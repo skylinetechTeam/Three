@@ -1,20 +1,97 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createStackNavigator } from "@react-navigation/stack";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import Ionicons from "react-native-vector-icons/Ionicons";
+import LoginScreen from "./screens/LoginScreen";
+import RegisterScreen from "./screens/RegisterScreen";
+import HomeScreen from "./screens/HomeScreen"; 
+import ServicesScreen from "./screens/ServicesScreen"; 
+import ActivitiesScreen from "./screens/ActivitiesScreen"; 
+import AccountScreen from "./screens/AccountScreen"; 
+import Toast from "react-native-toast-message";
 
-export default function App() {
+const Stack = createStackNavigator();
+const Tab = createBottomTabNavigator();
+
+function BottomTabs() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <Tab.Navigator
+      screenOptions={{
+        tabBarStyle: {
+          height: 70, 
+        },
+        tabBarIconStyle: {
+          height: 30, 
+          width: 30,  
+        },
+      }}
+    >
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home-outline" size={size} color={color} /> 
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Serviços"
+        component={ServicesScreen}
+        options={{
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="apps-outline" size={size} color={color} /> 
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Atividades"
+        component={ActivitiesScreen}
+        options={{
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="reader-outline" size={size} color={color} /> 
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Conta"
+        component={AccountScreen}
+        options={{
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-outline" size={size} color={color} /> 
+          ),
+        }}
+      />
+    </Tab.Navigator>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default function App() {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator initialRouteName="Login">
+        <Stack.Screen
+          name="Login"
+          component={LoginScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Register"
+          component={RegisterScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="HomeTabs"
+          component={BottomTabs}
+          options={{ headerShown: false }}
+        />
+      </Stack.Navigator>
+      <Toast />
+    </NavigationContainer>
+  );
+}
