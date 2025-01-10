@@ -74,7 +74,7 @@ function BottomTabs() {
 export default function App() {
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Login">
+      <Stack.Navigator initialRouteName="HomeTabs">
         <Stack.Screen
           name="Login"
           component={LoginScreen}

@@ -1,48 +1,73 @@
 import React from "react";
-import { ScrollView, View, Text, StyleSheet } from "react-native";
+import {useState, useEffect} from "react";
+import { Pressable, ScrollView, View, Text, StyleSheet } from "react-native";
+import Ionicons from "react-native-vector-icons/Ionicons";
+
+
 function Activity(props){
   return(
     <View style={styles.activity}>
-      <View style={{backgroundColor: "#ddd", width: 30, height: 30}}></View>
-      <View style={{backgroundColor: "yellow", width: "calc(100% - 10px - 30px - 60px)", boxSizing: "border-box"}}>
-	<Text numberOfLines={1} style={{fontWeight: 400}}>Rua 1 depois do golfe, entrada da matanga</Text>
-	<Text>5 mai, 20:00, 5000,00kz</Text>
+      <View style={{backgroundColor: "#eaeaea", width: 35, height: 35, borderRadius: 30, alignItems: "center", justifyContent: "center"}}>
+	<Ionicons name="car" size={28} color="#000" />
       </View>
-      <View style={{width: 60, height: 30, borderRadius: 10, backgroundColor: "#ddd"}}></View>
+      <View style={{width: "calc(100% - 35px - 20px - 90px)", boxSizing: "border-box"}}>
+	<Text numberOfLines={1} style={{fontWeight: 400, fontSize: 14, letterSpacing: 0.5}}>{props.descricao}</Text>
+	<Text style={{fontSize: 11, color: "#00000055", letterSpacing: 0.5}}>{props.data}</Text>
+      </View>
+      <View style={{width: 90, height: 30, borderRadius: 30, backgroundColor: "#eaeaea", flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingLeft: 7, paddingRight: 7}}>
+	<Ionicons name="reload" size={23} color="#000" />
+	<Text style={{fontWeight: "bold", fontSize: 14, letterSpacing: 0.5}}>Repetir</Text>
+      </View>
     </View>
   );
 }
 
 function ActivitiesGroup(props){
+  if(!props.activities) return null;
   return(
     <View style={styles.activitiesGroup}>
-      <Text style={{fontWeight: "bold", fontSize: 14}}>{props.date}</Text>
-      <Activity />
-      <Activity />
-      <Activity />
-      <Activity />
-      <Activity />
+      <Text style={{fontWeight: "bold", fontSize: 14, letterSpacing: 0.3}}>{props.date}</Text>
+      	{
+	  props.activities.map(function(elemento, index){
+	    return <Activity key={"txt"+index} data={elemento.data} descricao={elemento.descricao}/>
+	  })
+	}
     </View>
   );
 }
 
-
-function ActivitiesList(){
+function ActivitiesList({children}){
   return(
-    <ScrollView style={styles.activitiesList} contentContainerStyle={{gap: 10}}>
-      <ActivitiesGroup date="Maio 2024"/>
-      <ActivitiesGroup date="Abril 2024"/>
-      <ActivitiesGroup date="Fevereiro 2024"/>
-      <ActivitiesGroup date="Dezembro 2023"/>
+    <ScrollView style={styles.activitiesList} contentContainerStyle={{gap: 20}}>
+      {
+	children
+      }
     </ScrollView>
   );
 }
 
 export default function ActivitiesScreen() {
+  const [activitiesGroupTitles, setActivitiesGroupTitles] = useState(["Maio 2024", "Abril 2024"]);
+  const [activitiesGroupActivities, setActivitiesGroupActivities] = useState([[{descricao:"Rua do Kikagil, Luanda", data:"5 mai, 20:00, 5000,00kz"}], [
+{descricao:"Rua do Kikagil, Luanda", data:"5 mai, 20:00, 5000,00kz"},{descricao:"Rua do Kikagil, Luanda", data:"5 mai,  20:00, 5000,00kz"}]]);
   return (
     <View style={styles.container}>
       <Text style={styles.mainTitle}>Minhas atividades</Text>
-      <ActivitiesList />
+      <ActivitiesList>
+	{
+	  activitiesGroupActivities.length < 1 && <Text style={{color: "#00000077"}}>Sem actividades registradas</Text>
+	}
+	{
+          activitiesGroupActivities.map(function(elemento, index){
+	    return(
+	      <ActivitiesGroup key={"atGroup"+index} date={activitiesGroupTitles[index]} activities={elemento} />
+	    );
+	  })
+	}
+      </ActivitiesList>
+      {/*<Pressable style={{padding:10, borderRadius: 30, backgroundColor:"#358bff", height: "fit-content", width: "100%"}} onPress={()=>{setActivitiesGroupActivities([])}}>
+	<Text style={{width: "100%", textAlign: "center", color: "white", fontWeight: "bold"}}>Clique</Text>
+      </Pressable>*/}
     </View>
   );
 }
@@ -55,24 +80,20 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   mainTitle : {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "bold",
-    backgroundColor: "blue"
   },
   activitiesList: {
     flex: 1,
-    gap: 10,
-    backgroundColor: "red",
-    height: "100%"
+    height: "100%",
   },
   activitiesGroup: {
     gap: 5,
     width: "100%",
-    backgroundColor: "blue"
   },
   activity: {
     flexDirection: "row",
-    gap: 5,
+    gap: 10,
     height: 50,
     alignItems: "center",
     justifyContent: "space-between"
