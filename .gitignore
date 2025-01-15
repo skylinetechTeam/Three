@@ -35,5 +35,5 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# app.json api configs
-# app.json
+# googleMaps api configs
+config/googleMapsConfig.js

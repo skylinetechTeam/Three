@@ -16,7 +16,7 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.igorsemedo.travel",[pws]
+      "package": "com.igorsemedo.travel",
       "adaptiveIcon": {
         "foregroundImage": "./assets/travel.png",
         "backgroundColor": "#1737e8"
@@ -24,6 +24,14 @@
     },
     "web": {
       "favicon": "./assets/travel.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permitir $(PRODUCT_NAME) que use a sua localização."
+        }
+      ]
+    ]
   }
 }

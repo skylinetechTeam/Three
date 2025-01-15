@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,13 @@ import {
   Image,
   TouchableWithoutFeedback,
   Dimensions,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons"; // Para ícones
-import MapView from "react-native-maps";
+import MapView, { Marker } from 'react-native-maps';
+import * as Location from 'expo-location';
+import { searchPlaces, getPlaceDetails } from '../services/placesService';
 
 const locations = [
   { id: "1", name: "Kilamba", country: "Angola" },
@@ -23,17 +27,136 @@ const locations = [
 ];
 
 export default function HomeScreen() {
-  // Initial region for Angola (Luanda)
-  const initialRegion = {
+  
+  const [location, setLocation] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [initialRegion, setInitialRegion] = useState({
     latitude: -8.8389,
     longitude: 13.2894,
     latitudeDelta: 0.0922,
     longitudeDelta: 0.0421,
+  });
+
+  useEffect(() => {
+    getCurrentLocation();
+  }, []);
+
+  const getCurrentLocation = async () => {
+    let { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      setErrorMsg('Permission to access location was denied');
+      Alert.alert(
+        "Permissão Necessária",
+        "Precisamos da sua permissão para mostrar sua localização no mapa"
+      );
+      return;
+    }
+
+    try {
+      let location = await Location.getCurrentPositionAsync({});
+      setLocation(location);
+      setInitialRegion({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        latitudeDelta: 0.0922,
+        longitudeDelta: 0.0421,
+      });
+    } catch (error) {
+      console.error("Erro ao obter localização:", error);
+      Alert.alert("Erro", "Não foi possível obter sua localização");
+    }
   };
+  
+
+  // Função para buscar lugares próximos
+  // const searchPlaces = async (text) => {
+  //   setSearchQuery(text);
+  //   if (text.length > 2) {
+  //     try {
+  //       // Aqui você pode implementar a chamada à API de geocoding
+  //       // Por exemplo, usando Google Places API ou similar
+  //       // Por enquanto, vamos filtrar os locais estáticos
+  //       const filteredLocations = locations.filter(
+  //         location => location.name.toLowerCase().includes(text.toLowerCase()) ||
+  //                    location.country.toLowerCase().includes(text.toLowerCase())
+  //       );
+  //       setSearchResults(filteredLocations);
+  //     } catch (error) {
+  //       console.error("Erro na busca:", error);
+  //     }
+  //   } else {
+  //     setSearchResults([]);
+  //   }
+  // };
+  // 
+  const [searchTimeout, setSearchTimeout] = useState(null);
+
+  const handleSearchPlaces = async (text) => {
+      setSearchQuery(text);
+  
+      // Clear the previous timeout
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+  
+      // Set a new timeout
+      setSearchTimeout(
+        setTimeout(async () => {
+          if (text.length > 2 && location) {
+            setIsLoading(true);
+            try {
+              const results = await searchPlaces(text, {
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+              });
+              setSearchResults(results);
+            } catch (error) {
+              Alert.alert("Erro", "Não foi possível realizar a busca");
+            } finally {
+              setIsLoading(false);
+            }
+          } else {
+            setSearchResults([]);
+          }
+        }, 500)
+      );
+    };
+
+  const handleLocationSelect = async (prediction) => {
+      try {
+        setIsLoading(true);
+        const placeDetails = await getPlaceDetails(prediction.place_id);
+        
+        const selectedPlace = {
+          name: prediction.structured_formatting.main_text,
+          address: prediction.structured_formatting.secondary_text,
+          latitude: placeDetails.geometry.location.lat,
+          longitude: placeDetails.geometry.location.lng,
+        };
+  
+        setSelectedLocation(selectedPlace);
+        
+        // Atualizar região do mapa
+        setInitialRegion({
+          latitude: selectedPlace.latitude,
+          longitude: selectedPlace.longitude,
+          latitudeDelta: 0.0122,
+          longitudeDelta: 0.0121,
+        });
+      } catch (error) {
+        console.error("Erro ao selecionar localização:", error);
+        Alert.alert("Erro", "Não foi possível obter os detalhes do local");
+      } finally {
+        setIsLoading(false);
+      }
+    };
   
   return (
     <View style={styles.container}>
-      {/* Mapa com menu suspenso */}
       <View style={styles.mapContainer}>
         <TouchableOpacity style={styles.menuIconContainer}>
           <Ionicons name="menu" size={24} color="blue" />
@@ -41,57 +164,66 @@ export default function HomeScreen() {
         
         <MapView
           style={styles.map}
-          initialRegion={initialRegion}
+          region={initialRegion}
           showsUserLocation={true}
           showsMyLocationButton={true}
-        />
+        >
+          {selectedLocation && (
+            <Marker
+              coordinate={{
+                latitude: selectedLocation.latitude,
+                longitude: selectedLocation.longitude,
+              }}
+              title={selectedLocation.name}
+              description={selectedLocation.address}
+            />
+          )}
+        </MapView>
       </View>
 
       {/* Input de busca e opções */}
       <View style={styles.searchContainer}>
         <View style={styles.searchInputContainer}>
-          <Ionicons
-            name="search"
-            size={20}
-            color="#888"
-            style={styles.searchIcon}
-          />
+          <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Para onde?"
             placeholderTextColor="#888"
+            value={searchQuery}
+            onChangeText={handleSearchPlaces}
           />
+          {isLoading && (
+            <ActivityIndicator size="small" color="#0000ff" style={styles.loader} />
+          )}
         </View>
 
-        {/* Opções de viagem */}
-        <TouchableOpacity style={styles.travelOption}>
-          <Ionicons name="car" size={24} color="black" />
-          <View style={styles.travelTextContainer}>
-            <Text style={styles.travelTitle}>Viagens</Text>
-            <Text style={styles.travelSubtitle}>Pedir viagem</Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Lista de locais */}
         <FlatList
-          data={locations}
-          keyExtractor={(item) => item.id}
+          data={searchResults}
+          keyExtractor={(item) => item.place_id}
           renderItem={({ item }) => (
-            <TouchableOpacity style={styles.locationItem}>
+            <TouchableOpacity 
+              style={styles.locationItem}
+              onPress={() => handleLocationSelect(item)}
+            >
               <View style={styles.locationIconContainer}>
                 <Ionicons name="location-outline" size={24} color="black" />
               </View>
               <View style={styles.locationTextContainer}>
-                <Text style={styles.locationName}>{item.name}</Text>
-                <Text style={styles.locationCountry}>{item.country}</Text>
+                <Text style={styles.locationName}>
+                  {item.structured_formatting.main_text}
+                </Text>
+                <Text style={styles.locationCountry}>
+                  {item.structured_formatting.secondary_text}
+                </Text>
               </View>
             </TouchableOpacity>
           )}
         />
       </View>
 
+
       {/* Navegação inferior */}
-      <View style={styles.bottomNav}>
+      {/* <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem}>
           <Ionicons name="home-outline" size={24} color="black" />
           <Text style={styles.navText}>Home</Text>
@@ -108,7 +240,7 @@ export default function HomeScreen() {
           <Ionicons name="person-outline" size={24} color="gray" />
           <Text style={styles.navText}>Conta</Text>
         </TouchableOpacity>
-      </View>
+      </View> */}
     </View>
   );
 }
@@ -226,5 +358,8 @@ const styles = StyleSheet.create({
   navText: {
     fontSize: 12,
     color: "#333",
+  },
+  loader: {
+    marginLeft: 10,
   },
 });
