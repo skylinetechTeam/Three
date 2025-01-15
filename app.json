@@ -16,6 +16,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.igorsemedo.travel",[pws]
       "adaptiveIcon": {
         "foregroundImage": "./assets/travel.png",
         "backgroundColor": "#1737e8"

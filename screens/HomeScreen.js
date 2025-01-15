@@ -1,37 +1,61 @@
-import React from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, TouchableWithoutFeedback } from 'react-native';
-import { Ionicons } from '@expo/vector-icons'; // Para ícones
+import React from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  FlatList,
+  TouchableOpacity,
+  Image,
+  TouchableWithoutFeedback,
+  Dimensions,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons"; // Para ícones
+import MapView from "react-native-maps";
 
 const locations = [
-  { id: '1', name: 'Kilamba', country: 'Angola' },
-  { id: '2', name: 'Zango III', country: 'Angola' },
-  { id: '3', name: 'Talatona', country: 'Rua Luther Roscova, Luanda' },
-  { id: '4', name: 'Benfica', country: 'Pôr-do-sol, Luanda' },
-  { id: '5', name: 'Cacuaco', country: 'Rua da volvo, Luanda' },
-  { id: '6', name: 'Viana', country: 'Regedoria, Luanda' },
+  { id: "1", name: "Kilamba", country: "Angola" },
+  { id: "2", name: "Zango III", country: "Angola" },
+  { id: "3", name: "Talatona", country: "Rua Luther Roscova, Luanda" },
+  { id: "4", name: "Benfica", country: "Pôr-do-sol, Luanda" },
+  { id: "5", name: "Cacuaco", country: "Rua da volvo, Luanda" },
+  { id: "6", name: "Viana", country: "Regedoria, Luanda" },
 ];
 
-export default function App() {
+export default function HomeScreen() {
+  // Initial region for Angola (Luanda)
+  const initialRegion = {
+    latitude: -8.8389,
+    longitude: 13.2894,
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
+  };
+  
   return (
     <View style={styles.container}>
       {/* Mapa com menu suspenso */}
       <View style={styles.mapContainer}>
-        <TouchableWithoutFeedback onPress={() => alert('Menu suspenso')}>
-          <View style={styles.menuIconContainer}>
-            <Ionicons name="menu" size={24} color="blue" />
-          </View>
-        </TouchableWithoutFeedback>
-        <Image
-source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/Map_of_Angola.svg/1920px-Map_of_Angola.svg.png' }}
-
-/>
-
+        <TouchableOpacity style={styles.menuIconContainer}>
+          <Ionicons name="menu" size={24} color="blue" />
+        </TouchableOpacity>
+        
+        <MapView
+          style={styles.map}
+          initialRegion={initialRegion}
+          showsUserLocation={true}
+          showsMyLocationButton={true}
+        />
       </View>
 
       {/* Input de busca e opções */}
       <View style={styles.searchContainer}>
         <View style={styles.searchInputContainer}>
-          <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
+          <Ionicons
+            name="search"
+            size={20}
+            color="#888"
+            style={styles.searchIcon}
+          />
           <TextInput
             style={styles.searchInput}
             placeholder="Para onde?"
@@ -94,15 +118,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  map: {
+    width: Dimensions.get('window').width,
+    height: '100%',
+  },
   mapContainer: {
     flex: 1.5,
     position: 'relative',
-    backgroundColor: '#ddd',
   },
   mapImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
   menuIconContainer: {
     position: 'absolute',
@@ -115,20 +142,20 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     flex: 2,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 16,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 4,
   },
   searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e9e9e9',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#e9e9e9",
     borderRadius: 8,
     paddingHorizontal: 12,
     marginBottom: 16,
@@ -139,15 +166,15 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
-    fontWeight: 'bold',
+    color: "#333",
+    fontWeight: "bold",
   },
   travelOption: {
-    backgroundColor: '#e9e9e9',
+    backgroundColor: "#e9e9e9",
     borderRadius: 8,
     padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 16,
   },
   travelTextContainer: {
@@ -155,19 +182,19 @@ const styles = StyleSheet.create({
   },
   travelTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   travelSubtitle: {
     fontSize: 14,
-    color: '#888',
+    color: "#888",
   },
   locationItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 16,
   },
   locationIconContainer: {
-    backgroundColor: '#e9e9e9',
+    backgroundColor: "#e9e9e9",
     padding: 8,
     borderRadius: 5,
     marginRight: 8,
@@ -177,27 +204,27 @@ const styles = StyleSheet.create({
   },
   locationName: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   locationCountry: {
     fontSize: 14,
-    color: 'gray',
+    color: "gray",
   },
   bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    height:100,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    height: 100,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderTopWidth: 1,
-    borderTopColor: '#e9e9e9',
+    borderTopColor: "#e9e9e9",
   },
   navItem: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   navText: {
     fontSize: 12,
-    color: '#333',
+    color: "#333",
   },
 });
