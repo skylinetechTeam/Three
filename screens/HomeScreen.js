@@ -96,36 +96,61 @@ export default function HomeScreen() {
   const [searchTimeout, setSearchTimeout] = useState(null);
 
   const handleSearchPlaces = async (text) => {
-      setSearchQuery(text);
+    setSearchQuery(text);
+    console.log('Texto de busca:', text);
   
-      // Clear the previous timeout
-      if (searchTimeout) {
-        clearTimeout(searchTimeout);
-      }
+    // Clear the previous timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
   
-      // Set a new timeout
-      setSearchTimeout(
-        setTimeout(async () => {
-          if (text.length > 2 && location) {
-            setIsLoading(true);
-            try {
-              const results = await searchPlaces(text, {
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-              });
+    // Set a new timeout
+    setSearchTimeout(
+      setTimeout(async () => {
+        if (text.length > 2 && location) {
+          setIsLoading(true);
+          try {
+            console.log('Iniciando busca com location:', {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+            
+            const results = await searchPlaces(text, {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+            
+            console.log('Resultados obtidos:', results);
+            
+            if (Array.isArray(results) && results.length > 0) {
               setSearchResults(results);
-            } catch (error) {
-              Alert.alert("Erro", "Não foi possível realizar a busca");
-            } finally {
-              setIsLoading(false);
+            } else {
+              // Se não houver resultados, mostrar resultados locais
+              const filteredLocations = locations.filter(
+                location => 
+                  location.name.toLowerCase().includes(text.toLowerCase()) ||
+                  location.country.toLowerCase().includes(text.toLowerCase())
+              );
+              setSearchResults(filteredLocations.map(loc => ({
+                place_id: loc.id,
+                structured_formatting: {
+                  main_text: loc.name,
+                  secondary_text: loc.country
+                }
+              })));
             }
-          } else {
-            setSearchResults([]);
+          } catch (error) {
+            console.error('Erro na busca:', error);
+            Alert.alert("Erro", "Não foi possível realizar a busca");
+          } finally {
+            setIsLoading(false);
           }
-        }, 500)
-      );
-    };
-
+        } else {
+          setSearchResults([]);
+        }
+      }, 500)
+    );
+  };
   const handleLocationSelect = async (prediction) => {
       try {
         setIsLoading(true);
