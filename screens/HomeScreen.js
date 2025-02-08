@@ -70,29 +70,7 @@ export default function HomeScreen() {
       Alert.alert("Erro", "Não foi possível obter sua localização");
     }
   };
-  
 
-  // Função para buscar lugares próximos
-  // const searchPlaces = async (text) => {
-  //   setSearchQuery(text);
-  //   if (text.length > 2) {
-  //     try {
-  //       // Aqui você pode implementar a chamada à API de geocoding
-  //       // Por exemplo, usando Google Places API ou similar
-  //       // Por enquanto, vamos filtrar os locais estáticos
-  //       const filteredLocations = locations.filter(
-  //         location => location.name.toLowerCase().includes(text.toLowerCase()) ||
-  //                    location.country.toLowerCase().includes(text.toLowerCase())
-  //       );
-  //       setSearchResults(filteredLocations);
-  //     } catch (error) {
-  //       console.error("Erro na busca:", error);
-  //     }
-  //   } else {
-  //     setSearchResults([]);
-  //   }
-  // };
-  // 
   const [searchTimeout, setSearchTimeout] = useState(null);
 
   const handleSearchPlaces = async (text) => {
@@ -104,7 +82,6 @@ export default function HomeScreen() {
       clearTimeout(searchTimeout);
     }
   
-    // Set a new timeout
     setSearchTimeout(
       setTimeout(async () => {
         if (text.length > 2 && location) {
