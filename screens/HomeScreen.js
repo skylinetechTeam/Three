@@ -1,3 +1,5 @@
+// Travel/screens/HomeScreen.js
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -6,17 +8,16 @@ import {
   TextInput,
   FlatList,
   TouchableOpacity,
-  Image,
-  TouchableWithoutFeedback,
   Dimensions,
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons"; // Para ícones
+import { Ionicons } from "@expo/vector-icons";
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { searchPlaces, getPlaceDetails } from '../services/placesService';
 
+// Array de fallback para resultados locais
 const locations = [
   { id: "1", name: "Kilamba", country: "Angola" },
   { id: "2", name: "Zango III", country: "Angola" },
@@ -27,7 +28,6 @@ const locations = [
 ];
 
 export default function HomeScreen() {
-  
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,11 +57,11 @@ export default function HomeScreen() {
     }
 
     try {
-      let location = await Location.getCurrentPositionAsync({});
-      setLocation(location);
+      let loc = await Location.getCurrentPositionAsync({});
+      setLocation(loc);
       setInitialRegion({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
         latitudeDelta: 0.0922,
         longitudeDelta: 0.0421,
       });
@@ -76,12 +76,12 @@ export default function HomeScreen() {
   const handleSearchPlaces = async (text) => {
     setSearchQuery(text);
     console.log('Texto de busca:', text);
-  
-    // Clear the previous timeout
+
+    // Limpa o timeout anterior
     if (searchTimeout) {
       clearTimeout(searchTimeout);
     }
-  
+
     setSearchTimeout(
       setTimeout(async () => {
         if (text.length > 2 && location) {
@@ -104,9 +104,9 @@ export default function HomeScreen() {
             } else {
               // Se não houver resultados, mostrar resultados locais
               const filteredLocations = locations.filter(
-                location => 
-                  location.name.toLowerCase().includes(text.toLowerCase()) ||
-                  location.country.toLowerCase().includes(text.toLowerCase())
+                loc => 
+                  loc.name.toLowerCase().includes(text.toLowerCase()) ||
+                  loc.country.toLowerCase().includes(text.toLowerCase())
               );
               setSearchResults(filteredLocations.map(loc => ({
                 place_id: loc.id,
@@ -128,35 +128,28 @@ export default function HomeScreen() {
       }, 500)
     );
   };
-  const handleLocationSelect = async (prediction) => {
-      try {
-        setIsLoading(true);
-        const placeDetails = await getPlaceDetails(prediction.place_id);
-        
-        const selectedPlace = {
-          name: prediction.structured_formatting.main_text,
-          address: prediction.structured_formatting.secondary_text,
-          latitude: placeDetails.geometry.location.lat,
-          longitude: placeDetails.geometry.location.lng,
-        };
-  
-        setSelectedLocation(selectedPlace);
-        
-        // Atualizar região do mapa
-        setInitialRegion({
-          latitude: selectedPlace.latitude,
-          longitude: selectedPlace.longitude,
-          latitudeDelta: 0.0122,
-          longitudeDelta: 0.0121,
-        });
-      } catch (error) {
-        console.error("Erro ao selecionar localização:", error);
-        Alert.alert("Erro", "Não foi possível obter os detalhes do local");
-      } finally {
-        setIsLoading(false);
-      }
+
+  const handleLocationSelect = (prediction) => {
+    // Usa as coordenadas que já foram retornadas pela pesquisa
+    const selectedPlace = {
+      name: prediction.structured_formatting.main_text,
+      address: prediction.structured_formatting.secondary_text,
+      latitude: prediction.lat,
+      longitude: prediction.lon,
     };
   
+    setSelectedLocation(selectedPlace);
+    
+    // Atualiza a região do mapa para centralizar no local selecionado
+    setInitialRegion({
+      latitude: selectedPlace.latitude,
+      longitude: selectedPlace.longitude,
+      latitudeDelta: 0.0122,
+      longitudeDelta: 0.0121,
+    });
+  };
+
+
   return (
     <View style={styles.container}>
       <View style={styles.mapContainer}>
@@ -183,7 +176,7 @@ export default function HomeScreen() {
         </MapView>
       </View>
 
-      {/* Input de busca e opções */}
+      {/* Seção de busca e sugestões */}
       <View style={styles.searchContainer}>
         <View style={styles.searchInputContainer}>
           <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
@@ -201,7 +194,7 @@ export default function HomeScreen() {
 
         <FlatList
           data={searchResults}
-          keyExtractor={(item) => item.place_id}
+          keyExtractor={(item) => item.place_id.toString()}
           renderItem={({ item }) => (
             <TouchableOpacity 
               style={styles.locationItem}
@@ -223,9 +216,9 @@ export default function HomeScreen() {
         />
       </View>
 
-
-      {/* Navegação inferior */}
-      {/* <View style={styles.bottomNav}>
+      {/* Seção de navegação inferior (comentada; pode ser ativada quando necessário) */}
+      {/*
+      <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem}>
           <Ionicons name="home-outline" size={24} color="black" />
           <Text style={styles.navText}>Home</Text>
@@ -242,7 +235,8 @@ export default function HomeScreen() {
           <Ionicons name="person-outline" size={24} color="gray" />
           <Text style={styles.navText}>Conta</Text>
         </TouchableOpacity>
-      </View> */}
+      </View>
+      */}
     </View>
   );
 }
@@ -259,11 +253,6 @@ const styles = StyleSheet.create({
   mapContainer: {
     flex: 1.5,
     position: 'relative',
-  },
-  mapImage: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
   },
   menuIconContainer: {
     position: 'absolute',
@@ -302,25 +291,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#333",
     fontWeight: "bold",
-  },
-  travelOption: {
-    backgroundColor: "#e9e9e9",
-    borderRadius: 8,
-    padding: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  travelTextContainer: {
-    marginLeft: 8,
-  },
-  travelTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  travelSubtitle: {
-    fontSize: 14,
-    color: "#888",
   },
   locationItem: {
     flexDirection: "row",
