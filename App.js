@@ -1,15 +1,15 @@
-import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
-import { createStackNavigator } from "@react-navigation/stack";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import Ionicons from "react-native-vector-icons/Ionicons";
-import LoginScreen from "./screens/LoginScreen";
-import RegisterScreen from "./screens/RegisterScreen";
-import HomeScreen from "./screens/HomeScreen"; 
-import ServicesScreen from "./screens/ServicesScreen"; 
-import ActivitiesScreen from "./screens/ActivitiesScreen"; 
-import AccountScreen from "./screens/AccountScreen"; 
-import Toast from "react-native-toast-message";
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import LoginScreen from './screens/LoginScreen';
+import RegisterScreen from './screens/RegisterScreen';
+import HomeScreen from './screens/HomeScreen';
+import ServicesScreen from './screens/ServicesScreen';
+import ActivitiesScreen from './screens/ActivitiesScreen';
+import AccountScreen from './screens/AccountScreen';
+import Toast from 'react-native-toast-message';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -19,11 +19,11 @@ function BottomTabs() {
     <Tab.Navigator
       screenOptions={{
         tabBarStyle: {
-          height: 70, 
+          height: 70,
         },
         tabBarIconStyle: {
-          height: 30, 
-          width: 30,  
+          height: 30,
+          width: 30,
         },
       }}
     >
@@ -33,7 +33,7 @@ function BottomTabs() {
         options={{
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} /> 
+            <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
@@ -43,7 +43,7 @@ function BottomTabs() {
         options={{
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="apps-outline" size={size} color={color} /> 
+            <Ionicons name="apps-outline" size={size} color={color} />
           ),
         }}
       />
@@ -53,7 +53,7 @@ function BottomTabs() {
         options={{
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="reader-outline" size={size} color={color} /> 
+            <Ionicons name="reader-outline" size={size} color={color} />
           ),
         }}
       />
@@ -63,7 +63,7 @@ function BottomTabs() {
         options={{
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} /> 
+            <Ionicons name="person-outline" size={size} color={color} />
           ),
         }}
       />

@@ -15,78 +15,78 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState("");
 
   // Função para verificar se o usuário existe
-  // const handleLogin = async () => {
-  //   if (!telefone || !password) {
-  //      Toast.show({
-  //         type: "error",
-  //         text1: "Erro ao iniciar sessão",
-  //         text2: "Por favor, preencha todos os campos.",
-  //       });
-  //     return;
-  //   }
+  const handleLogin = async () => {
+    if (!telefone || !password) {
+       Toast.show({
+          type: "error",
+          text1: "Erro ao iniciar sessão",
+          text2: "Por favor, preencha todos os campos.",
+        });
+      return;
+    }
 
-  //   try {
-  //     const { data, error } = await supabase
-  //       .from("usuarios")
-  //       .select("nome")
-  //       .eq("telefone", telefone)
-  //       .eq("senha", password) 
+    try {
+      const { data, error } = await supabase
+        .from("usuarios")
+        .select("nome")
+        .eq("telefone", telefone)
+        .eq("senha", password) 
        
 
-  //     if (error || data.length === 0) {
-  //       Toast.show({
-  //         type: "error",
-  //         text1: "Erro ao iniciar sessão",
-  //         text2: "Usuário não encontrado. Por favor, registre-se.",
-  //       });
-  //     } else {
-  //       console.log(data);
-  //       Toast.show({
-  //         type: "success",
-  //         text1: "Bem-vindo!",
-  //         text2: `Olá, ${data[0].nome}!`,
-  //       });
+      if (error || data.length === 0) {
+        Toast.show({
+          type: "error",
+          text1: "Erro ao iniciar sessão",
+          text2: "Usuário não encontrado. Por favor, registre-se.",
+        });
+      } else {
+        console.log(data);
+        Toast.show({
+          type: "success",
+          text1: "Bem-vindo!",
+          text2: `Olá, ${data[0].nome}!`,
+        });
 
-  //       navigation.navigate("HomeTabs");
+        navigation.navigate("HomeTabs");
 
        
         
-  //     }
-  //   } catch (err) {
-  //     console.error(err);
-  //     Toast.show({
-  //       type: "error",
-  //       text1: "Erro",
-  //       text2: "Algo deu errado. Tente novamente.",
-  //     });
-  //   }
-  // };
+      }
+    } catch (err) {
+      console.error(err);
+      Toast.show({
+        type: "error",
+        text1: "Erro",
+        text2: "Algo deu errado. Tente novamente.",
+      });
+    }
+  };
 
   //Fixed User
-  const handleLogin = async () => {
-    const userFixo = {
-      telefone: "934551088",
-      senha: "12345678",
-      nome: "Fixed One"
-    };
+  // const handleLogin = async () => {
+  //   const userFixo = {
+  //     telefone: "934551088",
+  //     senha: "12345678",
+  //     nome: "Fixed One"
+  //   };
   
-    if (telefone === userFixo.telefone && password === userFixo.senha) {
-      Toast.show({
-        type: "success",
-        text1: "Bem-vindo!",
-        text2: `Olá, ${userFixo.nome}!`,
-      });
+  //   if (telefone === userFixo.telefone && password === userFixo.senha) {
+  //     Toast.show({
+  //       type: "success",
+  //       text1: "Bem-vindo!",
+  //       text2: `Olá, ${userFixo.nome}!`,
+  //     });
   
-      navigation.navigate("HomeTabs");
-      return;
-    }
+  //     navigation.navigate("HomeTabs");
+  //     return;
+  //   }
   
-    Toast.show({
-      type: "error",
-      text1: "Erro ao iniciar sessão",
-      text2: "Credenciais inválidas.",
-    });
-  };
+  //   Toast.show({
+  //     type: "error",
+  //     text1: "Erro ao iniciar sessão",
+  //     text2: "Credenciais inválidas.",
+  //   });
+  // };
 
   return (
     <View style={styles.container}>
