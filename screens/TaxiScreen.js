@@ -10,11 +10,13 @@ import {
   ActivityIndicator, 
   Image, 
   StyleSheet,
-  Dimensions 
+  Dimensions,
+  ScrollView,
+  SafeAreaView
 } from 'react-native';
 import * as Location from 'expo-location';
 import MapView, { Marker, Polyline } from 'react-native-maps'; // Change back to react-native-maps
-import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import { MaterialIcons, FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS, SHADOWS } from '../config/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -704,27 +706,31 @@ const handleStartRide = () => {
   // Add CarCategoriesModal as inner component
   const CarCategoriesModal = () => (
     showCategories ? (
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Escolha seu carro</Text>
+      <View style={styles.yyabgoCategoriesModal}>
+        <View style={styles.yyabgoModalHeader}>
+          <Text style={styles.yyabgoModalTitle}>Escolha seu carro</Text>
+        </View>
+        <ScrollView style={styles.yyabgoCategoriesScroll}>
           {Object.entries(CAR_CATEGORIES).map(([key, category]) => (
             <TouchableOpacity
               key={key}
-              style={styles.categoryCard}
+              style={styles.yyabgoCategoryCard}
               onPress={() => handleSelectCar(key)}
             >
-              <MaterialIcons name={category.icon} size={24} color={COLORS.primary} />
-              <View style={styles.categoryInfo}>
-                <Text style={styles.categoryName}>{category.name}</Text>
-                <Text style={styles.categoryDescription}>{category.description}</Text>
-                <Text style={styles.categoryEta}>{category.eta}</Text>
+              <View style={styles.yyabgoCategoryIcon}>
+                <MaterialIcons name={category.icon} size={24} color={COLORS.primary} />
               </View>
-              <Text style={styles.categoryPrice}>
+              <View style={styles.yyabgoCategoryInfo}>
+                <Text style={styles.yyabgoCategoryName}>{category.name}</Text>
+                <Text style={styles.yyabgoCategoryDescription}>{category.description}</Text>
+                <Text style={styles.yyabgoCategoryEta}>{category.eta}</Text>
+              </View>
+              <Text style={styles.yyabgoCategoryPrice}>
                 {`${Math.round(category.basePrice + (category.pricePerKm * (estimatedTime || 0)))} Kz`}
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       </View>
     ) : null
   );
@@ -733,33 +739,33 @@ const handleStartRide = () => {
   const ChatModal = () => (
     showChat ? (
       <View style={styles.modalContainer}>
-        <View style={styles.chatModalContent}>
-          <View style={styles.chatHeader}>
+        <View style={styles.yyabgoChatModal}>
+          <View style={styles.yyabgoChatHeader}>
             <TouchableOpacity 
-              style={styles.closeButton}
+              style={styles.yyabgoCloseButton}
               onPress={() => setShowChat(false)}
             >
-              <MaterialIcons name="close" size={24} color={COLORS.text.primary} />
+              <MaterialIcons name="arrow-back" size={24} color="#333" />
             </TouchableOpacity>
-            <Text style={styles.chatTitle}>Chat com motorista</Text>
+            <Text style={styles.yyabgoChatTitle}>Chat com o motorista</Text>
           </View>
-          <View style={styles.messagesContainer}>
+          <View style={styles.yyabgoMessagesContainer}>
             {messages.map((msg) => (
               <View 
                 key={msg.id} 
                 style={[
-                  styles.messageBox,
-                  msg.sender === 'driver' ? styles.driverMessage : styles.userMessage
+                  styles.yyabgoMessageBox,
+                  msg.sender === 'driver' ? styles.yyabgoDriverMessage : styles.yyabgoUserMessage
                 ]}
               >
                 <Text style={[
-                  styles.messageText,
-                  msg.sender === 'user' && { color: COLORS.white }
+                  styles.yyabgoMessageText,
+                  msg.sender === 'user' && { color: 'white' }
                 ]}>
                   {msg.text}
                 </Text>
                 <Text style={[
-                  styles.messageTime,
+                  styles.yyabgoMessageTime,
                   msg.sender === 'user' && { color: 'rgba(255,255,255,0.7)' }
                 ]}>
                   {msg.time}
@@ -776,44 +782,45 @@ const handleStartRide = () => {
   const DriverOnWayModal = () => (
     showDriverOnWayModal ? (
       <View style={styles.compactModalContainer}>
-        <View style={styles.compactModalContent}>
+        <View style={styles.yyabgoDriverOnWayCard}>
           {driverInfo && (
             <>
-              <View style={styles.driverHeaderInfo}>
-                <Image source={{ uri: driverInfo.photo }} style={styles.compactDriverPhoto} />
-                <View style={styles.compactDriverDetails}>
-                  <Text style={styles.compactDriverName}>{driverInfo.name}</Text>
-                  <Text style={styles.compactCarInfo}>{driverInfo.car}</Text>
-                  <Text style={styles.compactPlate}>{driverInfo.plate}</Text>
-                  <View style={styles.directionContainer}>
+              <View style={styles.yyabgoDriverHeader}>
+                <Image source={{ uri: driverInfo.photo }} style={styles.yyabgoDriverPhoto} />
+                <View style={styles.yyabgoDriverDetails}>
+                  <Text style={styles.yyabgoDriverName}>{driverInfo.name}</Text>
+                  <Text style={styles.yyabgoCarInfo}>{driverInfo.car}</Text>
+                  <Text style={styles.yyabgoPlate}>{driverInfo.plate}</Text>
+                  <View style={styles.yyabgoDirectionContainer}>
                     <MaterialIcons 
                       name="navigation" 
                       size={16} 
                       color={COLORS.primary}
                       style={[
-                        styles.directionIndicator,
+                        styles.yyabgoDirectionIndicator,
                         { transform: [{ rotate: `${driverBearing}deg` }] }
                       ]}
                     />
-                    <Text style={styles.estimatedInfo}>
+                    <Text style={styles.yyabgoEstimatedInfo}>
                       {distanceToDriver}km • {estimatedArrival} min
                     </Text>
                   </View>
                 </View>
-                <View style={styles.ratingContainer}>
-                  <Text style={styles.compactRating}>★ {driverInfo.rating}</Text>
+                <View style={styles.yyabgoRatingContainer}>
+                  <MaterialIcons name="star" size={16} color="#FFBF00" />
+                  <Text style={styles.yyabgoRating}>{driverInfo.rating}</Text>
                 </View>
               </View>
               
-              <View style={styles.compactActionButtons}>
+              <View style={styles.yyabgoActionButtons}>
                 <TouchableOpacity 
-                  style={styles.compactActionButton}
+                  style={styles.yyabgoActionButton}
                   onPress={() => setShowChat(true)}
                 >
                   <MaterialIcons name="chat" size={22} color={COLORS.primary} />
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={[styles.compactActionButton, styles.cancelButton]}
+                  style={[styles.yyabgoActionButton, styles.yyabgoCancelButton]}
                   onPress={handleCancelRide}
                 >
                   <MaterialIcons name="close" size={22} color="#FF3B30" />
@@ -830,14 +837,14 @@ const handleStartRide = () => {
   const StartRideModal = () => (
     showStartRideModal ? (
       <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Motorista chegou!</Text>
-          <Text style={styles.modalSubtitle}>Pronto para iniciar a viagem?</Text>
+        <View style={styles.yyabgoStartRideModal}>
+          <Text style={styles.yyabgoModalTitle}>Motorista chegou!</Text>
+          <Text style={styles.yyabgoModalSubtitle}>Pronto para iniciar a viagem?</Text>
           <TouchableOpacity 
-            style={styles.startRideButton}
+            style={styles.yyabgoStartRideButton}
             onPress={handleStartRide}
           >
-            <Text style={styles.startRideButtonText}>Iniciar Viagem</Text>
+            <Text style={styles.yyabgoStartRideButtonText}>Iniciar Viagem</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -848,10 +855,10 @@ const handleStartRide = () => {
   const Notification = () => (
     notification.show && (
       <Animated.View style={[
-        styles.notification,
+        styles.yyabgoNotification,
         { backgroundColor: notification.type === 'success' ? COLORS.primary : '#ff4444' }
       ]}>
-        <Text style={styles.notificationText}>{notification.message}</Text>
+        <Text style={styles.yyabgoNotificationText}>{notification.message}</Text>
       </Animated.View>
     )
   );
@@ -895,24 +902,26 @@ const handleStartRide = () => {
   // Add progress indicator component
   const RideProgressBar = () => (
     rideInProgress && (
-      <View style={styles.progressContainer}>
-        <View style={styles.progressInfo}>
-          <View>
-            <Text style={styles.progressTitle}>A caminho do destino</Text>
-            <Text style={styles.progressAddress} numberOfLines={1}>
+      <View style={styles.yyabgoProgressContainer}>
+        <View style={styles.yyabgoProgressInfo}>
+          <View style={styles.yyabgoDestinationInfo}>
+            <Text style={styles.yyabgoProgressTitle}>A caminho do destino</Text>
+            <Text style={styles.yyabgoProgressAddress} numberOfLines={1}>
               {selectedDestination?.name}
             </Text>
             {routeData?.congestionLevel > 1.3 && (
-              <Text style={styles.trafficWarning}>
+              <View style={styles.yyabgoTrafficContainer}>
                 <MaterialIcons name="traffic" size={16} color="#FF6B6B" />
-                {' Trânsito intenso'}
-              </Text>
+                <Text style={styles.yyabgoTrafficWarning}>
+                  Trânsito intenso
+                </Text>
+              </View>
             )}
           </View>
-          <Text style={styles.progressPercentage}>{Math.round(rideProgress)}%</Text>
+          <Text style={styles.yyabgoProgressPercentage}>{Math.round(rideProgress)}%</Text>
         </View>
-        <View style={styles.progressBarContainer}>
-          <View style={[styles.progressBar, { width: `${rideProgress}%` }]} />
+        <View style={styles.yyabgoProgressBarContainer}>
+          <View style={[styles.yyabgoProgressBar, { width: `${rideProgress}%` }]} />
         </View>
       </View>
     )
@@ -971,8 +980,37 @@ const handleStartRide = () => {
     }
   }, [location, selectedDestination]);
 
+  // Add notification animation function
+  useEffect(() => {
+    if (notification.show) {
+      // Create notification animation
+      const notificationAnimation = new Animated.Value(0);
+      
+      // Fade in
+      Animated.timing(notificationAnimation, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true
+      }).start();
+      
+      // Set timeout to automatically hide notification
+      const timer = setTimeout(() => {
+        // Fade out
+        Animated.timing(notificationAnimation, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true
+        }).start(() => {
+          setNotification(prev => ({ ...prev, show: false }));
+        });
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [notification.show, notification.message]);
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -981,6 +1019,7 @@ const handleStartRide = () => {
         showsMyLocationButton={false}
         followsUserLocation={false}
         onRegionChangeComplete={setInitialRegion}
+        mapPadding={{ top: 0, right: 0, bottom: 60, left: 0 }}
       >
         {/* Map markers and routes */}
         {!rideInProgress && !showCategories && nearbyDrivers.map(driver => (
@@ -1004,7 +1043,9 @@ const handleStartRide = () => {
               longitude: selectedDestination.lon
             }}
           >
-            <MaterialIcons name="location-on" size={40} color={COLORS.primary} />
+            <View style={styles.destinationMarker}>
+              <MaterialIcons name="location-on" size={40} color={COLORS.primary} />
+            </View>
           </Marker>
         )}
 
@@ -1041,19 +1082,24 @@ const handleStartRide = () => {
 
       {/* Search Container */}
       {!rideInProgress && (
-        <View style={styles.searchContainer}>
-          <View style={styles.inputContainer}>
+        <View style={styles.searchContainerYYabgo}>
+          <View style={styles.inputIconContainer}>
             <MaterialIcons name="my-location" size={24} color={COLORS.primary} />
+          </View>
+          <View style={styles.inputContainerYYabgo}>
             <TextInput
-              style={styles.input}
+              style={styles.inputYYabgo}
               placeholder="Minha localização"
               editable={false}
             />
           </View>
-          <View style={styles.inputContainer}>
+          <View style={styles.divider} />
+          <View style={styles.inputIconContainer}>
             <MaterialIcons name="search" size={24} color={COLORS.primary} />
+          </View>
+          <View style={styles.inputContainerYYabgo}>
             <TextInput
-              style={styles.input}
+              style={styles.inputYYabgo}
               placeholder="Para onde?"
               value={searchQuery}
               onChangeText={handleSearch}
@@ -1065,15 +1111,17 @@ const handleStartRide = () => {
 
       {/* Search Results */}
       {!rideInProgress && searchResults.length > 0 && (
-        <View style={styles.resultsContainer}>
+        <View style={styles.resultsContainerYYabgo}>
           {searchResults.map((result, index) => (
             <TouchableOpacity
               key={index}
-              style={styles.resultItem}
+              style={styles.resultItemYYabgo}
               onPress={() => handleSelectDestination(result)}
             >
-              <MaterialIcons name="location-on" size={24} color={COLORS.text.secondary} />
-              <Text style={styles.resultText}>{result.name}</Text>
+              <View style={styles.resultIconContainer}>
+                <MaterialIcons name="location-on" size={24} color={COLORS.text.secondary} />
+              </View>
+              <Text style={styles.resultTextYYabgo}>{result.name}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -1081,26 +1129,24 @@ const handleStartRide = () => {
 
       {/* Searching Driver Animation */}
       {isSearchingDriver && (
-        <Animated.View style={[styles.searchingContainer, {
-          opacity: searchingAnimation
-        }]}>
+        <View style={styles.searchingContainerYYabgo}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.searchingText}>Procurando motoristas próximos...</Text>
-        </Animated.View>
+          <Text style={styles.searchingTextYYabgo}>Procurando motoristas próximos...</Text>
+        </View>
       )}
 
       {/* Driver Found Card */}
       {tripStatus === 'found' && driverInfo && !showDriverOnWayModal && !showStartRideModal && (
-        <View style={styles.driverCard}>
-          <Image source={{ uri: driverInfo.photo }} style={styles.driverPhoto} />
-          <View style={styles.driverInfo}>
-            <Text style={styles.driverName}>{driverInfo.name}</Text>
-            <Text style={styles.driverRating}>★ {driverInfo.rating}</Text>
-            <Text style={styles.carInfo}>{driverInfo.car} • {driverInfo.plate}</Text>
+        <View style={styles.driverCardYYabgo}>
+          <Image source={{ uri: driverInfo.photo }} style={styles.driverPhotoYYabgo} />
+          <View style={styles.driverInfoYYabgo}>
+            <Text style={styles.driverNameYYabgo}>{driverInfo.name}</Text>
+            <Text style={styles.driverRatingYYabgo}>★ {driverInfo.rating}</Text>
+            <Text style={styles.carInfoYYabgo}>{driverInfo.car} • {driverInfo.plate}</Text>
           </View>
-          <View style={styles.tripInfo}>
-            <Text style={styles.estimatedPrice}>AKZ {estimatedPrice}</Text>
-            <Text style={styles.estimatedTime}>{estimatedTime} min</Text>
+          <View style={styles.tripInfoYYabgo}>
+            <Text style={styles.estimatedPriceYYabgo}>AKZ {estimatedPrice}</Text>
+            <Text style={styles.estimatedTimeYYabgo}>{estimatedTime} min</Text>
           </View>
         </View>
       )}
@@ -1112,7 +1158,7 @@ const handleStartRide = () => {
       <CarCategoriesModal />
       <Notification />
       <RideProgressBar />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -1123,480 +1169,481 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  searchContainer: {
+  searchContainerYYabgo: {
     position: 'absolute',
     top: 50,
     left: 15,
     right: 15,
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 15,
+    backgroundColor: 'white',
+    borderRadius: 24,
+    padding: 8,
     elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
-  inputContainer: {
+  inputIconContainer: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inputContainerYYabgo: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-    paddingVertical: 12,
+    padding: 12,
   },
-  input: {
+  inputYYabgo: {
     flex: 1,
-    marginLeft: 10,
     fontSize: 16,
+    color: '#333',
+    marginLeft: 8,
   },
-  resultsContainer: {
+  divider: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+    marginLeft: 40,
+    marginRight: 8,
+  },
+  resultsContainerYYabgo: {
     position: 'absolute',
-    top: 150,
-    left: 20,
-    right: 20,
-    backgroundColor: COLORS.white,
-    borderRadius: 8,
-    padding: 10,
-    maxHeight: height * 0.4,
-    ...SHADOWS.medium,
+    top: 144,
+    left: 15,
+    right: 15,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    maxHeight: 280,
+    padding: 8,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
-  resultItem: {
+  resultItemYYabgo: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 15,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: '#f5f5f5',
   },
-  resultText: {
-    marginLeft: 10,
-    fontSize: 16,
-  },
-  searchingContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: COLORS.white,
-    padding: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+  resultIconContainer: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
     alignItems: 'center',
-    flexDirection: 'row',
-    ...SHADOWS.medium,
   },
-  searchingText: {
-    marginLeft: 15,
-    fontSize: 16,
-    color: COLORS.text.primary,
-  },
-  driverCard: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    elevation: 24,
-  },
-  driverPhoto: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
-  driverInfo: {
+  resultTextYYabgo: {
     flex: 1,
-    marginLeft: 15,
-  },
-  driverName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  driverRating: {
-    fontSize: 16,
-    color: COLORS.text.secondary,
-  },
-  carInfo: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-  },
-  tripInfo: {
-    alignItems: 'flex-end',
-  },
-  estimatedPrice: {
-    fontSize: 18,
-    fontWeight: 'bold',     
-    color: COLORS.primary,
-  },
-  estimatedTime: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
+    marginLeft: 8,
+    fontSize: 15,
+    color: '#333',
   },
   centerButton: {
     position: 'absolute',
-    right: 15,
-    bottom: 100,
-    zIndex: 1,
+    right: 16,
+    bottom: 150,
+    zIndex: 999,
   },
   centerButtonInner: {
-    backgroundColor: COLORS.white,
-    borderRadius: 50,
-    padding: 15,
-    elevation: 5,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    transform: [{ scale: 1 }],
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
-  modalContainer: {
+  searchingContainerYYabgo: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  searchingTextYYabgo: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: 'white',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  driverCardYYabgo: {
+    position: 'absolute',
+    bottom: 20,
+    left: 15,
+    right: 15,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  driverPhotoYYabgo: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 16,
+  },
+  driverInfoYYabgo: {
+    flex: 1,
+  },
+  driverNameYYabgo: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  ratingContainerYYabgo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  driverRatingYYabgo: {
+    fontSize: 14,
+    color: '#555',
+    marginLeft: 4,
+  },
+  carInfoYYabgo: {
+    fontSize: 14,
+    color: '#777',
+    marginTop: 4,
+  },
+  tripInfoYYabgo: {
+    alignItems: 'flex-end',
+  },
+  estimatedPriceYYabgo: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  estimatedTimeYYabgo: {
+    fontSize: 14,
+    color: '#777',
+    marginTop: 4,
+  },
+  yyabgoCategoriesModal: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'transparent',
-  },
-  modalContent: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    padding: 25,
-    paddingTop: 20,
-    elevation: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  categoryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  categoryInfo: {
-    flex: 1,
-    marginLeft: 15,
-  },
-  categoryName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  categoryDescription: {
-    color: COLORS.text.secondary,
-    fontSize: 14,
-  },
-  categoryEta: {
-    color: COLORS.text.secondary,
-    fontSize: 12,
-    marginTop: 4,
-  },
-  categoryPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  chatModalContent: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    padding: 20,
-    height: height * 0.6,
-    elevation: 24,
-  },
-  chatHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  chatTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 15,
-  },
-  messagesContainer: {
-    flex: 1,
-  },
-  messageBox: {
-    padding: 15,
-    borderRadius: 20,
-    marginBottom: 12,
-    maxWidth: '80%',
-    elevation: 1,
-  },
-  driverMessage: {
-    backgroundColor: '#f0f0f0',
-    alignSelf: 'flex-start',
-  },
-  userMessage: {
-    backgroundColor: COLORS.primary,
-    alignSelf: 'flex-end',
-  },
-  messageText: {
-    fontSize: 16,
-  },
-  messageTime: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-    alignSelf: 'flex-end',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 20,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
-  },
-  chatButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 20,
-  },
-  cancelButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: 'rgba(255,0,0,0.1)',
-    borderRadius: 20,
-  },
-  startRideButton: {
-    backgroundColor: COLORS.primary,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 20,
-    elevation: 3,
-  },
-  startRideButtonText: {
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  modalSubtitle: {
-    fontSize: 16,
-    color: COLORS.text.secondary,
-    marginTop: 10,
-  },
-  notification: {
-    position: 'absolute',
-    top: 60,
-    left: 20,
-    right: 20,
-    backgroundColor: COLORS.primary,
-    padding: 16,
-    borderRadius: 12,
     elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  yyabgoModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 16,
   },
-  notificationText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  closeButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
-  destinationIndicator: {
-    position: 'absolute',
-    top: 100,
-    left: 20,
-    right: 20,
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 15,
-    alignItems: 'center',
-    ...SHADOWS.medium,
-  },
-  destinationTitle: {
-    fontSize: 16,
+  yyabgoModalTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.text.primary,
-    marginBottom: 10,
+    color: '#333',
   },
-  arrowContainer: {
+  yyabgoCategoriesScroll: {
+    maxHeight: 300,
+  },
+  yyabgoCategoryCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    height: 100,
-  },
-  arrowLine: {
-    height: 60,
-    width: 2,
-    marginVertical: 5,
-    overflow: 'hidden',
-  },
-  gradientLine: {
-    flex: 1,
-    width: '100%',
-  },
-  bounceArrow: {
-    marginTop: -5,
-  },
-  destinationAddress: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    textAlign: 'center',
-    marginTop: 10,
-  },
-  destinationSection: {
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingVertical: 15,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: '#f5f5f5',
   },
-  driverInfoContainer: {
-    flexDirection: 'row',
+  yyabgoCategoryIcon: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginRight: 16,
   },
-  progressContainer: {
-    position: 'absolute',
-    top: 100,
-    left: 20,
-    right: 20,
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 15,
-    ...SHADOWS.medium,
+  yyabgoCategoryInfo: {
+    flex: 1,
   },
-  progressInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  progressTitle: {
+  yyabgoCategoryName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: COLORS.text.primary,
+    color: '#333',
   },
-  progressAddress: {
+  yyabgoCategoryDescription: {
     fontSize: 14,
-    color: COLORS.text.secondary,
+    color: '#777',
   },
-  progressPercentage: {
+  yyabgoCategoryEta: {
+    fontSize: 14,
+    color: '#777',
+  },
+  yyabgoCategoryPrice: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: COLORS.primary,
+    color: '#333',
   },
-  progressBarContainer: {
-    height: 8,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-  },
-  compactModalContainer: {
+  yyabgoChatModal: {
     position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    backgroundColor: 'transparent',
-  },
-  compactModalContent: {
-    backgroundColor: COLORS.white,
-    borderRadius: 15,
-    padding: 15,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    elevation: 24,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
-  driverHeaderInfo: {
-    flex: 1,
+  yyabgoChatHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  yyabgoCloseButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  compactDriverPhoto: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    marginRight: 12,
+  yyabgoChatTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
   },
-  compactDriverDetails: {
+  yyabgoMessagesContainer: {
+    maxHeight: 300,
+  },
+  yyabgoMessageBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f5f5f5',
+  },
+  yyabgoDriverMessage: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 16,
+    padding: 8,
+  },
+  yyabgoUserMessage: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 16,
+    padding: 8,
+  },
+  yyabgoMessageText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  yyabgoMessageTime: {
+    fontSize: 12,
+    color: '#777',
+  },
+  yyabgoDriverOnWayCard: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  yyabgoDriverHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  yyabgoDriverPhoto: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 16,
+  },
+  yyabgoDriverDetails: {
     flex: 1,
   },
-  compactDriverName: {
+  yyabgoDriverName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: COLORS.text.primary,
+    color: '#333',
   },
-  compactCarInfo: {
-    fontSize: 13,
-    color: COLORS.text.secondary,
-  },
-  compactPlate: {
-    fontSize: 13,
-    color: COLORS.text.secondary,
-    fontWeight: '500',
-  },
-  ratingContainer: {
-    backgroundColor: COLORS.primary + '15',
-    padding: 4,
-    borderRadius: 8,
-    marginRight: 10,
-  },
-  compactRating: {
+  yyabgoCarInfo: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: COLORS.primary,
+    color: '#777',
   },
-  compactActionButtons: {
+  yyabgoPlate: {
+    fontSize: 14,
+    color: '#777',
+  },
+  yyabgoDirectionContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 8,
   },
-  compactActionButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.primary + '15',
-    alignItems: 'center',
+  yyabgoDirectionIndicator: {
+    width: 16,
+    height: 16,
     justifyContent: 'center',
-    marginLeft: 8,
-  },
-  estimatedInfo: {
-    fontSize: 12,
-    color: COLORS.primary,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  directionContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
-  },
-  directionIndicator: {
     marginRight: 8,
   },
-  trafficWarning: {
-    color: '#FF6B6B',
-    fontSize: 12,
-    marginTop: 4,
+  yyabgoEstimatedInfo: {
+    fontSize: 14,
+    color: '#777',
+  },
+  yyabgoRatingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  yyabgoRating: {
+    fontSize: 14,
+    color: '#FFBF00',
+  },
+  yyabgoActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  yyabgoActionButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  yyabgoCancelButton: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 16,
+    padding: 8,
+  },
+  yyabgoStartRideModal: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  yyabgoModalSubtitle: {
+    fontSize: 14,
+    color: '#777',
+  },
+  yyabgoStartRideButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 16,
+    padding: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  yyabgoStartRideButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  yyabgoNotification: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.primary,
+    padding: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  yyabgoNotificationText: {
+    fontSize: 14,
+    color: 'white',
+  },
+  yyabgoProgressContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    padding: 16,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  yyabgoProgressInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  yyabgoDestinationInfo: {
+    flex: 1,
+  },
+  yyabgoProgressTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  yyabgoProgressAddress: {
+    fontSize: 14,
+    color: '#777',
+  },
+  yyabgoTrafficContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  yyabgoTrafficWarning: {
+    fontSize: 14,
+    color: '#FF6B6B',
+    marginLeft: 4,
+  },
+  yyabgoProgressPercentage: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  yyabgoProgressBarContainer: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#f0f0f0',
+  },
+  yyabgoProgressBar: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.primary,
   },
 });

@@ -1,38 +1,30 @@
-import { Dimensions } from 'react-native';
+import { Dimensions, Easing } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
 export const COLORS = {
-  primary: '#0072bb',       // Azul principal
-  primaryDark: '#005c95',   // Azul escuro para hover/pressed
-  primaryLight: '#e0f4ff',  // Azul claro para backgrounds sutis
-  
-  secondary: '#ff6b00',     // Laranja para CTAs secundários
-  
-  white: '#ffffff',
-  black: '#000000',
-  
-  background: '#f5f5f5',    // Background cinza claro
-  card: '#ffffff',          // Background de cards
-  
+  primary: '#2563eb', // Azul mais suave
+  secondary: '#4b5563',
+  background: '#ffffff',
+  card: '#ffffff',
+  white: '#ffffff', // Add white color explicitly
   text: {
-    primary: '#333333',     // Texto escuro principal
-    secondary: '#666666',   // Texto cinza médio
-    tertiary: '#8a8a8a',    // Texto cinza claro
-    white: '#ffffff',       // Texto branco
-    link: '#0072bb',        // Texto de links
+    primary: '#1f2937',
+    secondary: '#6b7280',
+    light: '#9ca3af'
   },
-  
-  border: '#e1e1e1',        // Cor de bordas
   input: {
-    background: '#f9f9f9',  // Background de inputs
-    placeholder: '#8a8a8a', // Cor de placeholder
+    background: '#f9fafb',
+    placeholder: '#9ca3af'
   },
-  
-  success: '#4caf50',       // Verde para sucessos
-  error: '#f44336',         // Vermelho para erros
-  warning: '#ff9800',       // Laranja para avisos
-  info: '#2196f3',          // Azul para informações
+  border: '#e5e7eb',
+  notification: '#ef4444',
+  success: '#10b981',
+  map: {
+    route: '#2563eb',
+    marker: '#2563eb',
+    userMarker: '#2563eb'
+  }
 };
 
 export const SIZES = {
@@ -117,36 +109,38 @@ export const FONTS = {
 };
 
 export const SHADOWS = {
-  light: {
-    shadowColor: COLORS.black,
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
+  small: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
     shadowRadius: 2,
-    elevation: 1,
+    elevation: 2
   },
   medium: {
-    shadowColor: COLORS.black,
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4.65,
-    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4
   },
-  dark: {
-    shadowColor: COLORS.primary,
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 6,
+  large: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8
+  }
+};
+
+export const ANIMATIONS = {
+  spring: {
+    tension: 20,
+    friction: 7
   },
+  timing: {
+    duration: 250,
+    easing: Easing.inOut(Easing.ease)
+  }
 };
 
 // Estilos comuns para componentes
@@ -209,7 +203,7 @@ export const COMMON_STYLES = {
     backgroundColor: COLORS.input.background,
     height: SIZES.inputHeight,
     marginBottom: 20,
-    ...SHADOWS.light,
+    ...SHADOWS.small,
   },
   
   // Ícone de input
@@ -279,4 +273,4 @@ export default {
   FONTS,
   SHADOWS,
   COMMON_STYLES
-}; 
+};
