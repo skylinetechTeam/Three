@@ -5,20 +5,41 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
-import Toast from "react-native-toast-message"; // Importação correta do Toast
+import Toast from "react-native-toast-message";
 import { supabase } from "../supabaseClient";
+import { FontAwesome, Ionicons } from "@expo/vector-icons";
+import { COLORS, SIZES, FONTS, COMMON_STYLES } from "../config/theme";
 
 export default function RegisterScreen({ navigation }) {
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Função para registrar um novo usuário
   const handleRegister = async () => {
     if (!nome || !telefone || !password) {
-      Alert.alert("Erro", "Por favor, preencha todos os campos.");
+      Toast.show({
+        type: "error",
+        text1: "Erro ao registrar",
+        text2: "Por favor, preencha todos os campos.",
+      });
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Toast.show({
+        type: "error",
+        text1: "Erro ao registrar",
+        text2: "As senhas não coincidem.",
+      });
       return;
     }
 
@@ -59,115 +80,154 @@ export default function RegisterScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Toast para mensagens */}
-      <Toast />
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={COMMON_STYLES.container}
+    >
+      <StatusBar barStyle="light-content" />
+      <ScrollView 
+        contentContainerStyle={COMMON_STYLES.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={COMMON_STYLES.header}>
+          <Text style={styles.welcomeText}>Junte-se ao</Text>
+          <Text style={styles.headerText}>Travel</Text>
+        </View>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerText}>Crie sua Conta</Text>
-      </View>
+        {/* Card de registro */}
+        <View style={COMMON_STYLES.card}>
+          <View style={COMMON_STYLES.inputContainer}>
+            <Text style={styles.title}>Criar nova conta</Text>
+            
+            <Text style={COMMON_STYLES.label}>Nome Completo</Text>
+            <View style={COMMON_STYLES.inputWrapper}>
+              <FontAwesome name="user" size={SIZES.iconMedium} color={COLORS.primary} style={COMMON_STYLES.inputIcon} />
+              <TextInput
+                style={COMMON_STYLES.textInput}
+                placeholder="Digite seu nome completo"
+                placeholderTextColor={COLORS.input.placeholder}
+                value={nome}
+                onChangeText={setNome}
+              />
+            </View>
 
-      {/* Input Section */}
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Nome Completo</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="Digite seu nome"
-          placeholderTextColor="#ccc"
-          value={nome}
-          onChangeText={setNome}
-        />
-        <Text style={styles.label}>Telefone</Text>
-        <TextInput
-          style={styles.textInput}
-          keyboardType="phone-pad"
-          placeholder="Digite seu telefone"
-          placeholderTextColor="#ccc"
-          value={telefone}
-          onChangeText={setTelefone}
-        />
-        <Text style={styles.label}>Senha</Text>
-        <TextInput
-          style={styles.textInput}
-          secureTextEntry
-          placeholder="Digite sua senha"
-          placeholderTextColor="#ccc"
-          value={password}
-          onChangeText={setPassword}
-        />
-        <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
-          <Text style={styles.registerButtonText}>Criar Conta</Text>
-        </TouchableOpacity>
-      </View>
+            <Text style={COMMON_STYLES.label}>Telefone</Text>
+            <View style={COMMON_STYLES.inputWrapper}>
+              <FontAwesome name="phone" size={SIZES.iconMedium} color={COLORS.primary} style={COMMON_STYLES.inputIcon} />
+              <TextInput
+                style={COMMON_STYLES.textInput}
+                keyboardType="phone-pad"
+                placeholder="Digite seu telefone"
+                placeholderTextColor={COLORS.input.placeholder}
+                value={telefone}
+                onChangeText={setTelefone}
+              />
+            </View>
 
-      {/* Footer */}
-      <Text style={styles.footerText}>
-        Ao registrar-te, estás a aceitar os nossos termos & condições, a
-        reconhecer a nossa Política de Privacidade e a confirmar que tens mais
-        de 18 anos.
-      </Text>
-    </View>
+            <Text style={COMMON_STYLES.label}>Senha</Text>
+            <View style={COMMON_STYLES.inputWrapper}>
+              <FontAwesome name="lock" size={SIZES.iconMedium} color={COLORS.primary} style={COMMON_STYLES.inputIcon} />
+              <TextInput
+                style={[COMMON_STYLES.textInput, { flex: 1 }]}
+                secureTextEntry={!showPassword}
+                placeholder="Digite sua senha"
+                placeholderTextColor={COLORS.input.placeholder}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity 
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeIcon}
+              >
+                <Ionicons 
+                  name={showPassword ? "eye-off" : "eye"} 
+                  size={SIZES.iconMedium} 
+                  color={COLORS.primary} 
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={COMMON_STYLES.label}>Confirmar Senha</Text>
+            <View style={COMMON_STYLES.inputWrapper}>
+              <FontAwesome name="lock" size={SIZES.iconMedium} color={COLORS.primary} style={COMMON_STYLES.inputIcon} />
+              <TextInput
+                style={[COMMON_STYLES.textInput, { flex: 1 }]}
+                secureTextEntry={!showConfirmPassword}
+                placeholder="Confirme sua senha"
+                placeholderTextColor={COLORS.input.placeholder}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+              />
+              <TouchableOpacity 
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={styles.eyeIcon}
+              >
+                <Ionicons 
+                  name={showConfirmPassword ? "eye-off" : "eye"} 
+                  size={SIZES.iconMedium}
+                  color={COLORS.primary} 
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={COMMON_STYLES.primaryButton} onPress={handleRegister}>
+              <Text style={COMMON_STYLES.primaryButtonText}>Criar Conta</Text>
+            </TouchableOpacity>
+
+            <View style={styles.loginContainer}>
+              <Text style={styles.loginText}>Já tem uma conta?</Text>
+              <TouchableOpacity onPress={() => navigation.navigate("Login")}>
+                <Text style={styles.loginLink}> Entrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* Footer */}
+        <Text style={COMMON_STYLES.footerText}>
+          Ao registrar-te, estás a aceitar os nossos termos & condições, a
+          reconhecer a nossa Política de Privacidade e a confirmar que tens mais
+          de 18 anos.
+        </Text>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  header: {
-    width: "200%",
-    backgroundColor: "#003580",
-    alignItems: "center",
-    paddingVertical: 60,
+  welcomeText: {
+    fontSize: SIZES.large,
+    color: COLORS.primaryLight,
+    marginBottom: 5,
   },
   headerText: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#fff",
+    fontSize: SIZES.xxlarge,
+    ...FONTS.bold,
+    color: COLORS.white,
   },
-  inputContainer: {
-    width: "100%",
-    marginTop: 30,
+  title: {
+    fontSize: SIZES.xlarge,
+    ...FONTS.bold,
+    color: COLORS.text.primary,
     marginBottom: 20,
-  },
-  label: {
-    fontSize: 18,
-    fontWeight: "500",
-    color: "#333",
-    marginBottom: 10,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 50,
-    backgroundColor: "#f9f9f9",
-    fontSize: 16,
-    marginBottom: 20,
-    color: "#333",
-  },
-  registerButton: {
-    backgroundColor: "#1368f0",
-    borderRadius: 20,
-    height: 50,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 10,
-  },
-  registerButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  footerText: {
-    fontSize: 12,
-    color: "#666",
     textAlign: "center",
-    marginTop: 30,
+  },
+  eyeIcon: {
+    padding: SIZES.padding.small,
+  },
+  loginContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 20,
+  },
+  loginText: {
+    fontSize: SIZES.medium,
+    color: COLORS.text.secondary,
+  },
+  loginLink: {
+    fontSize: SIZES.medium,
+    color: COLORS.text.link,
+    ...FONTS.bold,
   },
 });

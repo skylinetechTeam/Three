@@ -9,12 +9,13 @@ import HomeScreen from './screens/HomeScreen';
 import ServicesScreen from './screens/ServicesScreen';
 import ActivitiesScreen from './screens/ActivitiesScreen';
 import AccountScreen from './screens/AccountScreen';
+import TaxiScreen from './screens/TaxiScreen';
 import Toast from 'react-native-toast-message';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-function BottomTabs() {
+function HomeTabs() {
   return (
     <Tab.Navigator
       screenOptions={{
@@ -34,6 +35,16 @@ function BottomTabs() {
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="TaxiScreen"
+        component={TaxiScreen}
+        options={{
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="car-outline" size={size} color={color} />
           ),
         }}
       />
@@ -87,7 +98,7 @@ export default function App() {
         />
         <Stack.Screen
           name="HomeTabs"
-          component={BottomTabs}
+          component={HomeTabs}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>
