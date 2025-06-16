@@ -8,9 +8,11 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/travel.png",
+      "backgroundColor": "#1737e8",
       "resizeMode": "contain",
-      "backgroundColor": "#1737e8"
+      "image": {
+        "_": "Removendo a imagem e configurando para usar texto"
+      }
     },
     "ios": {
       "supportsTablet": true

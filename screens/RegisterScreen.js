@@ -187,8 +187,7 @@ export default function RegisterScreen({ navigation }) {
         {/* Footer */}
         <Text style={COMMON_STYLES.footerText}>
           Ao registrar-te, estás a aceitar os nossos termos & condições, a
-          reconhecer a nossa Política de Privacidade e a confirmar que tens mais
-          de 18 anos.
+          reconhecer a nossa Política de Privacidade
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>

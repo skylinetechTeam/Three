@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import MapView, { Marker, Polyline } from 'react-native-maps'; // Change back to react-native-maps
-import { MaterialIcons, FontAwesome5, Ionicons } from '@expo/vector-icons';
+import { MaterialIcons, FontAwesome5, Ionicons, AntDesign, Entypo, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS, SHADOWS } from '../config/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -52,6 +52,34 @@ const CAR_CATEGORIES = {
     description: 'Carros espaçosos e confortáveis'
   }
 };
+
+// Métodos de pagamento disponíveis
+const PAYMENT_METHODS = [
+  {
+    id: 'cash',
+    name: 'Dinheiro',
+    icon: 'cash',
+    iconFamily: 'MaterialCommunityIcons'
+  },
+  {
+    id: 'card',
+    name: 'Cartão',
+    icon: 'credit-card',
+    iconFamily: 'AntDesign'
+  },
+  {
+    id: 'pix',
+    name: 'Transferência',
+    icon: 'bank-transfer',
+    iconFamily: 'MaterialCommunityIcons'
+  },
+  {
+    id: 'wallet',
+    name: 'Carteira',
+    icon: 'wallet',
+    iconFamily: 'AntDesign'
+  }
+];
 
 // Add these helper functions before the TaxiScreen component
 const calculateRouteDistance = (route) => {
@@ -223,6 +251,16 @@ export default function TaxiScreen() {
   // Adicionar novo estado para controlar a direção do motorista
   const [driverBearing, setDriverBearing] = useState(0);
   const [routeData, setRouteData] = useState(null);
+  
+  // Novos estados para melhorias
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showRideCompleteModal, setShowRideCompleteModal] = useState(false);
+  const [driverRating, setDriverRating] = useState(0);
+  const [isSharingTrip, setIsSharingTrip] = useState(false);
+  const [emergencyMode, setEmergencyMode] = useState(false);
+  const [holdStartTime, setHoldStartTime] = useState(null);
+  const [showEmergencyOptions, setShowEmergencyOptions] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -637,20 +675,8 @@ const handleStartRide = () => {
 
   // Add handleRideComplete function
   const handleRideComplete = () => {
-    setNotification({
-      show: true,
-      message: 'Você chegou ao seu destino!',
-      type: 'success'
-    });
-    setTimeout(() => {
-      setRideInProgress(false);
-      setTripStatus('idle');
-      setSelectedDestination(null);
-      setRoutePath([]);
-      setDriverPosition(null);
-      setRideProgress(0);
-      setNotification({ show: false, message: '', type: '' });
-    }, 3000);
+    setRideInProgress(false);
+    setShowRideCompleteModal(true);
   };
 
   // Add function to handle ride cancellation
@@ -781,54 +807,89 @@ const handleStartRide = () => {
   // Modificar o componente DriverOnWayModal para incluir o indicador de direção
   const DriverOnWayModal = () => (
     showDriverOnWayModal ? (
-      <View style={styles.compactModalContainer}>
-        <View style={styles.yyabgoDriverOnWayCard}>
-          {driverInfo && (
-            <>
-              <View style={styles.yyabgoDriverHeader}>
-                <Image source={{ uri: driverInfo.photo }} style={styles.yyabgoDriverPhoto} />
-                <View style={styles.yyabgoDriverDetails}>
-                  <Text style={styles.yyabgoDriverName}>{driverInfo.name}</Text>
-                  <Text style={styles.yyabgoCarInfo}>{driverInfo.car}</Text>
-                  <Text style={styles.yyabgoPlate}>{driverInfo.plate}</Text>
-                  <View style={styles.yyabgoDirectionContainer}>
-                    <MaterialIcons 
-                      name="navigation" 
-                      size={16} 
-                      color={COLORS.primary}
-                      style={[
-                        styles.yyabgoDirectionIndicator,
-                        { transform: [{ rotate: `${driverBearing}deg` }] }
-                      ]}
-                    />
-                    <Text style={styles.yyabgoEstimatedInfo}>
-                      {distanceToDriver}km • {estimatedArrival} min
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.yyabgoRatingContainer}>
-                  <MaterialIcons name="star" size={16} color="#FFBF00" />
-                  <Text style={styles.yyabgoRating}>{driverInfo.rating}</Text>
-                </View>
+      <View style={styles.yyabgoDriverOnWayCard}>
+        {driverInfo && (
+          <>
+            <View style={styles.yyabgoDriverHeader}>
+              <Image source={{ uri: driverInfo.photo }} style={styles.yyabgoDriverPhoto} />
+              <View style={styles.yyabgoDriverDetails}>
+                <Text style={styles.yyabgoDriverName}>{driverInfo.name}</Text>
+                <Text style={styles.yyabgoCarInfo}>{driverInfo.car}</Text>
+                <Text style={styles.yyabgoPlate}>{driverInfo.plate}</Text>
               </View>
+              <View style={styles.yyabgoRatingContainer}>
+                <Ionicons name="star" size={16} color="#FFBF00" />
+                <Text style={styles.yyabgoRating}>{driverInfo.rating}</Text>
+              </View>
+            </View>
+            
+            {distanceToDriver !== null && estimatedArrival !== null && (
+              <View style={styles.yyabgoDirectionContainer}>
+                <View style={styles.yyabgoDirectionIndicator}>
+                  <MaterialIcons name="directions-car" size={16} color={COLORS.primary} />
+                </View>
+                <Text style={styles.yyabgoEstimatedInfo}>
+                  Motorista a {distanceToDriver} km • Chegada em aproximadamente {estimatedArrival} min
+                </Text>
+              </View>
+            )}
+            
+            <View style={styles.extraButtonsContainer}>
+              <TouchableOpacity 
+                style={styles.paymentButton} 
+                onPress={() => setShowPaymentModal(true)}
+              >
+                <View style={styles.paymentButtonContent}>
+                  {selectedPaymentMethod === 'cash' ? (
+                    <MaterialCommunityIcons name="cash" size={20} color={COLORS.primary} />
+                  ) : selectedPaymentMethod === 'card' ? (
+                    <AntDesign name="credit-card" size={20} color={COLORS.primary} />
+                  ) : selectedPaymentMethod === 'pix' ? (
+                    <MaterialCommunityIcons name="bank-transfer" size={20} color={COLORS.primary} />
+                  ) : (
+                    <AntDesign name="wallet" size={20} color={COLORS.primary} />
+                  )}
+                  <Text style={styles.paymentButtonText}>
+                    {PAYMENT_METHODS.find(m => m.id === selectedPaymentMethod)?.name}
+                  </Text>
+                  <Entypo name="chevron-small-right" size={20} color={COLORS.primary} />
+                </View>
+              </TouchableOpacity>
               
-              <View style={styles.yyabgoActionButtons}>
-                <TouchableOpacity 
-                  style={styles.yyabgoActionButton}
-                  onPress={() => setShowChat(true)}
-                >
-                  <MaterialIcons name="chat" size={22} color={COLORS.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.yyabgoActionButton, styles.yyabgoCancelButton]}
-                  onPress={handleCancelRide}
-                >
-                  <MaterialIcons name="close" size={22} color="#FF3B30" />
-                </TouchableOpacity>
-              </View>
-            </>
-          )}
-        </View>
+              <TouchableOpacity 
+                style={styles.securityButton} 
+                onPress={shareTrip}
+              >
+                <Ionicons name="share-social-outline" size={20} color={COLORS.primary} />
+                <Text style={styles.securityButtonText}>Compartilhar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.emergencyButton}
+                onPressIn={handleEmergencyButtonHoldStart}
+                onPressOut={handleEmergencyButtonHoldEnd}
+              >
+                <Ionicons name="warning-outline" size={20} color="#FF3B30" />
+                <Text style={styles.emergencyButtonText}>Emergência</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.yyabgoActionButtons}>
+              <TouchableOpacity 
+                style={styles.yyabgoActionButton}
+                onPress={() => setShowChat(true)}
+              >
+                <MaterialIcons name="chat" size={22} color={COLORS.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.yyabgoActionButton, styles.yyabgoCancelButton]}
+                onPress={handleCancelRide}
+              >
+                <MaterialIcons name="close" size={22} color="#FF3B30" />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </View>
     ) : null
   );
@@ -1009,6 +1070,205 @@ const handleStartRide = () => {
     }
   }, [notification.show, notification.message]);
 
+  const handleSelectPaymentMethod = (methodId) => {
+    setSelectedPaymentMethod(methodId);
+    setShowPaymentModal(false);
+    setNotification({
+      show: true,
+      message: `Método de pagamento alterado para ${PAYMENT_METHODS.find(m => m.id === methodId).name}`,
+      type: 'success'
+    });
+    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 2000);
+  };
+
+  const shareTrip = () => {
+    setIsSharingTrip(true);
+    setNotification({
+      show: true,
+      message: 'Detalhes da viagem compartilhados',
+      type: 'success'
+    });
+    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 2000);
+  };
+
+  const activateEmergency = () => {
+    setShowEmergencyOptions(true);
+  };
+
+  const handleEmergencyAction = (action) => {
+    setEmergencyMode(true);
+    setShowEmergencyOptions(false);
+    
+    if (action === 'police') {
+      setNotification({
+        show: true,
+        message: 'Chamando a polícia para sua localização...',
+        type: 'error'
+      });
+    } else if (action === 'share') {
+      setNotification({
+        show: true,
+        message: 'Compartilhando localização com contatos de emergência...',
+        type: 'error'
+      });
+    } else {
+      setNotification({
+        show: true,
+        message: 'Modo de emergência ativado',
+        type: 'error'
+      });
+    }
+    
+    setTimeout(() => {
+      setEmergencyMode(false);
+      setNotification({ show: false, message: '', type: '' });
+    }, 5000);
+  };
+
+  const handleEmergencyButtonHoldStart = () => {
+    setHoldStartTime(Date.now());
+  };
+
+  const handleEmergencyButtonHoldEnd = () => {
+    if (holdStartTime && (Date.now() - holdStartTime > 3000)) {
+      activateEmergency();
+    }
+    setHoldStartTime(null);
+  };
+
+  const handleRateDriver = (rating) => {
+    setDriverRating(rating);
+    
+    setTimeout(() => {
+      setShowRideCompleteModal(false);
+      setDriverRating(0);
+      setTripStatus('idle');
+      setSelectedDestination(null);
+      setRoutePath([]);
+      setDriverPosition(null);
+      setRideProgress(0);
+    }, 1000);
+  };
+
+  // Add new component for payment method selection
+  const PaymentMethodModal = () => (
+    showPaymentModal && (
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Método de Pagamento</Text>
+            <TouchableOpacity onPress={() => setShowPaymentModal(false)}>
+              <AntDesign name="close" size={24} color={COLORS.text.secondary} />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView>
+            {PAYMENT_METHODS.map((method) => (
+              <TouchableOpacity
+                key={method.id}
+                style={[
+                  styles.paymentMethodItem,
+                  selectedPaymentMethod === method.id && styles.selectedPaymentMethod
+                ]}
+                onPress={() => handleSelectPaymentMethod(method.id)}
+              >
+                {method.iconFamily === 'MaterialCommunityIcons' ? (
+                  <MaterialCommunityIcons name={method.icon} size={24} color={selectedPaymentMethod === method.id ? COLORS.white : COLORS.primary} />
+                ) : method.iconFamily === 'AntDesign' ? (
+                  <AntDesign name={method.icon} size={24} color={selectedPaymentMethod === method.id ? COLORS.white : COLORS.primary} />
+                ) : (
+                  <Ionicons name={method.icon} size={24} color={selectedPaymentMethod === method.id ? COLORS.white : COLORS.primary} />
+                )}
+                <Text style={[
+                  styles.paymentMethodText,
+                  selectedPaymentMethod === method.id && styles.selectedPaymentMethodText
+                ]}>
+                  {method.name}
+                </Text>
+                {selectedPaymentMethod === method.id && (
+                  <Ionicons name="checkmark-circle" size={24} color={COLORS.white} style={styles.checkIcon} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    )
+  );
+
+  // Add component for ride complete and rating
+  const RideCompleteModal = () => (
+    showRideCompleteModal && (
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <View style={styles.rideCompleteHeader}>
+            <Text style={styles.rideCompleteTitle}>Viagem concluída</Text>
+            <Text style={styles.rideCompleteSubtitle}>Como foi sua experiência?</Text>
+          </View>
+          
+          <View style={styles.driverRatingContainer}>
+            <Image source={{ uri: driverInfo?.photo }} style={styles.ratingDriverPhoto} />
+            <Text style={styles.ratingDriverName}>{driverInfo?.name}</Text>
+            
+            <View style={styles.starsContainer}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity 
+                  key={star} 
+                  onPress={() => handleRateDriver(star)}
+                >
+                  <Ionicons 
+                    name={driverRating >= star ? "star" : "star-outline"}
+                    size={36} 
+                    color={driverRating >= star ? "#FFD700" : "#CCCCCC"} 
+                    style={styles.starIcon}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            {driverRating > 0 && (
+              <Text style={styles.thankYouText}>Obrigado pela sua avaliação!</Text>
+            )}
+          </View>
+        </View>
+      </View>
+    )
+  );
+
+  // Add component for emergency options
+  const EmergencyOptionsModal = () => (
+    showEmergencyOptions && (
+      <View style={styles.modalContainer}>
+        <View style={[styles.modalContent, styles.emergencyModal]}>
+          <Text style={styles.emergencyTitle}>Opções de Emergência</Text>
+          
+          <TouchableOpacity 
+            style={styles.emergencyOption} 
+            onPress={() => handleEmergencyAction('police')}
+          >
+            <MaterialIcons name="local-police" size={24} color="#FFFFFF" />
+            <Text style={styles.emergencyText}>Chamar Polícia</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.emergencyOption} 
+            onPress={() => handleEmergencyAction('share')}
+          >
+            <Ionicons name="share-social" size={24} color="#FFFFFF" />
+            <Text style={styles.emergencyText}>Compartilhar Localização</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.emergencyCancel} 
+            onPress={() => setShowEmergencyOptions(false)}
+          >
+            <Text style={styles.emergencyCancelText}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    )
+  );
+  
   return (
     <SafeAreaView style={styles.container}>
       <MapView
@@ -1156,8 +1416,24 @@ const handleStartRide = () => {
       <StartRideModal />
       <ChatModal />
       <CarCategoriesModal />
+      <PaymentMethodModal />
+      <RideCompleteModal />
+      <EmergencyOptionsModal />
       <Notification />
       <RideProgressBar />
+      
+      {/* Emergency Quick Access Button */}
+      {(showDriverOnWayModal || rideInProgress) && (
+        <TouchableOpacity 
+          style={[
+            styles.sosButton,
+            emergencyMode && styles.sosButtonActive
+          ]}
+          onPress={activateEmergency}
+        >
+          <Text style={styles.sosButtonText}>SOS</Text>
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 }
@@ -1645,5 +1921,208 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: COLORS.primary,
+  },
+  modalContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    width: '90%',
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text.primary,
+  },
+  paymentMethodItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+    backgroundColor: '#F5F5F5',
+  },
+  selectedPaymentMethod: {
+    backgroundColor: COLORS.primary,
+  },
+  paymentMethodText: {
+    marginLeft: 10,
+    fontSize: 16,
+    color: COLORS.text.primary,
+  },
+  selectedPaymentMethodText: {
+    color: COLORS.white,
+  },
+  checkIcon: {
+    marginLeft: 'auto',
+  },
+  rideCompleteHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  rideCompleteTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: COLORS.text.primary,
+    marginBottom: 5,
+  },
+  rideCompleteSubtitle: {
+    fontSize: 16,
+    color: COLORS.text.secondary,
+  },
+  driverRatingContainer: {
+    alignItems: 'center',
+  },
+  ratingDriverPhoto: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 10,
+  },
+  ratingDriverName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text.primary,
+    marginBottom: 15,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  starIcon: {
+    marginHorizontal: 5,
+  },
+  thankYouText: {
+    fontSize: 16,
+    color: COLORS.primary,
+    marginTop: 15,
+  },
+  emergencyModal: {
+    backgroundColor: '#FF3B30',
+  },
+  emergencyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  emergencyOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  emergencyText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  emergencyCancel: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  emergencyCancelText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  extraButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 15,
+  },
+  paymentButton: {
+    flex: 1.5,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    padding: 10,
+    marginRight: 5,
+  },
+  paymentButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  paymentButtonText: {
+    flex: 1,
+    color: COLORS.text.primary,
+    marginLeft: 5,
+  },
+  securityButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    padding: 10,
+    marginHorizontal: 5,
+  },
+  securityButtonText: {
+    color: COLORS.text.primary,
+    marginLeft: 5,
+    fontSize: 12,
+  },
+  emergencyButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEE2E2',
+    borderRadius: 10,
+    padding: 10,
+    marginLeft: 5,
+  },
+  emergencyButtonText: {
+    color: '#FF3B30',
+    marginLeft: 5,
+    fontSize: 12,
+  },
+  sosButton: {
+    position: 'absolute',
+    top: 80,
+    right: 15,
+    backgroundColor: '#FF3B30',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  sosButtonActive: {
+    backgroundColor: '#8B0000',
+  },
+  sosButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });
