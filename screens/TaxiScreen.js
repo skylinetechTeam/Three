@@ -22,34 +22,25 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
 
-// Update CAR_CATEGORIES with more realistic options
+// Categorias de veículos atualizadas para Colectivo e Privado
 const CAR_CATEGORIES = {
-  MOTO: {
-    id: 'moto',
-    name: 'Moto',
-    basePrice: 500,
-    pricePerKm: 80,
-    icon: 'motorcycle',
+  COLECTIVO: {
+    id: 'colectivo',
+    name: 'Colectivo',
+    basePrice: 500, // Preço fixo de 500kz para Colectivo
+    pricePerKm: 0, // Sem preço por km para Colectivo (preço fixo)
+    icon: 'directions-bus',
     eta: '5-10 min',
-    description: 'Rápido e econômico'
+    description: 'Transporte compartilhado econômico'
   },
-  STANDARD: {
-    id: 'standard',
-    name: 'Standard',
-    basePrice: 1000,
-    pricePerKm: 120,
+  PRIVADO: {
+    id: 'privado',
+    name: 'Privado',
+    basePrice: 0, // Sem preço base para Privado
+    pricePerKm: 200, // 200kz por km para Privado
     icon: 'directions-car',
     eta: '3-8 min',
-    description: 'Carros confortáveis para o dia a dia'
-  },
-  COMFORT: {
-    id: 'comfort',
-    name: 'Comfort+',
-    basePrice: 1500,
-    pricePerKm: 150,
-    icon: 'directions-car',
-    eta: '5-10 min',
-    description: 'Carros espaçosos e confortáveis'
+    description: 'Transporte exclusivo e confortável'
   }
 };
 
@@ -251,6 +242,9 @@ export default function TaxiScreen() {
   // Adicionar novo estado para controlar a direção do motorista
   const [driverBearing, setDriverBearing] = useState(0);
   const [routeData, setRouteData] = useState(null);
+  
+  // Estado para controlar a visibilidade do input de destino
+  const [showDestinationInput, setShowDestinationInput] = useState(true);
   
   // Novos estados para melhorias
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
@@ -508,12 +502,38 @@ export default function TaxiScreen() {
         setRoutePath(newRouteData.points);
         setEstimatedTime(Math.round(newRouteData.trafficDuration / 60));
         
+        // Calcular preços para as novas categorias
+        const distanceInKm = newRouteData.distance / 1000; // Converter para km
+        
+        // Preço fixo para Colectivo e preço por km para Privado
+        const colectivoPrice = CAR_CATEGORIES.COLECTIVO.basePrice; // Preço fixo de 500kz
+        const privadoPrice = Math.round(CAR_CATEGORIES.PRIVADO.pricePerKm * distanceInKm); // 200kz por km
+        
+        // Atualizar preços nas categorias
+        CAR_CATEGORIES.COLECTIVO.currentPrice = colectivoPrice;
+        CAR_CATEGORIES.PRIVADO.currentPrice = privadoPrice;
+        
+        // Definir preço estimado padrão (Colectivo)
+        setEstimatedPrice(colectivoPrice);
+        
+        // Mostrar notificação com os preços estimados
+        setNotification({
+          show: true,
+          message: `Preços: Colectivo ${colectivoPrice}kz (fixo) | Privado ${privadoPrice}kz (${distanceInKm.toFixed(1)}km)`,
+          type: 'info'
+        });
+        
+        // Esconder o input de destino após a seleção
+        setSearchQuery('');
+        
         if (newRouteData.congestionLevel > 1.3) {
-          setNotification({
-            show: true,
-            message: 'Trânsito intenso na rota. Tempo de viagem pode ser maior.',
-            type: 'warning'
-          });
+          setTimeout(() => {
+            setNotification({
+              show: true,
+              message: 'Trânsito intenso na rota. Tempo de viagem pode ser maior.',
+              type: 'warning'
+            });
+          }, 3000);
         }
 
         if (mapRef.current) {
@@ -531,23 +551,53 @@ export default function TaxiScreen() {
     }
   };
 
-// Add this function to calculate realistic prices
+// Função atualizada para calcular preços com as novas categorias
 const calculatePrice = (distance, category) => {
   const cat = CAR_CATEGORIES[category];
-  const basePrice = cat.basePrice;
-  const pricePerKm = cat.pricePerKm;
-  const distanceInKm = distance / 1000; // Convert to km
   
-  return Math.round(basePrice + (pricePerKm * distanceInKm));
+  if (category === 'COLECTIVO') {
+    // Preço fixo para Colectivo
+    return cat.basePrice;
+  } else {
+    // Preço por km para Privado
+    const distanceInKm = distance / 1000; // Convert to km
+    return Math.round(cat.pricePerKm * distanceInKm);
+  }
 };
 
-// Modificar handleSelectCar para usar apenas um motorista
+// Função atualizada para usar as novas categorias Colectivo e Privado
 const handleSelectCar = async (category) => {
   setSelectedCategory(category);
   setShowCategories(false);
   setTripStatus('searching');
   setIsSearchingDriver(true);
   startSearchingAnimation();
+  
+  // Atualizar o preço estimado com base na categoria selecionada
+  const priceForCategory = CAR_CATEGORIES[category].currentPrice;
+  setEstimatedPrice(priceForCategory);
+  
+  // Mostrar notificação com o preço confirmado e tipo de serviço
+  const categoryName = category === 'COLECTIVO' ? 'Colectivo' : 'Privado';
+  const priceType = category === 'COLECTIVO' ? '(preço fixo)' : '(por km)';
+  
+  setNotification({
+    show: true,
+    message: `${categoryName} confirmado: ${priceForCategory} Kz ${priceType}`,
+    type: 'success'
+  });
+  
+  // Atualizar informações do motorista com o preço e tipo de veículo
+  const driverInfo = {
+    id: `D${Math.random().toString(36).substr(2, 9)}`,
+    name: 'Avelino Carlito',
+    rating: (4.5 + Math.random() * 0.5).toFixed(1),
+    photo: 'https://i.pravatar.cc/150',
+    car: category === 'COLECTIVO' ? 'Hiace' : 'Lexus',
+    plate: `LD-${Math.floor(Math.random() * 90 + 10)}-${Math.floor(Math.random() * 90 + 10)}-AC`,
+    price: priceForCategory
+  };
+  setDriverInfo(driverInfo);
 
   // Gerar posição inicial do motorista a 2km de distância
   const startAngle = Math.random() * 360;
@@ -752,7 +802,10 @@ const handleStartRide = () => {
                 <Text style={styles.yyabgoCategoryEta}>{category.eta}</Text>
               </View>
               <Text style={styles.yyabgoCategoryPrice}>
-                {`${Math.round(category.basePrice + (category.pricePerKm * (estimatedTime || 0)))} Kz`}
+                {key === 'COLECTIVO' 
+                  ? `${category.currentPrice} Kz (fixo)` 
+                  : `${category.currentPrice} Kz (${routeData ? (routeData.distance / 1000).toFixed(1) : 0} km)`
+                }
               </Text>
             </TouchableOpacity>
           ))}
@@ -804,58 +857,90 @@ const handleStartRide = () => {
     ) : null
   );
 
-  // Modificar o componente DriverOnWayModal para incluir o indicador de direção
+  // Modificar o componente DriverOnWayModal para incluir o indicador de direção e preço
   const DriverOnWayModal = () => (
     showDriverOnWayModal ? (
       <View style={styles.yyabgoDriverOnWayCard}>
         {driverInfo && (
           <>
+            <View style={styles.vehicleInfoHeader}>
+              <View style={styles.vehicleTypeSection}>
+                <Text style={styles.vehicleTypeLabel}>VEÍCULO</Text>
+                <Text style={styles.vehicleTypeValue}>{selectedCategory === 'COLECTIVO' ? 'Colectivo' : 'Privado'}</Text>
+              </View>
+              <View style={styles.vehicleModelSection}>
+                <Text style={styles.vehicleModelLabel}>MODELO</Text>
+                <Text style={styles.vehicleModelValue}>{selectedCategory === 'COLECTIVO' ? 'Hiace' : 'Lexus'}</Text>
+              </View>
+              <View style={styles.vehicleSeatSection}>
+                <Text style={styles.vehicleSeatLabel}>LUGAR</Text>
+                <Text style={styles.vehicleSeatValue}>{selectedCategory === 'COLECTIVO' ? '15' : '4'}</Text>
+              </View>
+            </View>
+
             <View style={styles.yyabgoDriverHeader}>
               <Image source={{ uri: driverInfo.photo }} style={styles.yyabgoDriverPhoto} />
               <View style={styles.yyabgoDriverDetails}>
                 <Text style={styles.yyabgoDriverName}>{driverInfo.name}</Text>
-                <Text style={styles.yyabgoCarInfo}>{driverInfo.car}</Text>
-                <Text style={styles.yyabgoPlate}>{driverInfo.plate}</Text>
-              </View>
-              <View style={styles.yyabgoRatingContainer}>
-                <Ionicons name="star" size={16} color="#FFBF00" />
-                <Text style={styles.yyabgoRating}>{driverInfo.rating}</Text>
+                <View style={styles.driverLocationContainer}>
+                  <Ionicons name="location" size={14} color="#666" />
+                  <Text style={styles.driverLocationText}>
+                    {distanceToDriver !== null && estimatedArrival !== null ? 
+                      `${estimatedArrival} minutos de distância` : 
+                      "A caminho"}
+                  </Text>
+                </View>
+                <View style={styles.driverRatingRow}>
+                  <Ionicons name="star" size={14} color="#FFBF00" />
+                  <Text style={styles.driverRatingText}>{driverInfo.rating} ({Math.floor(Math.random() * 500) + 100} avaliações)</Text>
+                </View>
               </View>
             </View>
             
-            {distanceToDriver !== null && estimatedArrival !== null && (
-              <View style={styles.yyabgoDirectionContainer}>
-                <View style={styles.yyabgoDirectionIndicator}>
-                  <MaterialIcons name="directions-car" size={16} color={COLORS.primary} />
-                </View>
-                <Text style={styles.yyabgoEstimatedInfo}>
-                  Motorista a {distanceToDriver} km • Chegada em aproximadamente {estimatedArrival} min
-                </Text>
-              </View>
-            )}
+            <View style={styles.paymentPriceContainer}>
+              <Text style={styles.paymentMethodLabel}>Método de pagamento</Text>
+              <Text style={styles.tripPriceValue}>{driverInfo.price} Kz</Text>
+            </View>
             
-            <View style={styles.extraButtonsContainer}>
-              <TouchableOpacity 
-                style={styles.paymentButton} 
-                onPress={() => setShowPaymentModal(true)}
-              >
-                <View style={styles.paymentButtonContent}>
-                  {selectedPaymentMethod === 'cash' ? (
-                    <MaterialCommunityIcons name="cash" size={20} color={COLORS.primary} />
-                  ) : selectedPaymentMethod === 'card' ? (
-                    <AntDesign name="credit-card" size={20} color={COLORS.primary} />
-                  ) : selectedPaymentMethod === 'pix' ? (
-                    <MaterialCommunityIcons name="bank-transfer" size={20} color={COLORS.primary} />
-                  ) : (
-                    <AntDesign name="wallet" size={20} color={COLORS.primary} />
-                  )}
-                  <Text style={styles.paymentButtonText}>
-                    {PAYMENT_METHODS.find(m => m.id === selectedPaymentMethod)?.name}
-                  </Text>
-                  <Entypo name="chevron-small-right" size={20} color={COLORS.primary} />
+            <TouchableOpacity 
+              style={styles.paymentMethodButton} 
+              onPress={() => setShowPaymentModal(true)}
+            >
+              <View style={styles.paymentMethodContent}>
+                <View style={styles.paymentCardIcon}>
+                  <AntDesign name="creditcard" size={20} color="#000" />
                 </View>
+                <View style={styles.paymentCardDetails}>
+                  <Text style={styles.paymentCardNumber}>**** **** **** 8970</Text>
+                  <Text style={styles.paymentCardExpiry}>Expires: 12/26</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.actionButtonsContainer}>
+              <TouchableOpacity 
+                style={styles.actionButton}
+                onPress={() => setShowChat(true)}
+              >
+                <Ionicons name="call" size={22} color={COLORS.primary} />
               </TouchableOpacity>
               
+              <TouchableOpacity 
+                style={styles.actionButton}
+                onPress={() => setShowChat(true)}
+              >
+                <Ionicons name="chatbubble-outline" size={22} color={COLORS.primary} />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.cancelButton]}
+                onPress={handleCancelRide}
+              >
+                <Text style={styles.cancelButtonText}>Cancelar corrida</Text>
+              </TouchableOpacity>
+            </View>
+              
+            <View style={styles.securityButtonsContainer}>
               <TouchableOpacity 
                 style={styles.securityButton} 
                 onPress={shareTrip}
@@ -1444,6 +1529,146 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  // Novos estilos para o modal de motorista
+  vehicleInfoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  vehicleTypeSection: {
+    alignItems: 'center',
+  },
+  vehicleModelSection: {
+    alignItems: 'center',
+  },
+  vehicleSeatSection: {
+    alignItems: 'center',
+  },
+  vehicleTypeLabel: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 4,
+  },
+  vehicleTypeValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  vehicleModelLabel: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 4,
+  },
+  vehicleModelValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  vehicleSeatLabel: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 4,
+  },
+  vehicleSeatValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  driverLocationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  driverLocationText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
+  },
+  driverRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  driverRatingText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
+  },
+  paymentPriceContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+  },
+  paymentMethodLabel: {
+    fontSize: 14,
+    color: '#333',
+  },
+  tripPriceValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  paymentMethodButton: {
+    marginHorizontal: 15,
+    marginBottom: 15,
+    backgroundColor: '#f8f8f8',
+    borderRadius: 8,
+    padding: 12,
+  },
+  paymentMethodContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  paymentCardIcon: {
+    marginRight: 12,
+  },
+  paymentCardDetails: {
+    flex: 1,
+  },
+  paymentCardNumber: {
+    fontSize: 14,
+    color: '#333',
+  },
+  paymentCardExpiry: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: 15,
+    marginBottom: 15,
+  },
+  actionButton: {
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f8f8',
+  },
+  cancelButton: {
+    backgroundColor: '#0052CC',
+    paddingHorizontal: 20,
+    flex: 1,
+    marginLeft: 10,
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  securityButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: 15,
+    marginBottom: 15,
   },
   searchContainerYYabgo: {
     position: 'absolute',

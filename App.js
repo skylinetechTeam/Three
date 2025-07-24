@@ -5,11 +5,12 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
+import SetPasswordScreen from './screens/SetPasswordScreen';
+import PhoneVerificationScreen from './screens/PhoneVerificationScreen';
 import HomeScreen from './screens/HomeScreen';
-import ServicesScreen from './screens/ServicesScreen';
-import ActivitiesScreen from './screens/ActivitiesScreen';
 import AccountScreen from './screens/AccountScreen';
-import TaxiScreen from './screens/TaxiScreen';
+import ReservasScreen from './screens/ReservasScreen';
+import FavoritosScreen from './screens/FavoritosScreen';
 import Toast from 'react-native-toast-message';
 import SplashScreen from './components/SplashScreen';
 
@@ -22,10 +23,20 @@ function HomeTabs() {
       screenOptions={{
         tabBarStyle: {
           height: 70,
+          backgroundColor: '#2563EB',
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
         },
         tabBarIconStyle: {
           height: 30,
           width: 30,
+        },
+        tabBarActiveTintColor: '#ffffff',
+        tabBarInactiveTintColor: '#93C5FD',
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
         },
       }}
     >
@@ -40,32 +51,22 @@ function HomeTabs() {
         }}
       />
       <Tab.Screen
-        name="TaxiScreen"
-        component={TaxiScreen}
+        name="Reservas"
+        component={ReservasScreen}
         options={{
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="car-outline" size={size} color={color} />
+            <Ionicons name="calendar-outline" size={size} color={color} />
           ),
         }}
       />
       <Tab.Screen
-        name="Serviços"
-        component={ServicesScreen}
+        name="Favoritos"
+        component={FavoritosScreen}
         options={{
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="apps-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Atividades"
-        component={ActivitiesScreen}
-        options={{
-          headerShown: false,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="reader-outline" size={size} color={color} />
+            <Ionicons name="heart-outline" size={size} color={color} />
           ),
         }}
       />
@@ -107,6 +108,16 @@ export default function App() {
         <Stack.Screen
           name="Register"
           component={RegisterScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="SetPassword"
+          component={SetPasswordScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="PhoneVerification"
+          component={PhoneVerificationScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen

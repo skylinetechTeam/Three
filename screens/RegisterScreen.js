@@ -9,23 +9,22 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  SafeAreaView,
 } from "react-native";
 import Toast from "react-native-toast-message";
-import { supabase } from "../supabaseClient";
-import { FontAwesome, Ionicons } from "@expo/vector-icons";
+import { FontAwesome, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { COLORS, SIZES, FONTS, COMMON_STYLES } from "../config/theme";
 
 export default function RegisterScreen({ navigation }) {
   const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [countryCode, setCountryCode] = useState("+244");
 
-  // Função para registrar um novo usuário
-  const handleRegister = async () => {
-    if (!nome || !telefone || !password) {
+  // Função para registrar um novo usuário (usando dados mocados)
+  const handleRegister = () => {
+    if (!nome || !email || !telefone) {
       Toast.show({
         type: "error",
         text1: "Erro ao registrar",
@@ -34,199 +33,345 @@ export default function RegisterScreen({ navigation }) {
       return;
     }
 
-    if (password !== confirmPassword) {
+    if (!acceptTerms) {
       Toast.show({
         type: "error",
         text1: "Erro ao registrar",
-        text2: "As senhas não coincidem.",
+        text2: "Você deve aceitar os termos de serviço.",
       });
       return;
     }
 
-    try {
-      // Inserir dados diretamente na tabela 'usuarios'
-      const { data, error } = await supabase
-        .from("usuarios")
-        .insert([
-          {
-            nome: nome,
-            telefone: telefone,
-            senha: password, // Armazenando a senha diretamente, lembre-se de usar criptografia em produção
-          },
-        ]);
-
-      if (error) {
-        Toast.show({
-          type: "error",
-          text1: "Erro ao registrar",
-          text2: "Não foi possível criar sua conta. Tente novamente.",
-        });
-      } else {
-        Toast.show({
-          type: "success",
-          text1: "Conta criada com sucesso!",
-          text2: `Bem-vindo, ${nome}!`,
-        });
-        navigation.navigate("Login"); // Navega para a tela de login
-      }
-    } catch (err) {
-      console.error(err);
+    // Simular validação de dados
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
       Toast.show({
         type: "error",
-        text1: "Erro",
-        text2: "Algo deu errado. Tente novamente.",
+        text1: "Erro ao registrar",
+        text2: "Por favor, insira um email válido.",
       });
+      return;
     }
+
+    // Simular salvamento dos dados (mocado)
+    console.log("Dados do usuário:", {
+      nome,
+      email,
+      telefone: countryCode + telefone,
+    });
+
+    // Navegar para a tela de definir senha
+    navigation.navigate("SetPassword", {
+      userData: {
+        nome,
+        email,
+        telefone: countryCode + telefone,
+      }
+    });
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={COMMON_STYLES.container}
-    >
-      <StatusBar barStyle="light-content" />
-      <ScrollView 
-        contentContainerStyle={COMMON_STYLES.scrollContent}
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.container}
       >
-        {/* Header */}
-        <View style={COMMON_STYLES.header}>
-          <Text style={styles.welcomeText}>Junte-se ao</Text>
-          <Text style={styles.headerText}>Travel</Text>
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="chevron-back" size={24} color="#000" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>voltar</Text>
+          </View>
 
-        {/* Card de registro */}
-        <View style={COMMON_STYLES.card}>
-          <View style={COMMON_STYLES.inputContainer}>
-            <Text style={styles.title}>Criar nova conta</Text>
-            
-            <Text style={COMMON_STYLES.label}>Nome Completo</Text>
-            <View style={COMMON_STYLES.inputWrapper}>
-              <FontAwesome name="user" size={SIZES.iconMedium} color={COLORS.primary} style={COMMON_STYLES.inputIcon} />
+          {/* Title */}
+          <Text style={styles.title}>Criar conta</Text>
+
+          {/* Form Container */}
+          <View style={styles.formContainer}>
+            {/* Nome */}
+            <View style={styles.inputContainer}>
               <TextInput
-                style={COMMON_STYLES.textInput}
-                placeholder="Digite seu nome completo"
-                placeholderTextColor={COLORS.input.placeholder}
+                style={styles.textInput}
+                placeholder="Nome"
+                placeholderTextColor="#9CA3AF"
                 value={nome}
                 onChangeText={setNome}
               />
             </View>
 
-            <Text style={COMMON_STYLES.label}>Telefone</Text>
-            <View style={COMMON_STYLES.inputWrapper}>
-              <FontAwesome name="phone" size={SIZES.iconMedium} color={COLORS.primary} style={COMMON_STYLES.inputIcon} />
+            {/* Email */}
+            <View style={styles.inputContainer}>
               <TextInput
-                style={COMMON_STYLES.textInput}
-                keyboardType="phone-pad"
-                placeholder="Digite seu telefone"
-                placeholderTextColor={COLORS.input.placeholder}
-                value={telefone}
-                onChangeText={setTelefone}
+                style={styles.textInput}
+                placeholder="Email"
+                placeholderTextColor="#9CA3AF"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
               />
             </View>
 
-            <Text style={COMMON_STYLES.label}>Senha</Text>
-            <View style={COMMON_STYLES.inputWrapper}>
-              <FontAwesome name="lock" size={SIZES.iconMedium} color={COLORS.primary} style={COMMON_STYLES.inputIcon} />
-              <TextInput
-                style={[COMMON_STYLES.textInput, { flex: 1 }]}
-                secureTextEntry={!showPassword}
-                placeholder="Digite sua senha"
-                placeholderTextColor={COLORS.input.placeholder}
-                value={password}
-                onChangeText={setPassword}
-              />
-              <TouchableOpacity 
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeIcon}
-              >
-                <Ionicons 
-                  name={showPassword ? "eye-off" : "eye"} 
-                  size={SIZES.iconMedium} 
-                  color={COLORS.primary} 
-                />
+            {/* Telefone com código do país melhorado */}
+            <View style={styles.phoneContainer}>
+              <TouchableOpacity style={styles.countrySelector}>
+                <Text style={styles.flag}>🇦🇴</Text>
+                <Text style={styles.countryCode}>{countryCode}</Text>
+                <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
               </TouchableOpacity>
-            </View>
-
-            <Text style={COMMON_STYLES.label}>Confirmar Senha</Text>
-            <View style={COMMON_STYLES.inputWrapper}>
-              <FontAwesome name="lock" size={SIZES.iconMedium} color={COLORS.primary} style={COMMON_STYLES.inputIcon} />
-              <TextInput
-                style={[COMMON_STYLES.textInput, { flex: 1 }]}
-                secureTextEntry={!showConfirmPassword}
-                placeholder="Confirme sua senha"
-                placeholderTextColor={COLORS.input.placeholder}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-              />
-              <TouchableOpacity 
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={styles.eyeIcon}
-              >
-                <Ionicons 
-                  name={showConfirmPassword ? "eye-off" : "eye"} 
-                  size={SIZES.iconMedium}
-                  color={COLORS.primary} 
+              <View style={styles.phoneInputContainer}>
+                <TextInput
+                  style={styles.phoneInput}
+                  placeholder="Teu número de telefone"
+                  placeholderTextColor="#9CA3AF"
+                  value={telefone}
+                  onChangeText={setTelefone}
+                  keyboardType="phone-pad"
                 />
-              </TouchableOpacity>
+              </View>
             </View>
 
-            <TouchableOpacity style={COMMON_STYLES.primaryButton} onPress={handleRegister}>
-              <Text style={COMMON_STYLES.primaryButtonText}>Criar Conta</Text>
+            {/* Terms Checkbox */}
+            <TouchableOpacity
+              style={styles.termsContainer}
+              onPress={() => setAcceptTerms(!acceptTerms)}
+            >
+              <View style={[styles.checkbox, acceptTerms && styles.checkboxChecked]}>
+                {acceptTerms && <Ionicons name="checkmark" size={16} color="#fff" />}
+              </View>
+              <Text style={styles.termsText}>
+                Aceito os termos e condições e{" "}
+                <Text style={styles.termsLink}>Termos de serviço</Text> e{" "}
+                <Text style={styles.termsLink}>Política de Privacidade</Text>
+              </Text>
             </TouchableOpacity>
 
+            {/* Create Account Button */}
+            <TouchableOpacity style={styles.createButton} onPress={handleRegister}>
+              <Text style={styles.createButtonText}>Criar conta</Text>
+            </TouchableOpacity>
+
+            {/* Divider */}
+            <View style={styles.dividerContainer}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OU</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Social Login Buttons */}
+            <View style={styles.socialContainer}>
+              <TouchableOpacity style={styles.socialButton}>
+                <Text style={styles.socialButtonText}>G</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.socialButton}>
+                <Ionicons name="logo-facebook" size={24} color="#1877F2" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.socialButton}>
+                <Ionicons name="logo-apple" size={24} color="#000" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Login Link */}
             <View style={styles.loginContainer}>
-              <Text style={styles.loginText}>Já tem uma conta?</Text>
+              <Text style={styles.loginText}>Já tem uma conta? </Text>
               <TouchableOpacity onPress={() => navigation.navigate("Login")}>
-                <Text style={styles.loginLink}> Entrar</Text>
+                <Text style={styles.loginLink}>Entrar</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-
-        {/* Footer */}
-        <Text style={COMMON_STYLES.footerText}>
-          Ao registrar-te, estás a aceitar os nossos termos & condições, a
-          reconhecer a nossa Política de Privacidade
-        </Text>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  welcomeText: {
-    fontSize: SIZES.large,
-    color: COLORS.primaryLight,
-    marginBottom: 5,
+  container: {
+    flex: 1,
+    backgroundColor: '#ffffff',
   },
-  headerText: {
-    fontSize: SIZES.xxlarge,
-    ...FONTS.bold,
-    color: COLORS.white,
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 20,
+    paddingBottom: 20,
+  },
+  backButton: {
+    marginRight: 8,
+  },
+  headerTitle: {
+    fontSize: 16,
+    color: '#000',
   },
   title: {
-    fontSize: SIZES.xlarge,
-    ...FONTS.bold,
-    color: COLORS.text.primary,
-    marginBottom: 20,
-    textAlign: "center",
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 32,
   },
-  eyeIcon: {
-    padding: SIZES.padding.small,
+  formContainer: {
+    flex: 1,
+  },
+  inputContainer: {
+    marginBottom: 16,
+    position: 'relative',
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    fontSize: 16,
+    backgroundColor: '#ffffff',
+    color: '#000',
+  },
+  phoneContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  countrySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+    backgroundColor: '#ffffff',
+    minWidth: 100,
+  },
+  flag: {
+    fontSize: 18,
+    marginRight: 6,
+  },
+  countryCode: {
+    fontSize: 16,
+    color: '#000',
+    marginRight: 6,
+    fontWeight: '500',
+  },
+  phoneInputContainer: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  phoneInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    fontSize: 16,
+    backgroundColor: '#ffffff',
+    color: '#000',
+  },
+
+  termsContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+    paddingHorizontal: 4,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 4,
+    marginRight: 12,
+    marginTop: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  termsText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: '#2563EB',
+    textDecorationLine: 'underline',
+  },
+  createButton: {
+    backgroundColor: '#2563EB',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  createButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
+  socialContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 32,
+  },
+  socialButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+    backgroundColor: '#ffffff',
+  },
+  socialButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#DB4437',
   },
   loginContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 32,
   },
   loginText: {
-    fontSize: SIZES.medium,
-    color: COLORS.text.secondary,
+    fontSize: 14,
+    color: '#6B7280',
   },
   loginLink: {
-    fontSize: SIZES.medium,
-    color: COLORS.text.link,
-    ...FONTS.bold,
+    fontSize: 14,
+    color: '#2563EB',
+    fontWeight: '600',
   },
 });
