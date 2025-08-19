@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
+import LocalDatabase from "../services/localDatabase";
 import { COLORS, SIZES, FONTS, SHADOWS, COMMON_STYLES } from "../config/theme";
 
 export default function LoginScreen({ navigation }) {
@@ -20,8 +21,8 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Função para verificar se o usuário existe (usando dados mocados)
-  const handleLogin = () => {
+  // Login usando dados salvos no dispositivo
+  const handleLogin = async () => {
     if (!emailOrPhone || !password) {
        Toast.show({
           type: "error",
@@ -31,32 +32,53 @@ export default function LoginScreen({ navigation }) {
       return;
     }
 
-    // Dados mocados para teste
-    const mockUsers = [
-      { email: "teste@email.com", telefone: "+244123456789", senha: "123456", nome: "João Silva" },
-      { email: "admin@travel.com", telefone: "+244987654321", senha: "admin123", nome: "Admin Travel" },
-    ];
+    try {
+      const input = (emailOrPhone || '').trim();
+      const typedPassword = (password || '').trim();
 
-    // Verificar se o usuário existe nos dados mocados
-    const user = mockUsers.find(u =>
-      (u.email === emailOrPhone || u.telefone === emailOrPhone) && u.senha === password
-    );
+      const storedProfile = await LocalDatabase.getUserProfile();
 
-    if (!user) {
-      Toast.show({
-        type: "error",
-        text1: "Erro ao iniciar sessão",
-        text2: "Email/telefone ou senha incorretos.",
+      if (!storedProfile) {
+        Toast.show({
+          type: "error",
+          text1: "Conta não encontrada",
+          text2: "Crie uma conta primeiro.",
+        });
+        return;
+      }
+
+      const emailMatch = (storedProfile.email || '').toLowerCase() === input.toLowerCase();
+      const phoneMatch = (storedProfile.telefone || storedProfile.phone || '') === input;
+      const passwordMatch = (storedProfile.password || '') === typedPassword;
+
+      if (!passwordMatch || !(emailMatch || phoneMatch)) {
+        Toast.show({
+          type: "error",
+          text1: "Erro ao iniciar sessão",
+          text2: "Email/telefone ou senha incorretos.",
+        });
+        return;
+      }
+
+      await LocalDatabase.updateUserProfile({
+        isLoggedIn: true,
+        lastLogin: new Date().toISOString(),
       });
-    } else {
-      console.log("Usuário logado:", user);
+
       Toast.show({
         type: "success",
         text1: "Bem-vindo!",
-        text2: `Olá, ${user.nome}!`,
+        text2: `Olá, ${storedProfile.nome || storedProfile.fullName || storedProfile.email}!`,
       });
 
-      navigation.navigate("HomeTabs");
+      navigation.reset({ index: 0, routes: [{ name: "HomeTabs" }] });
+    } catch (error) {
+      console.error('Login error:', error);
+      Toast.show({
+        type: "error",
+        text1: "Erro ao iniciar sessão",
+        text2: "Tente novamente.",
+      });
     }
   };
 
