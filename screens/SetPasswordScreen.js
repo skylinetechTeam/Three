@@ -20,7 +20,7 @@ export default function SetPasswordScreen({ navigation, route = {} }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!password || !confirmPassword) {
       Toast.show({
         type: "error",
@@ -48,18 +48,36 @@ export default function SetPasswordScreen({ navigation, route = {} }) {
       return;
     }
 
-    // Simular criação de conta e envio de código SMS
-    Toast.show({
-      type: "success",
-      text1: "Código enviado!",
-      text2: "Verifique seu telefone para o código de verificação.",
-    });
+    try {
+      const userData = route?.params?.userData || {};
+      const profileToSave = {
+        ...userData,
+        password,
+        isLoggedIn: true,
+        createdAt: userData?.createdAt || new Date().toISOString(),
+      };
 
-    // Navegar para a tela de verificação de telefone
-    navigation.navigate("PhoneVerification", {
-      userData: route?.params?.userData || {},
-      password: password
-    });
+      const LocalDatabase = (await import('../services/localDatabase')).default;
+      await LocalDatabase.saveUserProfile(profileToSave);
+
+      Toast.show({
+        type: "success",
+        text1: "Conta criada",
+        text2: "Bem-vindo!",
+      });
+
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'HomeTabs' }],
+      });
+    } catch (error) {
+      console.error('Erro ao finalizar registro:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Não foi possível finalizar o registro.',
+      });
+    }
   };
 
   return (

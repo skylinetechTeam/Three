@@ -18,7 +18,6 @@ import TermsScreen from './screens/TermsScreen';
 import AboutScreen from './screens/AboutScreen';
 import EditProfileScreen from './screens/EditProfileScreen';
 import SetPasswordScreen from './screens/SetPasswordScreen';
-import PhoneVerificationScreen from './screens/PhoneVerificationScreen';
 import Toast from 'react-native-toast-message';
 import SplashScreen from './components/SplashScreen';
 import LocalDatabase from './services/localDatabase';
@@ -134,11 +133,6 @@ export default function App() {
         <Stack.Screen
           name="SetPassword"
           component={SetPasswordScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="PhoneVerification"
-          component={PhoneVerificationScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen
