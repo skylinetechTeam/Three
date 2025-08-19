@@ -14,6 +14,7 @@ import {
 import Toast from "react-native-toast-message";
 import { FontAwesome, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { COLORS, SIZES, FONTS, COMMON_STYLES } from "../config/theme";
+import LocalDatabase from "../services/localDatabase";
 
 export default function RegisterScreen({ navigation }) {
   const [nome, setNome] = useState("");
@@ -22,8 +23,8 @@ export default function RegisterScreen({ navigation }) {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [countryCode, setCountryCode] = useState("+244");
 
-  // Função para registrar um novo usuário (usando dados mocados)
-  const handleRegister = () => {
+  // Função para registrar um novo usuário e salvar localmente
+  const handleRegister = async () => {
     if (!nome || !email || !telefone) {
       Toast.show({
         type: "error",
@@ -53,21 +54,32 @@ export default function RegisterScreen({ navigation }) {
       return;
     }
 
-    // Simular salvamento dos dados (mocado)
-    console.log("Dados do usuário:", {
-      nome,
-      email,
-      telefone: countryCode + telefone,
-    });
-
-    // Navegar para a tela de definir senha
-    navigation.navigate("SetPassword", {
-      userData: {
+    try {
+      const userData = {
         nome,
         email,
         telefone: countryCode + telefone,
-      }
-    });
+        createdAt: new Date().toISOString(),
+        isLoggedIn: false,
+      };
+
+      await LocalDatabase.saveUserProfile(userData);
+
+      Toast.show({
+        type: "success",
+        text1: "Conta criada",
+        text2: "Registo concluído. Faça login para continuar.",
+      });
+
+      navigation.navigate("Login");
+    } catch (error) {
+      console.error("Erro ao salvar usuário:", error);
+      Toast.show({
+        type: "error",
+        text1: "Erro ao registrar",
+        text2: "Não foi possível salvar os dados. Tente novamente.",
+      });
+    }
   };
 
   return (
