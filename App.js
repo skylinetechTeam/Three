@@ -5,14 +5,23 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
-import SetPasswordScreen from './screens/SetPasswordScreen';
-import PhoneVerificationScreen from './screens/PhoneVerificationScreen';
 import HomeScreen from './screens/HomeScreen';
-import AccountScreen from './screens/AccountScreen';
+import ProfileScreen from './screens/ProfileScreen';
 import ReservasScreen from './screens/ReservasScreen';
 import FavoritosScreen from './screens/FavoritosScreen';
+import PaymentScreen from './screens/PaymentScreen';
+import PaymentHistoryScreen from './screens/PaymentHistoryScreen';
+import SettingsScreen from './screens/SettingsScreen';
+import HelpScreen from './screens/HelpScreen';
+import PrivacyScreen from './screens/PrivacyScreen';
+import TermsScreen from './screens/TermsScreen';
+import AboutScreen from './screens/AboutScreen';
+import EditProfileScreen from './screens/EditProfileScreen';
+import SetPasswordScreen from './screens/SetPasswordScreen';
+import PhoneVerificationScreen from './screens/PhoneVerificationScreen';
 import Toast from 'react-native-toast-message';
 import SplashScreen from './components/SplashScreen';
+import LocalDatabase from './services/localDatabase';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -72,7 +81,7 @@ function HomeTabs() {
       />
       <Tab.Screen
         name="Conta"
-        component={AccountScreen}
+        component={ProfileScreen}
         options={{
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
@@ -86,20 +95,32 @@ function HomeTabs() {
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 2000);
+    checkLoginStatus();
   }, []);
 
+  const checkLoginStatus = async () => {
+    try {
+      const userProfile = await LocalDatabase.getUserProfile();
+      if (userProfile && userProfile.isLoggedIn) {
+        setIsLoggedIn(true);
+      }
+    } catch (error) {
+      console.error('Error checking login status:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (isLoading) {
-    return <SplashScreen />;
+    return <SplashScreen onFinish={() => setIsLoading(false)} />;
   }
 
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Login">
+      <Stack.Navigator initialRouteName={isLoggedIn ? "HomeTabs" : "Login"}>
         <Stack.Screen
           name="Login"
           component={LoginScreen}
@@ -123,6 +144,46 @@ export default function App() {
         <Stack.Screen
           name="HomeTabs"
           component={HomeTabs}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Payment"
+          component={PaymentScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="PaymentHistory"
+          component={PaymentHistoryScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Help"
+          component={HelpScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Privacy"
+          component={PrivacyScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Terms"
+          component={TermsScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="About"
+          component={AboutScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="EditProfile"
+          component={EditProfileScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

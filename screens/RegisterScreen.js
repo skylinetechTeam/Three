@@ -23,7 +23,7 @@ export default function RegisterScreen({ navigation }) {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [countryCode, setCountryCode] = useState("+244");
 
-  // Função para registrar um novo usuário e salvar localmente
+  // Função para registrar um novo usuário e seguir para definir senha
   const handleRegister = async () => {
     if (!nome || !email || !telefone) {
       Toast.show({
@@ -54,32 +54,14 @@ export default function RegisterScreen({ navigation }) {
       return;
     }
 
-    try {
-      const userData = {
+    // vai para a tela de definir senha com os dados preenchidos
+    navigation.navigate("SetPassword", {
+      userData: {
         nome,
         email,
         telefone: countryCode + telefone,
-        createdAt: new Date().toISOString(),
-        isLoggedIn: false,
-      };
-
-      await LocalDatabase.saveUserProfile(userData);
-
-      Toast.show({
-        type: "success",
-        text1: "Conta criada",
-        text2: "Registo concluído. Faça login para continuar.",
-      });
-
-      navigation.navigate("Login");
-    } catch (error) {
-      console.error("Erro ao salvar usuário:", error);
-      Toast.show({
-        type: "error",
-        text1: "Erro ao registrar",
-        text2: "Não foi possível salvar os dados. Tente novamente.",
-      });
-    }
+      },
+    });
   };
 
   return (
