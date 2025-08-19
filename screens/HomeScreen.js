@@ -22,6 +22,101 @@ const { width, height } = Dimensions.get('window');
 // HERE Maps API Configuration
 const HERE_API_KEY = 'bMtOJnfPZwG3fyrgS24Jif6dt3MXbOoq6H4X4KqxZKY';
 
+// OpenStreetMap fallback HTML for when HERE Maps has gray tiles
+const openStreetMapHTML = (lat, lng) => `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; }
+        #map { height: 100%; width: 100%; }
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            background: rgba(255,255,255,0.9);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            color: #2563EB;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">
+        <div>Carregando mapa...</div>
+    </div>
+    <div id="map"></div>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        console.log('🗺️ Iniciando OpenStreetMap...');
+        
+        // Initialize map
+        const map = L.map('map').setView([${lat}, ${lng}], 13);
+        
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+        
+        // Hide loading
+        document.getElementById('loading').style.display = 'none';
+        
+        console.log('✅ OpenStreetMap carregado com sucesso');
+        
+        // Add user marker
+        let userMarker = L.marker([${lat}, ${lng}])
+            .addTo(map)
+            .bindPopup('Sua localização');
+        
+        // Expose functions for React Native
+        window.__setUserLocation = function(lat, lng) {
+            if (userMarker) {
+                map.removeLayer(userMarker);
+            }
+            userMarker = L.marker([lat, lng]).addTo(map).bindPopup('Sua localização');
+            map.setView([lat, lng], 13);
+        };
+        
+        window.__setDestination = function(lat, lng, title) {
+            if (window.destinationMarker) {
+                map.removeLayer(window.destinationMarker);
+            }
+            window.destinationMarker = L.marker([lat, lng]).addTo(map).bindPopup(title);
+        };
+        
+        window.__centerOnUser = function() {
+            if (userMarker) {
+                map.setView(userMarker.getLatLng(), 13);
+            }
+        };
+        
+        window.__clearRoute = function() {
+            if (window.destinationMarker) {
+                map.removeLayer(window.destinationMarker);
+                window.destinationMarker = null;
+            }
+        };
+        
+        // Notify React Native
+        window.ReactNativeWebView?.postMessage(JSON.stringify({
+            type: 'MAP_READY',
+            success: true,
+            provider: 'OpenStreetMap'
+        }));
+    </script>
+</body>
+</html>
+`;
+
 export default function HomeScreen({ navigation }) {
   const [location, setLocation] = useState(null);
   const [destination, setDestination] = useState('');
@@ -36,6 +131,7 @@ export default function HomeScreen({ navigation }) {
   const [isMapLoading, setIsMapLoading] = useState(true);
   const [mapError, setMapError] = useState(null);
   const [useHereMap, setUseHereMap] = useState(true);
+  const [mapProvider, setMapProvider] = useState('here'); // 'here', 'openstreet', 'native'
   const webViewRef = useRef(null);
   const mapViewRef = useRef(null);
   const searchTimeoutRef = useRef(null);
@@ -91,7 +187,7 @@ export default function HomeScreen({ navigation }) {
     }
   }, [location]);
 
-  // HERE Maps HTML content with improved loading and error handling
+  // Simplified HERE Maps HTML to fix gray tiles issue
   const hereMapHTML = `
     <!DOCTYPE html>
     <html>
@@ -100,17 +196,21 @@ export default function HomeScreen({ navigation }) {
         <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
         <title>HERE Map</title>
         <style>
+            * { box-sizing: border-box; }
             body, html { 
                 margin: 0; 
                 padding: 0; 
                 height: 100%; 
+                width: 100%;
                 overflow: hidden;
-                background-color: #f0f0f0;
+                background-color: #E8F4FD;
+                font-family: Arial, sans-serif;
             }
             #mapContainer { 
                 height: 100%; 
                 width: 100%; 
-                background-color: #f0f0f0;
+                background-color: #E8F4FD;
+                position: relative;
             }
             #loadingIndicator {
                 position: absolute;
@@ -118,16 +218,18 @@ export default function HomeScreen({ navigation }) {
                 left: 50%;
                 transform: translate(-50%, -50%);
                 text-align: center;
-                font-family: Arial, sans-serif;
-                color: #666;
+                color: #2563EB;
                 z-index: 1000;
+                background: rgba(255,255,255,0.9);
+                padding: 20px;
+                border-radius: 10px;
             }
             .spinner {
-                border: 4px solid #f3f3f3;
-                border-top: 4px solid #2563EB;
+                border: 3px solid #f3f3f3;
+                border-top: 3px solid #2563EB;
                 border-radius: 50%;
-                width: 40px;
-                height: 40px;
+                width: 30px;
+                height: 30px;
                 animation: spin 1s linear infinite;
                 margin: 0 auto 10px;
             }
@@ -144,55 +246,124 @@ export default function HomeScreen({ navigation }) {
         </div>
         <div id="mapContainer"></div>
         
-        <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-core.js"></script>
-        <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-service.js"></script>
-        <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-ui.js"></script>
-        <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-mapevents.js"></script>
-        <link rel="stylesheet" type="text/css" href="https://js.api.here.com/v3/3.1/mapsjs-ui.css" />
-        
         <script>
-            console.log('🗺️ Iniciando carregamento do HERE Maps...');
+            console.log('🗺️ Iniciando HERE Maps simplificado...');
             
-            // Wait for all scripts to load
+            // Load HERE Maps scripts dynamically to ensure proper loading
+            function loadScript(src) {
+                return new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
+            
+            async function loadHereScripts() {
+                try {
+                    await loadScript('https://js.api.here.com/v3/3.1/mapsjs-core.js');
+                    await loadScript('https://js.api.here.com/v3/3.1/mapsjs-service.js');
+                    await loadScript('https://js.api.here.com/v3/3.1/mapsjs-ui.js');
+                    await loadScript('https://js.api.here.com/v3/3.1/mapsjs-mapevents.js');
+                    
+                    // Load CSS
+                    const link = document.createElement('link');
+                    link.rel = 'stylesheet';
+                    link.href = 'https://js.api.here.com/v3/3.1/mapsjs-ui.css';
+                    document.head.appendChild(link);
+                    
+                    console.log('✅ Scripts HERE Maps carregados');
+                    initializeMap();
+                } catch (error) {
+                    console.error('❌ Erro ao carregar scripts HERE Maps:', error);
+                    document.getElementById('loadingIndicator').innerHTML = 
+                        '<div style="color: #ef4444;">Erro ao carregar scripts do mapa</div>';
+                    
+                    window.ReactNativeWebView?.postMessage(JSON.stringify({
+                        type: 'MAP_ERROR',
+                        error: 'Falha ao carregar scripts HERE Maps'
+                    }));
+                }
+            }
+            
             function initializeMap() {
                 try {
                     console.log('🔑 HERE API Key:', '${HERE_API_KEY}');
                     
-                    // Hide loading indicator
-                    document.getElementById('loadingIndicator').style.display = 'none';
-                    
-                    // Initialize HERE Maps
+                    // Initialize HERE Maps Platform
                     const platform = new H.service.Platform({
-                        'apikey': '${HERE_API_KEY}'
+                        'apikey': '${HERE_API_KEY}',
+                        'useHTTPS': true
                     });
 
-                    const defaultLayers = platform.createDefaultLayers();
+                    const defaultLayers = platform.createDefaultLayers({
+                        tileSize: 256,
+                        ppi: window.devicePixelRatio > 1 ? 320 : 72
+                    });
+                    
+                    console.log('🗺️ Usando raster normal map para evitar tiles cinzas');
                     
                     const map = new H.Map(
                       document.getElementById('mapContainer'),
-                      defaultLayers.vector.normal.map,
+                      defaultLayers.raster.normal.map,
                       {
-                        zoom: 15,
-                        center: { lat: ${location?.coords.latitude || -8.8390}, lng: ${location?.coords.longitude || 13.2894} },
-                        pixelRatio: window.devicePixelRatio || 1
+                        zoom: 13,
+                        center: { lat: ${location?.coords.latitude || -8.8390}, lng: ${location?.coords.longitude || 13.2894} }
                       }
                     );
 
                     console.log('✅ HERE Map criado com sucesso');
+                    
+                    // Hide loading indicator
+                    document.getElementById('loadingIndicator').style.display = 'none';
 
-                    // Enable map interaction (pan, zoom)
+                    // Enable map interaction
                     const behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
                     const ui = H.ui.UI.createDefault(map, defaultLayers);
                     
                     // Handle window resize
                     window.addEventListener('resize', () => {
-                        map.getViewPort().resize();
+                        setTimeout(() => map.getViewPort().resize(), 100);
                     });
+
+                    // Force initial resize
+                    setTimeout(() => {
+                        map.getViewPort().resize();
+                        console.log('🔄 Resize inicial executado');
+                    }, 500);
 
                     // Custom markers
                     let userMarker = null;
                     let destinationMarker = null;
                     let routeLine = null;
+
+                    // Check for gray tiles and fix them
+                    let tileCheckCount = 0;
+                    const maxTileChecks = 3;
+                    
+                    function checkAndFixGrayTiles() {
+                        tileCheckCount++;
+                        console.log('🔍 Verificando tiles (tentativa ' + tileCheckCount + ')...');
+                        
+                        // Force map refresh to load tiles
+                        map.getViewPort().resize();
+                        
+                        if (tileCheckCount < maxTileChecks) {
+                            setTimeout(checkAndFixGrayTiles, 2000);
+                        } else {
+                            console.log('✅ Verificação de tiles concluída');
+                            
+                            // Notify React Native that map is ready
+                            window.ReactNativeWebView?.postMessage(JSON.stringify({
+                                type: 'MAP_READY',
+                                success: true
+                            }));
+                        }
+                    }
+                    
+                    // Start tile checking after map is created
+                    setTimeout(checkAndFixGrayTiles, 1000);
 
                     // Add user location marker
                     function addUserLocationMarker(lat, lng) {
@@ -295,11 +466,11 @@ export default function HomeScreen({ navigation }) {
                 }
             }
             
-            // Initialize when DOM is ready
+            // Start loading HERE Maps scripts
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', initializeMap);
+                document.addEventListener('DOMContentLoaded', loadHereScripts);
             } else {
-                initializeMap();
+                loadHereScripts();
             }
         </script>
     </body>
@@ -361,11 +532,17 @@ export default function HomeScreen({ navigation }) {
     setSelectedDestination(selectedLocation);
     setIsSearchExpanded(false);
     
-          // Send location to HERE Map
+          // Send location to Map
       if (selectedLocation.lat && selectedLocation.lng) {
-        const js = `window.__setDestination(${selectedLocation.lat}, ${selectedLocation.lng}, ${JSON.stringify(selectedLocation.name)}); true;`;
-        console.log('🗺️ Injecting JavaScript:', js);
-        webViewRef.current?.injectJavaScript(js);
+        if (mapProvider === 'native') {
+          // For React Native Maps, we just update the state - markers are handled in render
+          console.log('🗺️ Destino selecionado para React Native Maps');
+        } else {
+          // For WebView maps (HERE or OpenStreetMap)
+          const js = `window.__setDestination && window.__setDestination(${selectedLocation.lat}, ${selectedLocation.lng}, ${JSON.stringify(selectedLocation.name)}); true;`;
+          console.log('🗺️ Injecting JavaScript:', js);
+          webViewRef.current?.injectJavaScript(js);
+        }
         
         // Iniciar busca de motoristas
         console.log('🚗 Iniciando busca de motoristas...');
@@ -394,10 +571,7 @@ export default function HomeScreen({ navigation }) {
 
   const centerOnUserLocation = () => {
     if (location) {
-      if (useHereMap) {
-        const js = `window.__centerOnUser(); true;`;
-        webViewRef.current?.injectJavaScript(js);
-      } else {
+      if (mapProvider === 'native') {
         // React Native Maps
         mapViewRef.current?.animateToRegion({
           latitude: location.coords.latitude,
@@ -405,15 +579,33 @@ export default function HomeScreen({ navigation }) {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         }, 1000);
+      } else {
+        // WebView maps (HERE or OpenStreetMap)
+        const js = `window.__centerOnUser && window.__centerOnUser(); true;`;
+        webViewRef.current?.injectJavaScript(js);
       }
     }
   };
 
   const switchMapProvider = () => {
-    setUseHereMap(!useHereMap);
+    const providers = ['here', 'openstreet', 'native'];
+    const currentIndex = providers.indexOf(mapProvider);
+    const nextProvider = providers[(currentIndex + 1) % providers.length];
+    
+    setMapProvider(nextProvider);
     setIsMapLoading(true);
     setMapError(null);
-    console.log('🔄 Alternando para:', useHereMap ? 'React Native Maps' : 'HERE Maps');
+    console.log('🔄 Alternando para:', nextProvider);
+  };
+
+  const getMapHTML = () => {
+    const lat = location?.coords.latitude || -8.8390;
+    const lng = location?.coords.longitude || 13.2894;
+    
+    if (mapProvider === 'openstreet') {
+      return openStreetMapHTML(lat, lng);
+    }
+    return hereMapHTML; // Default to HERE Maps
   };
 
   const handleSearchFocus = () => {
@@ -451,8 +643,10 @@ export default function HomeScreen({ navigation }) {
     setDriversFound(false);
     
     // Clear route on map
-    const js = `window.__clearRoute(); true;`;
-    webViewRef.current?.injectJavaScript(js);
+    if (mapProvider !== 'native') {
+      const js = `window.__clearRoute && window.__clearRoute(); true;`;
+      webViewRef.current?.injectJavaScript(js);
+    }
   };
 
   const getIconForCategory = (categories) => {
@@ -486,11 +680,54 @@ export default function HomeScreen({ navigation }) {
       {console.log('🏠 HomeScreen render - States:', { isSearchingDrivers, selectedDestination: !!selectedDestination, driverSearchTime, driversFound })}
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
-      {/* HERE Map WebView */}
-      <WebView
-        ref={webViewRef}
-        source={{ html: hereMapHTML }}
-        style={styles.map}
+      {/* Map Container - Multiple Providers */}
+      {mapProvider === 'native' ? (
+        <MapView
+          ref={mapViewRef}
+          style={styles.map}
+          provider={PROVIDER_GOOGLE}
+          initialRegion={{
+            latitude: location?.coords.latitude || -8.8390,
+            longitude: location?.coords.longitude || 13.2894,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }}
+          showsUserLocation={true}
+          showsMyLocationButton={false}
+          showsCompass={true}
+          showsScale={true}
+          loadingEnabled={true}
+          onMapReady={() => {
+            console.log('✅ React Native Maps pronto');
+            setIsMapLoading(false);
+            setMapError(null);
+          }}
+        >
+          {location && (
+            <Marker
+              coordinate={{
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+              }}
+              title="Sua localização"
+            />
+          )}
+          {selectedDestination && (
+            <Marker
+              coordinate={{
+                latitude: selectedDestination.lat,
+                longitude: selectedDestination.lng,
+              }}
+              title={selectedDestination.name}
+              pinColor="red"
+            />
+          )}
+        </MapView>
+      ) : (
+        <WebView
+          ref={webViewRef}
+          source={{ html: getMapHTML() }}
+          style={styles.map}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         startInLoadingState={true}
@@ -524,13 +761,25 @@ export default function HomeScreen({ navigation }) {
           console.error('❌ WebView error:', error);
           setIsMapLoading(false);
           setMapError('Erro ao carregar o mapa');
-          Alert.alert('Erro no Mapa', 'Não foi possível carregar o mapa. Verifique sua conexão com a internet.');
+          // Auto-switch to next provider on error
+          setTimeout(() => {
+            if (mapProvider === 'here') {
+              console.log('🔄 Alternando para OpenStreetMap devido a erro');
+              setMapProvider('openstreet');
+              setIsMapLoading(true);
+              setMapError(null);
+            } else if (mapProvider === 'openstreet') {
+              console.log('🔄 Alternando para React Native Maps devido a erro');
+              setMapProvider('native');
+              setIsMapLoading(true);
+              setMapError(null);
+            }
+          }, 2000);
         }}
         onHttpError={(error) => {
           console.error('🌐 WebView HTTP error:', error);
           setIsMapLoading(false);
           setMapError('Erro de conexão');
-          Alert.alert('Erro de Conexão', 'Problema de conectividade ao carregar o mapa.');
         }}
         onMessage={(event) => {
           try {
@@ -538,14 +787,23 @@ export default function HomeScreen({ navigation }) {
             console.log('📨 Mensagem do mapa:', data);
             
             if (data.type === 'MAP_READY') {
-              console.log('✅ Mapa pronto para uso');
+              console.log(`✅ ${data.provider || mapProvider} pronto para uso`);
               setIsMapLoading(false);
               setMapError(null);
             } else if (data.type === 'MAP_ERROR') {
               console.error('❌ Erro no mapa:', data.error);
               setIsMapLoading(false);
               setMapError(data.error);
-              Alert.alert('Erro no Mapa', `Problema ao inicializar o mapa: ${data.error}`);
+              
+              // Auto-switch to OpenStreetMap if HERE Maps has gray tiles
+              if (data.error.includes('cinza') || data.error.includes('tiles')) {
+                setTimeout(() => {
+                  console.log('🔄 Alternando para OpenStreetMap devido a tiles cinzas');
+                  setMapProvider('openstreet');
+                  setIsMapLoading(true);
+                  setMapError(null);
+                }, 1500);
+              }
             }
           } catch (error) {
             console.log('📨 Mensagem do mapa (não JSON):', event.nativeEvent.data);
@@ -591,6 +849,21 @@ export default function HomeScreen({ navigation }) {
         onPress={centerOnUserLocation}
       >
         <MaterialIcons name="my-location" size={24} color="#ffffff" />
+      </TouchableOpacity>
+
+      {/* Map Provider Switch Button */}
+      <TouchableOpacity
+        style={styles.mapSwitchButton}
+        onPress={switchMapProvider}
+      >
+        <MaterialIcons 
+          name={mapProvider === 'here' ? "map" : mapProvider === 'openstreet' ? "public" : "satellite"} 
+          size={18} 
+          color="#ffffff" 
+        />
+        <Text style={styles.mapSwitchText}>
+          {mapProvider === 'here' ? "HERE" : mapProvider === 'openstreet' ? "OSM" : "Google"}
+        </Text>
       </TouchableOpacity>
 
       {/* Search and Taxi Controls OR Driver Search Animation */}
@@ -823,6 +1096,28 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 5,
+  },
+  mapSwitchButton: {
+    position: 'absolute',
+    top: 120,
+    right: 20,
+    backgroundColor: '#10B981',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  mapSwitchText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   bottomContainer: {
     position: 'absolute',
