@@ -11,15 +11,21 @@ import {
   ScrollView,
   Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import { getHereApiKey, getDefaultLocation } from '../config/maps';
+import { testHereMapsAPI, testMapHTML } from '../utils/testMapsAPI';
 
 const { width, height } = Dimensions.get('window');
 
 // HERE Maps API Configuration
-const HERE_API_KEY = 'bMtOJnfPZwG3fyrgS24Jif6dt3MXbOoq6H4X4KqxZKY';
+const HERE_API_KEY = getHereApiKey();
+const DEFAULT_LOCATION = getDefaultLocation();
+const DEFAULT_LAT = DEFAULT_LOCATION.latitude;
+const DEFAULT_LNG = DEFAULT_LOCATION.longitude;
 
 export default function HomeScreen({ navigation }) {
   const [location, setLocation] = useState(null);
@@ -32,6 +38,8 @@ export default function HomeScreen({ navigation }) {
   const [isSearchingDrivers, setIsSearchingDrivers] = useState(false);
   const [driverSearchTime, setDriverSearchTime] = useState(0);
   const [driversFound, setDriversFound] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapError, setMapError] = useState(false);
   const webViewRef = useRef(null);
   const searchTimeoutRef = useRef(null);
 
@@ -48,6 +56,16 @@ export default function HomeScreen({ navigation }) {
     })();
   }, []);
 
+  // Update map when location is available
+  useEffect(() => {
+    if (location && mapLoaded && webViewRef.current) {
+      const js = `
+        window.__setUserLocation(${location.coords.latitude}, ${location.coords.longitude});
+      `;
+      webViewRef.current.injectJavaScript(js);
+    }
+  }, [location, mapLoaded]);
+
   // HERE Maps HTML content
   const hereMapHTML = `
     <!DOCTYPE html>
@@ -62,36 +80,73 @@ export default function HomeScreen({ navigation }) {
         <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-mapevents.js"></script>
         <link rel="stylesheet" type="text/css" href="https://js.api.here.com/v3/3.1/mapsjs-ui.css" />
         <style>
-            body, html { margin: 0; padding: 0; height: 100%; }
-            #mapContainer { height: 100%; width: 100%; }
+            body, html { 
+                margin: 0; 
+                padding: 0; 
+                height: 100%; 
+                width: 100%;
+                overflow: hidden;
+            }
+            #mapContainer { 
+                height: 100%; 
+                width: 100%; 
+                position: relative;
+            }
+            #errorContainer {
+                display: none;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                text-align: center;
+                background: rgba(255, 255, 255, 0.9);
+                padding: 20px;
+                border-radius: 10px;
+                z-index: 1000;
+            }
         </style>
     </head>
     <body>
-        <div id="mapContainer"></div>
+        <div id="mapContainer">
+            <div id="errorContainer">
+                <h3>Erro ao carregar o mapa</h3>
+                <p>Verifique sua conexão com a internet</p>
+            </div>
+        </div>
         
         <script>
-            // Initialize HERE Maps
-            const platform = new H.service.Platform({
-                'apikey': '${HERE_API_KEY}'
-            });
-
-            const defaultLayers = platform.createDefaultLayers();
+            let map = null;
+            let platform = null;
             
-            const map = new H.Map(
-              document.getElementById('mapContainer'),
-              defaultLayers.raster.normal.map,
-              {
-                zoom: 15,
-                center: { lat: ${location?.coords.latitude || -8.8390}, lng: ${location?.coords.longitude || 13.2894} },
-                pixelRatio: window.devicePixelRatio || 1,
-                engineType: H.map.render.RenderEngine.EngineType.RASTER
-              }
-            );
+            try {
+                // Initialize HERE Maps
+                platform = new H.service.Platform({
+                    'apikey': '${HERE_API_KEY}'
+                });
 
-            // Enable map interaction (pan, zoom)
-            const behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
-            const ui = H.ui.UI.createDefault(map, defaultLayers);
-            window.addEventListener('resize', () => map.getViewPort().resize());
+                const defaultLayers = platform.createDefaultLayers();
+                
+                map = new H.Map(
+                  document.getElementById('mapContainer'),
+                  defaultLayers.raster.normal.map,
+                  {
+                    zoom: 15,
+                    center: { lat: ${location?.coords.latitude || DEFAULT_LAT}, lng: ${location?.coords.longitude || DEFAULT_LNG} },
+                    pixelRatio: window.devicePixelRatio || 1,
+                    engineType: H.map.render.RenderEngine.EngineType.RASTER
+                  }
+                );
+
+                // Enable map interaction (pan, zoom)
+                const behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
+                const ui = H.ui.UI.createDefault(map, defaultLayers);
+                window.addEventListener('resize', () => map.getViewPort().resize());
+                
+                console.log('HERE Maps initialized successfully');
+            } catch (error) {
+                console.error('Error initializing HERE Maps:', error);
+                document.getElementById('errorContainer').style.display = 'block';
+            }
 
             // Custom markers
             let userMarker = null;
@@ -100,68 +155,111 @@ export default function HomeScreen({ navigation }) {
 
             // Add user location marker
             function addUserLocationMarker(lat, lng) {
+                if (!map) return;
+                
                 if (userMarker) {
                     map.removeObject(userMarker);
                 }
                 
-                const userIcon = new H.map.Icon(
-                    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8" fill="#2563EB" stroke="#ffffff" stroke-width="3"/></svg>',
-                    { size: { w: 24, h: 24 } }
-                );
-                
-                userMarker = new H.map.Marker({ lat: lat, lng: lng }, { icon: userIcon });
-                map.addObject(userMarker);
+                try {
+                    const userIcon = new H.map.Icon(
+                        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8" fill="#2563EB" stroke="#ffffff" stroke-width="3"/></svg>',
+                        { size: { w: 24, h: 24 } }
+                    );
+                    
+                    userMarker = new H.map.Marker({ lat: lat, lng: lng }, { icon: userIcon });
+                    map.addObject(userMarker);
+                } catch (error) {
+                    console.error('Error adding user marker:', error);
+                }
             }
 
             // Add destination marker
             function addDestinationMarker(lat, lng, title) {
+                if (!map) return;
+                
                 if (destinationMarker) {
                     map.removeObject(destinationMarker);
                 }
                 
-                const destIcon = new H.map.Icon(
-                    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#EF4444"/></svg>',
-                    { size: { w: 32, h: 32 } }
-                );
-                
-                destinationMarker = new H.map.Marker({ lat: lat, lng: lng }, { icon: destIcon });
-                destinationMarker.setData(title);
-                map.addObject(destinationMarker);
+                try {
+                    const destIcon = new H.map.Icon(
+                        '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#EF4444"/></svg>',
+                        { size: { w: 32, h: 32 } }
+                    );
+                    
+                    destinationMarker = new H.map.Marker({ lat: lat, lng: lng }, { icon: destIcon });
+                    destinationMarker.setData(title);
+                    map.addObject(destinationMarker);
+                } catch (error) {
+                    console.error('Error adding destination marker:', error);
+                }
             }
 
             // Center map on location
             function centerOnLocation(lat, lng, zoom = 15) {
-                map.setCenter({ lat: lat, lng: lng });
-                map.setZoom(zoom);
+                if (!map) return;
+                
+                try {
+                    map.setCenter({ lat: lat, lng: lng });
+                    map.setZoom(zoom);
+                } catch (error) {
+                    console.error('Error centering map:', error);
+                }
             }
 
             // Expose functions for React Native to call via injectJavaScript
             window.__setUserLocation = function(lat, lng) {
-              addUserLocationMarker(lat, lng);
-              centerOnLocation(lat, lng);
+              try {
+                addUserLocationMarker(lat, lng);
+                centerOnLocation(lat, lng);
+              } catch (error) {
+                console.error('Error in __setUserLocation:', error);
+              }
             };
             window.__setDestination = function(lat, lng, title) {
-              addDestinationMarker(lat, lng, title);
+              try {
+                addDestinationMarker(lat, lng, title);
+              } catch (error) {
+                console.error('Error in __setDestination:', error);
+              }
             };
             window.__centerOnUser = function() {
-              if (userMarker) {
-                const userPos = userMarker.getGeometry();
-                centerOnLocation(userPos.lat, userPos.lng);
+              try {
+                if (userMarker && map) {
+                  const userPos = userMarker.getGeometry();
+                  centerOnLocation(userPos.lat, userPos.lng);
+                }
+              } catch (error) {
+                console.error('Error in __centerOnUser:', error);
               }
             };
             window.__clearRoute = function() {
-              if (destinationMarker) {
-                map.removeObject(destinationMarker);
-                destinationMarker = null;
-              }
-              if (routeLine) {
-                map.removeObject(routeLine);
-                routeLine = null;
+              try {
+                if (destinationMarker && map) {
+                  map.removeObject(destinationMarker);
+                  destinationMarker = null;
+                }
+                if (routeLine && map) {
+                  map.removeObject(routeLine);
+                  routeLine = null;
+                }
+              } catch (error) {
+                console.error('Error in __clearRoute:', error);
               }
             };
 
             // Initialize with user location if available
-            ${location ? `addUserLocationMarker(${location.coords.latitude}, ${location.coords.longitude});` : ''}
+            ${location ? `
+              setTimeout(() => {
+                try {
+                  addUserLocationMarker(${location.coords.latitude}, ${location.coords.longitude});
+                  console.log('User location marker added successfully');
+                } catch (error) {
+                  console.error('Error adding initial user location:', error);
+                }
+              }, 1000);
+            ` : ''}
         </script>
     </body>
     </html>
@@ -326,24 +424,79 @@ export default function HomeScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      {console.log('🏠 HomeScreen render - States:', { isSearchingDrivers, selectedDestination: !!selectedDestination, driverSearchTime, driversFound })}
+    <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
       {/* HERE Map WebView */}
-      <WebView
-        ref={webViewRef}
-        source={{ html: hereMapHTML }}
-        style={styles.map}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        startInLoadingState={true}
-        scalesPageToFit={true}
-        mixedContentMode="compatibility"
-        onLoad={() => console.log('🗺️ WebView loaded successfully')}
-        onError={(error) => console.error('❌ WebView error:', error)}
-        onHttpError={(error) => console.error('🌐 WebView HTTP error:', error)}
-      />
+      {!mapError ? (
+        <WebView
+          ref={webViewRef}
+          source={{ html: hereMapHTML }}
+          style={styles.map}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          startInLoadingState={true}
+          scalesPageToFit={true}
+          mixedContentMode="compatibility"
+          onLoad={() => {
+            setMapLoaded(true);
+            console.log('🗺️ WebView loaded successfully');
+          }}
+          onError={(error) => {
+            setMapError(true);
+            console.error('❌ WebView error:', error);
+          }}
+          onHttpError={(error) => {
+            setMapError(true);
+            console.error('🌐 WebView HTTP error:', error);
+          }}
+        />
+      ) : (
+        <View style={styles.mapFallback}>
+          <MaterialIcons name="map" size={64} color="#6B7280" />
+          <Text style={styles.mapFallbackTitle}>Mapa não disponível</Text>
+          <Text style={styles.mapFallbackSubtitle}>
+            Não foi possível carregar o mapa. Verifique sua conexão com a internet.
+          </Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => {
+              setMapError(false);
+              setMapLoaded(false);
+            }}
+          >
+            <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Loading Indicator */}
+      {!mapLoaded && !mapError && (
+        <View style={styles.mapLoading}>
+          <ActivityIndicator size="large" color="#2563EB" />
+          <Text style={styles.mapLoadingText}>Carregando mapa...</Text>
+        </View>
+      )}
+
+      {/* Debug Info (only in development) */}
+      {__DEV__ && (
+        <View style={styles.debugInfo}>
+          <Text style={styles.debugText}>Map Loaded: {mapLoaded ? 'Yes' : 'No'}</Text>
+          <Text style={styles.debugText}>Map Error: {mapError ? 'Yes' : 'No'}</Text>
+          <Text style={styles.debugText}>Location: {location ? 'Available' : 'Not Available'}</Text>
+          <Text style={styles.debugText}>API Key: {HERE_API_KEY ? 'Set' : 'Not Set'}</Text>
+          <TouchableOpacity 
+            style={styles.testButton}
+            onPress={async () => {
+              console.log('🧪 Testing HERE Maps API...');
+              const result = await testHereMapsAPI();
+              Alert.alert('Test Result', result.success ? 'API is working!' : 'API failed: ' + result.error);
+            }}
+          >
+            <Text style={styles.testButtonText}>Test API</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Location Button */}
       <TouchableOpacity
@@ -556,7 +709,7 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -567,6 +720,80 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  mapFallback: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 20,
+  },
+  mapFallbackTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  mapFallbackSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  mapLoading: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    zIndex: 1000,
+  },
+  mapLoadingText: {
+    fontSize: 16,
+    color: '#2563EB',
+    marginTop: 12,
+    fontWeight: '500',
+  },
+  debugInfo: {
+    position: 'absolute',
+    top: 100,
+    left: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 10,
+    borderRadius: 5,
+    zIndex: 1001,
+  },
+  debugText: {
+    color: '#ffffff',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  testButton: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginTop: 8,
+  },
+  testButtonText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '600',
   },
   locationButton: {
     position: 'absolute',
