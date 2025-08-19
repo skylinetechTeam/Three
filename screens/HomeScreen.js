@@ -15,6 +15,7 @@ import {
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
 const { width, height } = Dimensions.get('window');
 
@@ -32,7 +33,11 @@ export default function HomeScreen({ navigation }) {
   const [isSearchingDrivers, setIsSearchingDrivers] = useState(false);
   const [driverSearchTime, setDriverSearchTime] = useState(0);
   const [driversFound, setDriversFound] = useState(false);
+  const [isMapLoading, setIsMapLoading] = useState(true);
+  const [mapError, setMapError] = useState(null);
+  const [useHereMap, setUseHereMap] = useState(true);
   const webViewRef = useRef(null);
+  const mapViewRef = useRef(null);
   const searchTimeoutRef = useRef(null);
 
   useEffect(() => {
@@ -40,128 +45,262 @@ export default function HomeScreen({ navigation }) {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         console.log('Permission to access location was denied');
+        Alert.alert(
+          'Permissão de Localização',
+          'Para usar o mapa, precisamos acessar sua localização. Por favor, permita o acesso nas configurações.',
+          [{ text: 'OK' }]
+        );
         return;
       }
 
-      let location = await Location.getCurrentPositionAsync({});
-      setLocation(location);
+      try {
+        let location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          timeout: 10000,
+          maximumAge: 60000,
+        });
+        console.log('📍 Localização obtida:', location);
+        setLocation(location);
+      } catch (error) {
+        console.error('❌ Erro ao obter localização:', error);
+        Alert.alert(
+          'Erro de Localização',
+          'Não foi possível obter sua localização. Verifique se o GPS está ativado.',
+          [{ text: 'OK' }]
+        );
+      }
     })();
   }, []);
 
-  // HERE Maps HTML content
+  // Effect to update map when location changes
+  useEffect(() => {
+    if (location && webViewRef.current) {
+      console.log('🔄 Atualizando localização no mapa:', location.coords);
+      const js = `
+        if (window.__setUserLocation) {
+          window.__setUserLocation(${location.coords.latitude}, ${location.coords.longitude});
+        } else {
+          console.log('⚠️ Função __setUserLocation não está disponível ainda');
+        }
+        true;
+      `;
+      // Add a delay to ensure WebView is fully loaded
+      setTimeout(() => {
+        webViewRef.current?.injectJavaScript(js);
+      }, 2000);
+    }
+  }, [location]);
+
+  // HERE Maps HTML content with improved loading and error handling
   const hereMapHTML = `
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
         <title>HERE Map</title>
+        <style>
+            body, html { 
+                margin: 0; 
+                padding: 0; 
+                height: 100%; 
+                overflow: hidden;
+                background-color: #f0f0f0;
+            }
+            #mapContainer { 
+                height: 100%; 
+                width: 100%; 
+                background-color: #f0f0f0;
+            }
+            #loadingIndicator {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                text-align: center;
+                font-family: Arial, sans-serif;
+                color: #666;
+                z-index: 1000;
+            }
+            .spinner {
+                border: 4px solid #f3f3f3;
+                border-top: 4px solid #2563EB;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                animation: spin 1s linear infinite;
+                margin: 0 auto 10px;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="loadingIndicator">
+            <div class="spinner"></div>
+            <div>Carregando mapa...</div>
+        </div>
+        <div id="mapContainer"></div>
+        
         <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-core.js"></script>
         <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-service.js"></script>
         <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-ui.js"></script>
         <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-mapevents.js"></script>
         <link rel="stylesheet" type="text/css" href="https://js.api.here.com/v3/3.1/mapsjs-ui.css" />
-        <style>
-            body, html { margin: 0; padding: 0; height: 100%; }
-            #mapContainer { height: 100%; width: 100%; }
-        </style>
-    </head>
-    <body>
-        <div id="mapContainer"></div>
         
         <script>
-            // Initialize HERE Maps
-            const platform = new H.service.Platform({
-                'apikey': '${HERE_API_KEY}'
-            });
-
-            const defaultLayers = platform.createDefaultLayers();
+            console.log('🗺️ Iniciando carregamento do HERE Maps...');
             
-            const map = new H.Map(
-              document.getElementById('mapContainer'),
-              defaultLayers.raster.normal.map,
-              {
-                zoom: 15,
-                center: { lat: ${location?.coords.latitude || -8.8390}, lng: ${location?.coords.longitude || 13.2894} },
-                pixelRatio: window.devicePixelRatio || 1,
-                engineType: H.map.render.RenderEngine.EngineType.RASTER
-              }
-            );
+            // Wait for all scripts to load
+            function initializeMap() {
+                try {
+                    console.log('🔑 HERE API Key:', '${HERE_API_KEY}');
+                    
+                    // Hide loading indicator
+                    document.getElementById('loadingIndicator').style.display = 'none';
+                    
+                    // Initialize HERE Maps
+                    const platform = new H.service.Platform({
+                        'apikey': '${HERE_API_KEY}'
+                    });
 
-            // Enable map interaction (pan, zoom)
-            const behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
-            const ui = H.ui.UI.createDefault(map, defaultLayers);
-            window.addEventListener('resize', () => map.getViewPort().resize());
+                    const defaultLayers = platform.createDefaultLayers();
+                    
+                    const map = new H.Map(
+                      document.getElementById('mapContainer'),
+                      defaultLayers.vector.normal.map,
+                      {
+                        zoom: 15,
+                        center: { lat: ${location?.coords.latitude || -8.8390}, lng: ${location?.coords.longitude || 13.2894} },
+                        pixelRatio: window.devicePixelRatio || 1
+                      }
+                    );
 
-            // Custom markers
-            let userMarker = null;
-            let destinationMarker = null;
-            let routeLine = null;
+                    console.log('✅ HERE Map criado com sucesso');
 
-            // Add user location marker
-            function addUserLocationMarker(lat, lng) {
-                if (userMarker) {
-                    map.removeObject(userMarker);
+                    // Enable map interaction (pan, zoom)
+                    const behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
+                    const ui = H.ui.UI.createDefault(map, defaultLayers);
+                    
+                    // Handle window resize
+                    window.addEventListener('resize', () => {
+                        map.getViewPort().resize();
+                    });
+
+                    // Custom markers
+                    let userMarker = null;
+                    let destinationMarker = null;
+                    let routeLine = null;
+
+                    // Add user location marker
+                    function addUserLocationMarker(lat, lng) {
+                        console.log('📍 Adicionando marcador do usuário:', lat, lng);
+                        
+                        if (userMarker) {
+                            map.removeObject(userMarker);
+                        }
+                        
+                        const userIcon = new H.map.Icon(
+                            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8" fill="#2563EB" stroke="#ffffff" stroke-width="3"/></svg>',
+                            { size: { w: 24, h: 24 } }
+                        );
+                        
+                        userMarker = new H.map.Marker({ lat: lat, lng: lng }, { icon: userIcon });
+                        map.addObject(userMarker);
+                    }
+
+                    // Add destination marker
+                    function addDestinationMarker(lat, lng, title) {
+                        console.log('🎯 Adicionando marcador de destino:', lat, lng, title);
+                        
+                        if (destinationMarker) {
+                            map.removeObject(destinationMarker);
+                        }
+                        
+                        const destIcon = new H.map.Icon(
+                            '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#EF4444"/></svg>',
+                            { size: { w: 32, h: 32 } }
+                        );
+                        
+                        destinationMarker = new H.map.Marker({ lat: lat, lng: lng }, { icon: destIcon });
+                        destinationMarker.setData(title);
+                        map.addObject(destinationMarker);
+                    }
+
+                    // Center map on location
+                    function centerOnLocation(lat, lng, zoom = 15) {
+                        console.log('🎯 Centralizando mapa em:', lat, lng);
+                        map.setCenter({ lat: lat, lng: lng });
+                        map.setZoom(zoom);
+                    }
+
+                    // Expose functions for React Native to call via injectJavaScript
+                    window.__setUserLocation = function(lat, lng) {
+                      console.log('🔧 __setUserLocation chamado:', lat, lng);
+                      addUserLocationMarker(lat, lng);
+                      centerOnLocation(lat, lng);
+                    };
+                    
+                    window.__setDestination = function(lat, lng, title) {
+                      console.log('🔧 __setDestination chamado:', lat, lng, title);
+                      addDestinationMarker(lat, lng, title);
+                    };
+                    
+                    window.__centerOnUser = function() {
+                      console.log('🔧 __centerOnUser chamado');
+                      if (userMarker) {
+                        const userPos = userMarker.getGeometry();
+                        centerOnLocation(userPos.lat, userPos.lng);
+                      }
+                    };
+                    
+                    window.__clearRoute = function() {
+                      console.log('🔧 __clearRoute chamado');
+                      if (destinationMarker) {
+                        map.removeObject(destinationMarker);
+                        destinationMarker = null;
+                      }
+                      if (routeLine) {
+                        map.removeObject(routeLine);
+                        routeLine = null;
+                      }
+                    };
+
+                    // Initialize with user location if available
+                    ${location ? `
+                    console.log('🚀 Inicializando com localização do usuário:', ${location.coords.latitude}, ${location.coords.longitude});
+                    addUserLocationMarker(${location.coords.latitude}, ${location.coords.longitude});
+                    ` : `
+                    console.log('📍 Localização não disponível, usando coordenadas padrão');
+                    `}
+                    
+                    // Notify React Native that map is ready
+                    window.ReactNativeWebView?.postMessage(JSON.stringify({
+                        type: 'MAP_READY',
+                        success: true
+                    }));
+                    
+                } catch (error) {
+                    console.error('❌ Erro ao inicializar HERE Maps:', error);
+                    document.getElementById('loadingIndicator').innerHTML = 
+                        '<div style="color: #ef4444;">Erro ao carregar o mapa<br><small>' + error.message + '</small></div>';
+                    
+                    // Notify React Native about the error
+                    window.ReactNativeWebView?.postMessage(JSON.stringify({
+                        type: 'MAP_ERROR',
+                        error: error.message
+                    }));
                 }
-                
-                const userIcon = new H.map.Icon(
-                    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8" fill="#2563EB" stroke="#ffffff" stroke-width="3"/></svg>',
-                    { size: { w: 24, h: 24 } }
-                );
-                
-                userMarker = new H.map.Marker({ lat: lat, lng: lng }, { icon: userIcon });
-                map.addObject(userMarker);
             }
-
-            // Add destination marker
-            function addDestinationMarker(lat, lng, title) {
-                if (destinationMarker) {
-                    map.removeObject(destinationMarker);
-                }
-                
-                const destIcon = new H.map.Icon(
-                    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#EF4444"/></svg>',
-                    { size: { w: 32, h: 32 } }
-                );
-                
-                destinationMarker = new H.map.Marker({ lat: lat, lng: lng }, { icon: destIcon });
-                destinationMarker.setData(title);
-                map.addObject(destinationMarker);
+            
+            // Initialize when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initializeMap);
+            } else {
+                initializeMap();
             }
-
-            // Center map on location
-            function centerOnLocation(lat, lng, zoom = 15) {
-                map.setCenter({ lat: lat, lng: lng });
-                map.setZoom(zoom);
-            }
-
-            // Expose functions for React Native to call via injectJavaScript
-            window.__setUserLocation = function(lat, lng) {
-              addUserLocationMarker(lat, lng);
-              centerOnLocation(lat, lng);
-            };
-            window.__setDestination = function(lat, lng, title) {
-              addDestinationMarker(lat, lng, title);
-            };
-            window.__centerOnUser = function() {
-              if (userMarker) {
-                const userPos = userMarker.getGeometry();
-                centerOnLocation(userPos.lat, userPos.lng);
-              }
-            };
-            window.__clearRoute = function() {
-              if (destinationMarker) {
-                map.removeObject(destinationMarker);
-                destinationMarker = null;
-              }
-              if (routeLine) {
-                map.removeObject(routeLine);
-                routeLine = null;
-              }
-            };
-
-            // Initialize with user location if available
-            ${location ? `addUserLocationMarker(${location.coords.latitude}, ${location.coords.longitude});` : ''}
         </script>
     </body>
     </html>
@@ -255,9 +394,26 @@ export default function HomeScreen({ navigation }) {
 
   const centerOnUserLocation = () => {
     if (location) {
-      const js = `window.__centerOnUser(); true;`;
-      webViewRef.current?.injectJavaScript(js);
+      if (useHereMap) {
+        const js = `window.__centerOnUser(); true;`;
+        webViewRef.current?.injectJavaScript(js);
+      } else {
+        // React Native Maps
+        mapViewRef.current?.animateToRegion({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 1000);
+      }
     }
+  };
+
+  const switchMapProvider = () => {
+    setUseHereMap(!useHereMap);
+    setIsMapLoading(true);
+    setMapError(null);
+    console.log('🔄 Alternando para:', useHereMap ? 'React Native Maps' : 'HERE Maps');
   };
 
   const handleSearchFocus = () => {
@@ -340,10 +496,94 @@ export default function HomeScreen({ navigation }) {
         startInLoadingState={true}
         scalesPageToFit={true}
         mixedContentMode="compatibility"
-        onLoad={() => console.log('🗺️ WebView loaded successfully')}
-        onError={(error) => console.error('❌ WebView error:', error)}
-        onHttpError={(error) => console.error('🌐 WebView HTTP error:', error)}
+        allowsInlineMediaPlayback={true}
+        mediaPlaybackRequiresUserAction={false}
+        allowsFullscreenVideo={false}
+        allowsBackForwardNavigationGestures={false}
+        onLoad={() => {
+          console.log('🗺️ WebView carregado com sucesso');
+          setMapError(null);
+          // Inject user location if available
+          if (location) {
+            setTimeout(() => {
+              const js = `window.__setUserLocation && window.__setUserLocation(${location.coords.latitude}, ${location.coords.longitude}); true;`;
+              webViewRef.current?.injectJavaScript(js);
+            }, 1000);
+          }
+        }}
+        onLoadStart={() => {
+          console.log('🔄 WebView iniciando carregamento...');
+          setIsMapLoading(true);
+          setMapError(null);
+        }}
+        onLoadEnd={() => {
+          console.log('✅ WebView carregamento finalizado');
+          // Keep loading state until we get MAP_READY message
+        }}
+        onError={(error) => {
+          console.error('❌ WebView error:', error);
+          setIsMapLoading(false);
+          setMapError('Erro ao carregar o mapa');
+          Alert.alert('Erro no Mapa', 'Não foi possível carregar o mapa. Verifique sua conexão com a internet.');
+        }}
+        onHttpError={(error) => {
+          console.error('🌐 WebView HTTP error:', error);
+          setIsMapLoading(false);
+          setMapError('Erro de conexão');
+          Alert.alert('Erro de Conexão', 'Problema de conectividade ao carregar o mapa.');
+        }}
+        onMessage={(event) => {
+          try {
+            const data = JSON.parse(event.nativeEvent.data);
+            console.log('📨 Mensagem do mapa:', data);
+            
+            if (data.type === 'MAP_READY') {
+              console.log('✅ Mapa pronto para uso');
+              setIsMapLoading(false);
+              setMapError(null);
+            } else if (data.type === 'MAP_ERROR') {
+              console.error('❌ Erro no mapa:', data.error);
+              setIsMapLoading(false);
+              setMapError(data.error);
+              Alert.alert('Erro no Mapa', `Problema ao inicializar o mapa: ${data.error}`);
+            }
+          } catch (error) {
+            console.log('📨 Mensagem do mapa (não JSON):', event.nativeEvent.data);
+          }
+        }}
       />
+
+      {/* Map Loading Overlay */}
+      {isMapLoading && (
+        <View style={styles.mapLoadingOverlay}>
+          <View style={styles.mapLoadingContainer}>
+            <View style={styles.mapLoadingSpinner} />
+            <Text style={styles.mapLoadingText}>Carregando mapa...</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Map Error Overlay */}
+      {mapError && !isMapLoading && (
+        <View style={styles.mapErrorOverlay}>
+          <View style={styles.mapErrorContainer}>
+            <MaterialIcons name="error" size={48} color="#EF4444" />
+            <Text style={styles.mapErrorTitle}>Erro no Mapa</Text>
+            <Text style={styles.mapErrorText}>{mapError}</Text>
+            <TouchableOpacity 
+              style={styles.retryButton}
+              onPress={() => {
+                setMapError(null);
+                setIsMapLoading(true);
+                // Force WebView reload by updating the key
+                webViewRef.current?.reload();
+              }}
+            >
+              <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Location Button */}
       <TouchableOpacity
@@ -898,5 +1138,92 @@ const styles = StyleSheet.create({
   noResultsSubtext: {
     fontSize: 14,
     color: '#9CA3AF',
+  },
+  // Map Loading Overlay Styles
+  mapLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  mapLoadingContainer: {
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  mapLoadingSpinner: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 4,
+    borderColor: '#E5E7EB',
+    borderTopColor: '#2563EB',
+    marginBottom: 16,
+  },
+  mapLoadingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  // Map Error Overlay Styles
+  mapErrorOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  mapErrorContainer: {
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    marginHorizontal: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  mapErrorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  mapErrorText: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#2563EB',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
