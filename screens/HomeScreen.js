@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,28 +10,31 @@ import {
   Dimensions,
   ScrollView,
   Alert,
+  Platform,
 } from 'react-native';
 import * as Location from 'expo-location';
-import MapView, { Marker } from 'react-native-maps';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import { COLORS, SIZES, FONTS, SHADOWS, COMMON_STYLES } from '../config/theme';
+import { MaterialIcons } from '@expo/vector-icons';
+import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
 
 const { width, height } = Dimensions.get('window');
+
+// HERE Maps API Configuration
+const HERE_API_KEY = 'bMtOJnfPZwG3fyrgS24Jif6dt3MXbOoq6H4X4KqxZKY';
 
 export default function HomeScreen({ navigation }) {
   const [location, setLocation] = useState(null);
   const [destination, setDestination] = useState('');
   const [selectedTaxiType, setSelectedTaxiType] = useState('Coletivo');
-  const [mapRef, setMapRef] = useState(null);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
-  const [searchResults, setSearchResults] = useState([]);
-  const [savedAddresses, setSavedAddresses] = useState({
-    home: null,
-    work: null
-  });
   const [filteredResults, setFilteredResults] = useState([]);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [selectedMarker, setSelectedMarker] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedDestination, setSelectedDestination] = useState(null);
+  const [isSearchingDrivers, setIsSearchingDrivers] = useState(false);
+  const [driverSearchTime, setDriverSearchTime] = useState(0);
+  const [driversFound, setDriversFound] = useState(false);
+  const mapRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
+  const [routeCoords, setRouteCoords] = useState([]);
 
   useEffect(() => {
     (async () => {
@@ -43,383 +46,226 @@ export default function HomeScreen({ navigation }) {
 
       let location = await Location.getCurrentPositionAsync({});
       setLocation(location);
+    })();
+  }, []);
 
-      // Focar no mapa quando a localização for obtida
-      if (mapRef && location) {
-        mapRef.animateToRegion({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
+  // Removido WebView HERE e usando react-native-maps com OpenStreetMap
+
+  // Search places with HERE Maps API
+  const searchPlacesWithHERE = async (query) => {
+    if (!query || query.length < 2) return [];
+    
+    console.log('🔍 Searching for:', query);
+    setIsSearching(true);
+    
+    try {
+      const userLat = location?.coords.latitude || -8.8390;
+      const userLng = location?.coords.longitude || 13.2894;
+      
+      console.log('📍 User location:', userLat, userLng);
+      console.log('🔑 HERE API Key:', HERE_API_KEY);
+      
+      // HERE Geocoding and Search API
+      const searchUrl = `https://discover.search.hereapi.com/v1/discover?apikey=${HERE_API_KEY}&q=${encodeURIComponent(query)}&at=${userLat},${userLng}&limit=20&lang=pt-PT`;
+      
+      console.log('🌐 Search URL:', searchUrl);
+      
+      const response = await fetch(searchUrl);
+      const data = await response.json();
+      
+      console.log('📡 HERE API response:', data);
+      
+      if (data.items && data.items.length > 0) {
+        const formattedPlaces = data.items.map((item, index) => ({
+          id: `here_${index}`,
+          name: item.title,
+          address: item.address.label,
+          lat: item.position.lat,
+          lng: item.position.lng,
+          distance: item.distance,
+          categories: item.categories || []
+        }));
+        
+        console.log('✅ Formatted places:', formattedPlaces);
+        setFilteredResults(formattedPlaces);
+      } else {
+        console.log('❌ No items in response');
+        setFilteredResults([]);
+      }
+    } catch (error) {
+      console.error('❌ HERE Places search error:', error);
+      Alert.alert('Erro', 'Não foi possível buscar locais. Tente novamente.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleLocationSelect = (selectedLocation) => {
+    console.log('🎯 Location selected:', selectedLocation);
+    setDestination(selectedLocation.name);
+    setSelectedDestination(selectedLocation);
+    setIsSearchExpanded(false);
+    if (selectedLocation.lat && selectedLocation.lng) {
+      // Ajusta região para o destino
+      if (mapRef.current) {
+        mapRef.current.animateToRegion({
+          latitude: selectedLocation.lat,
+          longitude: selectedLocation.lng,
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
-        }, 1000);
-        
-        // Pré-carregar buscas comuns em segundo plano
-        try {
-          const { preloadCommonSearches } = require('../services/placesService');
-          preloadCommonSearches(location);
-        } catch (error) {
-          console.log('Erro ao pré-carregar buscas:', error);
-          // Não é um erro crítico, então apenas logamos
-        }
+        }, 600);
       }
-    })();
-  }, [mapRef]);
 
-  // Locais reais e populares de Luanda
-  const luandaPlaces = [
-    // Shopping Centers
-    { id: 1, name: 'Shopping Belas', address: 'Estrada de Catete, Belas', district: 'Belas', type: 'shopping' },
-    { id: 2, name: 'Shopping Xyami', address: 'Rua Rainha Ginga', district: 'Maianga', type: 'shopping' },
-    { id: 3, name: 'Belas Shopping', address: 'Talatona', district: 'Talatona', type: 'shopping' },
-    { id: 4, name: 'Centro Comercial Kero', address: 'Rua Rainha Ginga', district: 'Maianga', type: 'shopping' },
+      // Desenha linha simples até o destino
+      if (location?.coords) {
+        setRouteCoords([
+          { latitude: location.coords.latitude, longitude: location.coords.longitude },
+          { latitude: selectedLocation.lat, longitude: selectedLocation.lng },
+        ]);
+      }
 
-    // Universidades e Escolas
-    { id: 5, name: 'Universidade Agostinho Neto', address: 'Avenida Ho Chi Minh', district: 'Maianga', type: 'university' },
-    { id: 6, name: 'Universidade Católica de Angola', address: 'Rua Direita da Samba', district: 'Maianga', type: 'university' },
-    { id: 7, name: 'UTEL', address: 'Rua Amílcar Cabral', district: 'Ingombota', type: 'school' },
-    { id: 8, name: 'Escola Portuguesa de Luanda', address: 'Rua Rei Katyavala', district: 'Ingombota', type: 'school' },
-    { id: 9, name: 'Instituto de Telecomunicações', address: 'Rua Ho Chi Minh', district: 'Maianga', type: 'school' },
+      // Iniciar busca de motoristas
+      console.log('🚗 Iniciando busca de motoristas...');
+      setIsSearchingDrivers(true);
+      setDriverSearchTime(0);
+      setDriversFound(false);
 
-    // Hospitais e Clínicas
-    { id: 10, name: 'Hospital Américo Boavida', address: 'Rua Direita do Cemitério', district: 'Sambizanga', type: 'hospital' },
-    { id: 11, name: 'Hospital Josina Machel', address: 'Rua Josina Machel', district: 'Maianga', type: 'hospital' },
-    { id: 12, name: 'Clínica Sagrada Esperança', address: 'Rua Amílcar Cabral', district: 'Ingombota', type: 'clinic' },
-    { id: 13, name: 'Hospital Militar', address: 'Rua Comandante Che Guevara', district: 'Maianga', type: 'hospital' },
-
-    // Pontos Turísticos
-    { id: 14, name: 'Fortaleza de São Miguel', address: 'Rua da Fortaleza, Cidade Alta', district: 'Ingombota', type: 'landmark' },
-    { id: 15, name: 'Marginal de Luanda', address: 'Avenida 4 de Fevereiro', district: 'Ingombota', type: 'landmark' },
-    { id: 16, name: 'Ilha do Cabo', address: 'Ilha do Cabo', district: 'Ingombota', type: 'beach' },
-    { id: 17, name: 'Mussulo', address: 'Ilha do Mussulo', district: 'Luanda', type: 'beach' },
-
-    // Aeroporto e Transporte
-    { id: 18, name: 'Aeroporto Internacional 4 de Fevereiro', address: 'Rua do Aeroporto', district: 'Luanda', type: 'airport' },
-    { id: 19, name: 'Porto de Luanda', address: 'Avenida 4 de Fevereiro', district: 'Ingombota', type: 'port' },
-
-    // Mercados
-    { id: 20, name: 'Mercado do Roque Santeiro', address: 'Estrada de Catete', district: 'Rangel', type: 'market' },
-    { id: 21, name: 'Mercado do Kikolo', address: 'Bairro Kikolo', district: 'Sambizanga', type: 'market' },
-
-    // Bancos
-    { id: 22, name: 'Banco BAI', address: 'Rua Amílcar Cabral', district: 'Ingombota', type: 'bank' },
-    { id: 23, name: 'Banco BIC', address: 'Largo do Kinaxixi', district: 'Ingombota', type: 'bank' },
-    { id: 24, name: 'Banco Nacional de Angola', address: 'Avenida 4 de Fevereiro', district: 'Ingombota', type: 'bank' },
-
-    // Hotéis
-    { id: 25, name: 'Hotel Presidente', address: 'Largo 17 de Setembro', district: 'Ingombota', type: 'hotel' },
-    { id: 26, name: 'Epic Sana Hotel', address: 'Ilha do Cabo', district: 'Ingombota', type: 'hotel' },
-
-    // Distritos Principais
-    { id: 27, name: 'Ingombota', address: 'Centro de Luanda', district: 'Ingombota', type: 'district' },
-    { id: 28, name: 'Maianga', address: 'Distrito de Maianga', district: 'Maianga', type: 'district' },
-    { id: 29, name: 'Rangel', address: 'Distrito do Rangel', district: 'Rangel', type: 'district' },
-    { id: 30, name: 'Sambizanga', address: 'Distrito de Sambizanga', district: 'Sambizanga', type: 'district' },
-
-    // Empresas de Telecomunicações
-    { id: 31, name: 'Unitel', address: 'Rua Amílcar Cabral', district: 'Ingombota', type: 'company' },
-    { id: 32, name: 'Movicel', address: 'Avenida 4 de Fevereiro', district: 'Ingombota', type: 'company' },
-    { id: 33, name: 'Angola Telecom', address: 'Largo do Kinaxixi', district: 'Ingombota', type: 'company' }
-  ];
-
-  const handleTaxiTypeSelect = (type) => {
-    setSelectedTaxiType(type);
-    setIsSearchExpanded(true);
-    setSearchResults(luandaPlaces);
-    setFilteredResults(luandaPlaces);
+      const driverSearchInterval = setInterval(() => {
+        setDriverSearchTime(prev => {
+          const newTime = prev + 1;
+          console.log('⏱️ Tempo de busca:', newTime, 'segundos');
+          if (newTime >= 10) {
+            clearInterval(driverSearchInterval);
+            setIsSearchingDrivers(false);
+            setDriversFound(false);
+            console.log('❌ Motoristas não encontrados após 10 segundos');
+            return 10;
+          }
+          return newTime;
+        });
+      }, 1000);
+    }
   };
 
   const centerOnUserLocation = () => {
-    if (location && mapRef) {
-      mapRef.animateToRegion({
+    if (location?.coords && mapRef.current) {
+      mapRef.current.animateToRegion({
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
-      }, 1000);
+      }, 600);
     }
   };
 
   const handleSearchFocus = () => {
     setIsSearchExpanded(true);
-    setSearchResults(luandaPlaces);
-    setFilteredResults(luandaPlaces);
+    setFilteredResults([]);
   };
 
-  const handleLocationSelect = (selectedLocation) => {
-    setDestination(selectedLocation.name);
-    setIsSearchExpanded(false);
-    
-    // Atualizar o mapa para mostrar a localização selecionada
-    if (mapRef && selectedLocation) {
-      // Verificar se temos coordenadas válidas
-      const latitude = selectedLocation.lat || 
-                      (selectedLocation.geometry && selectedLocation.geometry.location.lat);
-      const longitude = selectedLocation.lon || 
-                       (selectedLocation.geometry && selectedLocation.geometry.location.lng);
-      
-      if (latitude && longitude) {
-        // Animar o mapa para a localização selecionada
-        mapRef.animateToRegion({
-          latitude: parseFloat(latitude),
-          longitude: parseFloat(longitude),
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 1000);
-        
-        // Adicionar marcador para a localização selecionada
-        setSelectedMarker({
-          latitude: parseFloat(latitude),
-          longitude: parseFloat(longitude),
-          title: selectedLocation.name
-        });
-        
-        console.log('Localização selecionada:', selectedLocation.name, latitude, longitude);
-      }
-    }
-  };
-
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchIndicator, setSearchIndicator] = useState('');
-  const [searchProgress, setSearchProgress] = useState(0);
-  
   const handleSearchChange = async (text) => {
+    console.log('📝 handleSearchChange called with:', text);
     setDestination(text);
-
-    if (text.length === 0) {
-      // Mostrar locais populares quando não há busca
-      const popularPlaces = luandaPlaces.slice(0, 20).sort((a, b) => {
-        const typeOrder = {
-          'shopping': 1, 'landmark': 2, 'university': 3, 'hospital': 4,
-          'district': 5, 'neighborhood': 6, 'market': 7, 'hotel': 8
-        };
-        return (typeOrder[a.type] || 99) - (typeOrder[b.type] || 99);
-      });
-      setFilteredResults(popularPlaces);
-      setSearchIndicator('');
-      return;
-    }
-
+    
     if (text.length < 2) {
+      console.log('📏 Text too short, clearing results');
       setFilteredResults([]);
-      setSearchIndicator('');
       return;
     }
-
-    const searchTerm = text.toLowerCase().trim();
     
-    // Primeiro, mostrar resultados locais imediatamente para feedback rápido
-    const filtered = luandaPlaces.filter(place => {
-      const name = place.name.toLowerCase();
-      const address = place.address.toLowerCase();
-      const district = place.district.toLowerCase();
-      const type = place.type.toLowerCase();
-
-      // Busca simples e rápida
-      return name.includes(searchTerm) ||
-             address.includes(searchTerm) ||
-             district.includes(searchTerm) ||
-             type.includes(searchTerm) ||
-             // Categorias específicas
-             (searchTerm.includes('hospital') && (type === 'hospital' || type === 'clinic')) ||
-             (searchTerm.includes('escola') && (type === 'school' || type === 'university')) ||
-             (searchTerm.includes('universidade') && (type === 'university' || type === 'school')) ||
-             (searchTerm.includes('shopping') && type === 'shopping') ||
-             (searchTerm.includes('banco') && type === 'bank') ||
-             (searchTerm.includes('hotel') && type === 'hotel') ||
-             (searchTerm.includes('aeroporto') && type === 'airport') ||
-             (searchTerm.includes('mercado') && type === 'market');
-    });
-
-    // Ordenação simples por relevância
-    const sortedResults = filtered.sort((a, b) => {
-      const aName = a.name.toLowerCase();
-      const bName = b.name.toLowerCase();
-
-      // Nome que começa com o termo de busca tem prioridade
-      if (aName.startsWith(searchTerm) && !bName.startsWith(searchTerm)) return -1;
-      if (!aName.startsWith(searchTerm) && bName.startsWith(searchTerm)) return 1;
-
-      return aName.localeCompare(bName);
-    });
+    console.log('🚀 Starting search for:', text);
     
-    // Mostrar resultados locais imediatamente
-    setFilteredResults(sortedResults);
-    
-    // Se temos resultados locais suficientes, não precisamos buscar online
-    if (sortedResults.length >= 5) {
-      setSearchIndicator('Resultados locais');
-      return;
+    // Debounce search
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
     }
-
-    try {
-      // Buscar lugares usando o serviço de busca global apenas se o texto for longo o suficiente
-      if (text.length >= 3) {
-        setIsSearching(true);
-        setSearchIndicator('Buscando...');
-        setSearchProgress(0);
-        
-        // Iniciar animação de progresso
-        const progressInterval = setInterval(() => {
-          setSearchProgress(prev => {
-            // Incrementar gradualmente até 90% (reservando 10% para o processamento final)
-            const newProgress = prev + (0.1 * (1 - prev/90));
-            return Math.min(newProgress, 90);
-          });
-        }, 100);
-        
-        // Importar o serviço de busca
-        const { searchPlaces } = require('../services/placesService');
-        
-        // Buscar lugares globalmente
-        const onlinePlaces = await searchPlaces(text, location);
-        
-        // Limpar o intervalo quando a busca terminar
-        clearInterval(progressInterval);
-        setSearchProgress(100); // Completar o progresso
-        
-        if (onlinePlaces && onlinePlaces.length > 0) {
-          // Converter resultados online para o formato esperado
-          const formattedOnlinePlaces = onlinePlaces.map((place, index) => ({
-            id: `online_${index}`,
-            name: place.structured_formatting.main_text.split(',')[0],
-            address: place.structured_formatting.main_text,
-            district: place.structured_formatting.secondary_text,
-            type: 'location',
-            lat: place.lat,
-            lon: place.lon,
-            country: place.country,
-            region: place.region,
-            isOnline: true
-          }));
-          
-          // Pequeno atraso para mostrar o progresso completo antes de atualizar os resultados
-          setTimeout(() => {
-            setFilteredResults(formattedOnlinePlaces);
-            setSearchIndicator('');
-            setIsSearching(false);
-            setSearchProgress(0);
-          }, 300);
-          return;
-        }
-      }
-      
-      // Se chegamos aqui, não encontramos resultados online ou não fizemos a busca
-      setSearchProgress(0);
-      setSearchIndicator(sortedResults.length > 0 ? 'Resultados locais' : '');
-      setIsSearching(false);
-    } catch (error) {
-      console.error('Erro na busca:', error);
-      // Já mostramos os resultados locais, então apenas atualizamos o indicador
-      setSearchProgress(0);
-      setSearchIndicator('Resultados locais');
-      setIsSearching(false);
-      
-      // Mostrar um feedback visual do erro por um breve momento
-      Alert.alert(
-        "Erro na busca",
-        "Não foi possível completar a busca online. Mostrando resultados locais.",
-        [{ text: "OK" }],
-        { cancelable: true }
-      );
-    }
+    searchTimeoutRef.current = setTimeout(() => {
+      console.log('⚡ Executing search for:', text);
+      searchPlacesWithHERE(text);
+    }, 500);
   };
 
-  const handleSaveAddress = (type) => {
-    // Simular salvamento de endereço
-    const newAddress = {
-      name: type === 'home' ? 'Casa' : 'Trabalho',
-      address: 'Toque para adicionar endereço',
-      isNew: true
+  const handleNewSearch = () => {
+    setDestination('');
+    setSelectedDestination(null);
+    setIsSearchingDrivers(false);
+    setDriverSearchTime(0);
+    setDriversFound(false);
+    setRouteCoords([]);
+  };
+
+  const getIconForCategory = (categories) => {
+    if (!categories || categories.length === 0) return 'place';
+    
+    const categoryId = categories[0].id;
+    
+    const categoryIcons = {
+      'airport': 'flight',
+      'bus-station': 'directions-bus',
+      'railway-station': 'train',
+      'taxi-stand': 'local-taxi',
+      'hotel': 'hotel',
+      'restaurant': 'restaurant',
+      'fast-food': 'fastfood',
+      'cafe': 'local-cafe',
+      'shopping-mall': 'shopping-cart',
+      'department-store': 'store',
+      'hospital': 'local-hospital',
+      'school': 'school',
+      'cinema': 'movie',
+      'bank': 'account-balance',
+      'church': 'church',
     };
-
-    setSavedAddresses(prev => ({
-      ...prev,
-      [type]: newAddress
-    }));
+    
+    return categoryIcons[categoryId] || 'place';
   };
-
-  const getIconForType = (type) => {
-    const icons = {
-      district: 'location-city',
-      neighborhood: 'home',
-      residential: 'apartment',
-      shopping: 'shopping-cart',
-      store: 'store',
-      airport: 'flight',
-      landmark: 'place',
-      university: 'school',
-      school: 'school',
-      historic: 'account-balance',
-      hospital: 'local-hospital',
-      clinic: 'medical-services',
-      market: 'store',
-      beach: 'beach-access',
-      port: 'directions-boat',
-      stadium: 'sports-soccer',
-      hotel: 'hotel',
-      restaurant: 'restaurant',
-      government: 'account-balance',
-      bank: 'account-balance',
-      church: 'church',
-      gas_station: 'local-gas-station',
-      company: 'business',
-      city: 'location-city'
-    };
-    return icons[type] || 'place';
-  };
-
-
 
   return (
     <View style={styles.container}>
+      {console.log('🏠 HomeScreen render - States:', { isSearchingDrivers, selectedDestination: !!selectedDestination, driverSearchTime, driversFound })}
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
-      {/* Map */}
+      {/* OpenStreetMap via UrlTile */}
       <MapView
-        ref={setMapRef}
+        ref={mapRef}
         style={styles.map}
+        mapType="none"
         initialRegion={{
-          latitude: location ? location.coords.latitude : -8.8390,
-          longitude: location ? location.coords.longitude : 13.2894,
+          latitude: location?.coords?.latitude || -8.8390,
+          longitude: location?.coords?.longitude || 13.2894,
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         }}
         showsUserLocation={true}
         showsMyLocationButton={false}
-        followsUserLocation={true}
       >
-        {location && (
+        <UrlTile
+          urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maximumZ={19}
+          zIndex={-1}
+        />
+
+        {selectedDestination?.lat && selectedDestination?.lng && (
           <Marker
             coordinate={{
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
+              latitude: selectedDestination.lat,
+              longitude: selectedDestination.lng,
             }}
-            title="Sua localização"
-            pinColor="blue"
+            title={selectedDestination?.name}
+            description={selectedDestination?.address}
           />
         )}
-        
-        {selectedMarker && (
-          <Marker
-            coordinate={{
-              latitude: selectedMarker.latitude,
-              longitude: selectedMarker.longitude,
-            }}
-            title={selectedMarker.title}
-            pinColor="red"
+
+        {routeCoords.length === 2 && (
+          <Polyline
+            coordinates={routeCoords}
+            strokeColor="#2563EB"
+            strokeWidth={3}
           />
         )}
       </MapView>
 
-      {/* Menu Button */}
-      <TouchableOpacity
-        style={styles.menuButton}
-        onPress={() => setIsDrawerOpen(true)}
-      >
-        <MaterialIcons name="menu" size={24} color="#000" />
-      </TouchableOpacity>
-
-      {/* My Location Button */}
+      {/* Location Button */}
       <TouchableOpacity
         style={styles.locationButton}
         onPress={centerOnUserLocation}
@@ -427,61 +273,98 @@ export default function HomeScreen({ navigation }) {
         <MaterialIcons name="my-location" size={24} color="#ffffff" />
       </TouchableOpacity>
 
-      {/* Search and Taxi Controls */}
-      <View style={styles.bottomContainer}>
-        {/* Search Input */}
-        <TouchableOpacity
-          style={styles.searchContainer}
-          onPress={handleSearchFocus}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Para onde você quer ir?"
-            placeholderTextColor="#9CA3AF"
-            value={destination}
-            onChangeText={setDestination}
-            onFocus={handleSearchFocus}
-            editable={!isSearchExpanded}
-          />
-        </TouchableOpacity>
-
-
-
-        {/* Taxi Type Buttons */}
-        <View style={styles.taxiButtonsContainer}>
+      {/* Search and Taxi Controls OR Driver Search Animation */}
+      {console.log('🔍 Render condition - isSearchingDrivers:', isSearchingDrivers, 'driversFound:', driversFound)}
+      {!isSearchingDrivers ? (
+        <View style={styles.bottomContainer}>
+          {/* Search Input */}
           <TouchableOpacity
-            style={[
-              styles.taxiButton,
-              selectedTaxiType === 'Coletivo' && styles.taxiButtonSelected
-            ]}
-            onPress={() => handleTaxiTypeSelect('Coletivo')}
+            style={styles.searchContainer}
+            onPress={handleSearchFocus}
+            activeOpacity={0.8}
           >
-            <Text style={[
-              styles.taxiButtonText,
-              selectedTaxiType === 'Coletivo' && styles.taxiButtonTextSelected
-            ]}>
-              Coletivo
-            </Text>
+            <MaterialIcons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Para onde você quer ir?"
+              placeholderTextColor="#9CA3AF"
+              value={destination}
+              onChangeText={setDestination}
+              onFocus={handleSearchFocus}
+              editable={!isSearchExpanded}
+            />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.taxiButton,
-              selectedTaxiType === 'Privado' && styles.taxiButtonSelected
-            ]}
-            onPress={() => handleTaxiTypeSelect('Privado')}
-          >
-            <Text style={[
-              styles.taxiButtonText,
-              selectedTaxiType === 'Privado' && styles.taxiButtonTextSelected
-            ]}>
-              Privado
-            </Text>
-          </TouchableOpacity>
+          {/* Taxi Type Selection */}
+          <View style={styles.taxiButtonsContainer}>
+            <TouchableOpacity
+              style={[
+                styles.taxiButton,
+                selectedTaxiType === 'Coletivo' && styles.taxiButtonSelected
+              ]}
+              onPress={() => setSelectedTaxiType('Coletivo')}
+            >
+              <Text style={[
+                styles.taxiButtonText,
+                selectedTaxiType === 'Coletivo' && styles.taxiButtonTextSelected
+              ]}>
+                Coletivo
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.taxiButton,
+                selectedTaxiType === 'Privado' && styles.taxiButtonSelected
+              ]}
+              onPress={() => setSelectedTaxiType('Privado')}
+            >
+              <Text style={[
+                styles.taxiButtonText,
+                selectedTaxiType === 'Privado' && styles.taxiButtonTextSelected
+              ]}>
+                Privado
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      ) : null}
+
+      {/* Driver Search Animation */}
+      {isSearchingDrivers && (
+        <View style={styles.driverSearchCard}>
+          <View style={styles.searchingAnimation}>
+            <View style={styles.spinnerContainer}>
+              <View style={styles.spinner} />
+            </View>
+            <Text style={styles.searchingTitle}>Procurando motoristas...</Text>
+            <Text style={styles.searchingSubtitle}>
+              Tempo de busca: {driverSearchTime}/10 segundos
+            </Text>
+            <View style={styles.searchingDots}>
+              <Text style={styles.dot}>•</Text>
+              <Text style={styles.dot}>•</Text>
+              <Text style={styles.dot}>•</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Drivers Not Found */}
+      {!driversFound && !isSearchingDrivers && driverSearchTime >= 10 && (
+        <View style={styles.driversNotFoundCard}>
+          <View style={styles.notFoundContent}>
+            <MaterialIcons name="cancel" size={48} color="#EF4444" />
+            <Text style={styles.notFoundTitle}>Nenhum motorista encontrado</Text>
+            <Text style={styles.notFoundSubtitle}>
+              Após 10 segundos de busca, não foi possível encontrar motoristas disponíveis na sua área
+            </Text>
+            <TouchableOpacity style={styles.tryAgainButton} onPress={handleNewSearch}>
+              <Text style={styles.tryAgainButtonText}>Tentar Novamente</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Full Screen Search Overlay */}
       {isSearchExpanded && (
@@ -522,7 +405,7 @@ export default function HomeScreen({ navigation }) {
                   name: "Localização atual",
                   address: "Minha localização",
                   lat: location.coords.latitude,
-                  lon: location.coords.longitude
+                  lng: location.coords.longitude
                 });
               }
             }}
@@ -536,80 +419,19 @@ export default function HomeScreen({ navigation }) {
             </View>
           </TouchableOpacity>
 
-          {/* Saved Places */}
-          {(savedAddresses.home || savedAddresses.work) && (
-            <View style={styles.savedPlacesSection}>
-              <Text style={styles.sectionTitle}>Locais salvos</Text>
-              {savedAddresses.home && (
-                <TouchableOpacity
-                  style={styles.savedPlaceItem}
-                  onPress={() => handleLocationSelect(savedAddresses.home)}
-                >
-                  <View style={styles.savedPlaceIcon}>
-                    <MaterialIcons name="home" size={20} color="#10B981" />
-                  </View>
-                  <View style={styles.savedPlaceInfo}>
-                    <Text style={styles.savedPlaceName}>Casa</Text>
-                    <Text style={styles.savedPlaceAddress}>{savedAddresses.home.address}</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-              {savedAddresses.work && (
-                <TouchableOpacity
-                  style={styles.savedPlaceItem}
-                  onPress={() => handleLocationSelect(savedAddresses.work)}
-                >
-                  <View style={styles.savedPlaceIcon}>
-                    <MaterialIcons name="work" size={20} color="#F59E0B" />
-                  </View>
-                  <View style={styles.savedPlaceInfo}>
-                    <Text style={styles.savedPlaceName}>Trabalho</Text>
-                    <Text style={styles.savedPlaceAddress}>{savedAddresses.work.address}</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-
           {/* Search Results */}
           <View style={styles.searchResultsSection}>
-            {destination.length > 0 ? (
-              <View style={styles.searchResultsHeader}>
-                <Text style={styles.sectionTitle}>
-                  {filteredResults.length > 0 && filteredResults[0].isOnline 
-                    ? `Resultados globais (${filteredResults.length})` 
-                    : `Resultados da busca (${filteredResults.length})`}
-                </Text>
-                {isSearching ? (
-                  <View style={styles.searchingContainer}>
-                    <View style={styles.searchingBadge}>
-                      <Text style={styles.searchingText}>Buscando...</Text>
-                    </View>
-                    <View style={styles.progressBarContainer}>
-                      <View 
-                        style={[styles.progressBar, {width: `${searchProgress}%`}]} 
-                      />
-                    </View>
-                  </View>
-                ) : filteredResults.length > 0 && (
-                  <View style={[styles.globalSearchBadge, 
-                    {backgroundColor: filteredResults[0].isOnline ? '#EFF6FF' : '#F0FDF4'}]}>
-                    <MaterialIcons 
-                      name={filteredResults[0].isOnline ? "public" : "place"} 
-                      size={16} 
-                      color={filteredResults[0].isOnline ? "#2563EB" : "#10B981"} 
-                    />
-                    <Text 
-                      style={[styles.globalSearchText, 
-                        {color: filteredResults[0].isOnline ? "#2563EB" : "#10B981"}]}
-                    >
-                      {filteredResults[0].isOnline ? "Busca global" : "Resultados locais"}
-                    </Text>
-                  </View>
-                )}
+            <Text style={styles.sectionTitle}>
+              {isSearching ? 'Buscando...' : 
+               filteredResults.length > 0 ? `Resultados da busca (${filteredResults.length})` : 
+               'Digite para buscar locais'}
+            </Text>
+
+            {isSearching && (
+              <View style={styles.searchingIndicator}>
+                <MaterialIcons name="search" size={20} color="#2563EB" />
+                <Text style={styles.searchingText}>Buscando com HERE Maps...</Text>
               </View>
-            ) : (
-              <Text style={styles.sectionTitle}>Locais populares</Text>
             )}
 
             {filteredResults.length > 0 ? (
@@ -625,22 +447,26 @@ export default function HomeScreen({ navigation }) {
                     onPress={() => handleLocationSelect(result)}
                   >
                     <View style={styles.resultIcon}>
-                      <MaterialIcons name={getIconForType(result.type)} size={18} color="#6B7280" />
+                      <MaterialIcons 
+                        name={getIconForCategory(result.categories)} 
+                        size={18} 
+                        color="#6B7280" 
+                      />
                     </View>
                     <View style={styles.resultInfo}>
                       <Text style={styles.resultName}>{result.name}</Text>
                       <Text style={styles.resultAddress}>
-                        {result.isOnline 
-                          ? `${result.address}${result.region ? `, ${result.region}` : ''}${result.country ? `, ${result.country}` : ''}` 
-                          : `${result.address}, ${result.district}`
-                        }
+                        {result.address}
+                        {result.distance && ` • ${Math.round(result.distance/1000)}km`}
                       </Text>
                     </View>
-                    <MaterialIcons name="arrow-forward-ios" size={16} color="#9CA3AF" />
+                    <View style={styles.hereMapsBadge}>
+                      <Text style={styles.hereMapsBadgeText}>HERE</Text>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            ) : destination.length > 0 ? (
+            ) : destination.length > 0 && !isSearching ? (
               <View style={styles.noResultsContainer}>
                 <MaterialIcons name="search-off" size={32} color="#D1D5DB" />
                 <Text style={styles.noResultsText}>Nenhum resultado encontrado</Text>
@@ -649,65 +475,6 @@ export default function HomeScreen({ navigation }) {
             ) : null}
           </View>
         </View>
-      )}
-
-      {/* Side Drawer Menu */}
-      {isDrawerOpen && (
-        <TouchableOpacity
-          style={styles.drawerOverlay}
-          activeOpacity={1}
-          onPress={() => setIsDrawerOpen(false)}
-        >
-          <TouchableOpacity
-            style={styles.drawerContent}
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Profile Section */}
-            <View style={styles.profileSection}>
-              <View style={styles.profileImageContainer}>
-                <View style={styles.profileImage}>
-                  <MaterialIcons name="person" size={40} color="#2563EB" />
-                </View>
-              </View>
-              <Text style={styles.profileName}>Avelino Carilo</Text>
-              <Text style={styles.profileEmail}>avelinocarilo@gmail.com</Text>
-
-              <TouchableOpacity style={styles.editProfileButton}>
-                <MaterialIcons name="edit" size={16} color="#6B7280" />
-                <Text style={styles.editProfileText}>Editar perfil</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Menu Items */}
-            <View style={styles.menuItems}>
-              <TouchableOpacity style={styles.menuItem}>
-                <MaterialIcons name="payment" size={20} color="#6B7280" />
-                <Text style={styles.menuItemText}>Pagamento</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.menuItem}>
-                <MaterialIcons name="history" size={20} color="#6B7280" />
-                <Text style={styles.menuItemText}>Histórico</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.menuItem}>
-                <MaterialIcons name="location-on" size={20} color="#6B7280" />
-                <Text style={styles.menuItemText}>Definições</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.menuItem}>
-                <MaterialIcons name="help" size={20} color="#6B7280" />
-                <Text style={styles.menuItemText}>Ajuda</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.menuItem}>
-                <MaterialIcons name="logout" size={20} color="#6B7280" />
-                <Text style={styles.menuItemText}>Encerrar</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
       )}
     </View>
   );
@@ -720,22 +487,6 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
-  },
-  menuButton: {
-    position: 'absolute',
-    top: 60,
-    left: 20,
-    width: 40,
-    height: 40,
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   locationButton: {
     position: 'absolute',
@@ -755,13 +506,13 @@ const styles = StyleSheet.create({
   },
   bottomContainer: {
     position: 'absolute',
-    bottom: 70, // Space for tab bar (70px height)
+    bottom: 70,
     left: 20,
     right: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)', // Mais opaco
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#2563EB', // Borda azul
+    borderColor: '#2563EB',
     padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -774,11 +525,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#ffffff',
     borderWidth: 2,
-    borderColor: '#2563EB', // Borda azul
+    borderColor: '#2563EB',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    marginBottom: 12,
   },
   searchIcon: {
     marginRight: 12,
@@ -792,6 +542,7 @@ const styles = StyleSheet.create({
   taxiButtonsContainer: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: 12,
   },
   taxiButton: {
     flex: 1,
@@ -800,7 +551,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#2563EB', // Borda azul para todos os botões
+    borderColor: '#2563EB',
   },
   taxiButtonSelected: {
     backgroundColor: '#2563EB',
@@ -814,7 +565,113 @@ const styles = StyleSheet.create({
   taxiButtonTextSelected: {
     color: '#ffffff',
   },
-  // Full Screen Search Overlay
+  // Driver Search Animation Styles
+  driverSearchCard: {
+    position: 'absolute',
+    bottom: 70,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#10B981',
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    alignItems: 'center',
+  },
+  searchingAnimation: {
+    alignItems: 'center',
+  },
+  spinnerContainer: {
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  spinner: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 4,
+    borderColor: '#E5E7EB',
+    borderTopColor: '#10B981',
+    transform: [{ rotate: '0deg' }],
+  },
+  searchingTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  searchingSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  searchingDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dot: {
+    fontSize: 24,
+    color: '#10B981',
+    marginHorizontal: 4,
+    opacity: 0.6,
+  },
+  // Drivers Not Found Styles
+  driversNotFoundCard: {
+    position: 'absolute',
+    bottom: 70,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#EF4444',
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    alignItems: 'center',
+  },
+  notFoundContent: {
+    alignItems: 'center',
+  },
+  notFoundTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  notFoundSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  tryAgainButton: {
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  tryAgainButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Search Overlay Styles
   searchOverlay: {
     position: 'absolute',
     top: 0,
@@ -827,16 +684,16 @@ const styles = StyleSheet.create({
   searchHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: '#E5E7EB',
   },
   backButton: {
     padding: 8,
-    marginRight: 8,
+    marginRight: 12,
   },
   searchBarContainer: {
     flex: 1,
@@ -849,38 +706,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1F2937',
-    marginLeft: 8,
-    fontWeight: '400',
-  },
   currentLocationItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#EBF4FF',
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   currentLocationIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#EBF4FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    marginRight: 16,
   },
   currentLocationInfo: {
     flex: 1,
@@ -895,108 +736,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
   },
-  savedPlacesSection: {
-    marginTop: 24,
-    paddingHorizontal: 16,
+  searchResultsSection: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  savedPlaceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  savedPlaceIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  savedPlaceInfo: {
-    flex: 1,
-  },
-  savedPlaceName: {
-    fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 2,
+    marginBottom: 16,
   },
-  savedPlaceAddress: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  searchResultsSection: {
-    flex: 1,
-    marginTop: 24,
-    paddingHorizontal: 16,
-  },
-  searchResultsHeader: {
+  searchingIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  globalSearchBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  searchingContainer: {
-    alignItems: 'center',
-  },
-  searchingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginBottom: 4,
+    justifyContent: 'center',
+    paddingVertical: 20,
   },
   searchingText: {
-    fontSize: 12,
-    color: '#D97706',
-    fontWeight: '500',
-  },
-  progressBarContainer: {
-    width: 100,
-    height: 3,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#D97706',
-    borderRadius: 2,
-  },
-  globalSearchText: {
-    fontSize: 12,
+    fontSize: 16,
     color: '#2563EB',
-    marginLeft: 4,
-    fontWeight: '500',
+    marginLeft: 8,
   },
   resultsList: {
     flex: 1,
@@ -1004,24 +764,19 @@ const styles = StyleSheet.create({
   resultItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#F9FAFB',
     borderRadius: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    borderColor: '#E5E7EB',
   },
   resultIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F9FAFB',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EBF4FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1033,115 +788,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   resultAddress: {
     fontSize: 14,
     color: '#6B7280',
-    lineHeight: 18,
+  },
+  hereMapsBadge: {
+    backgroundColor: '#00D4AA',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  hereMapsBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#ffffff',
   },
   noResultsContainer: {
     alignItems: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 24,
+    paddingVertical: 40,
   },
   noResultsText: {
     fontSize: 18,
     fontWeight: '600',
     color: '#6B7280',
-    marginTop: 12,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   noResultsSubtext: {
     fontSize: 14,
     color: '#9CA3AF',
-    textAlign: 'center',
-  },
-
-  // Side Drawer Styles
-  drawerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 2000,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    flexDirection: 'row',
-  },
-  drawerContent: {
-    width: '75%',
-    backgroundColor: '#ffffff',
-    height: '100%',
-    paddingTop: 60,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  profileSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 30,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    alignItems: 'center',
-  },
-  profileImageContainer: {
-    marginBottom: 16,
-  },
-  profileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#EBF4FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#DBEAFE',
-  },
-  profileName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  profileEmail: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 12,
-  },
-  editProfileButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  editProfileText: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  menuItems: {
-    paddingTop: 20,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F9FAFB',
-  },
-  menuItemText: {
-    fontSize: 16,
-    color: '#374151',
-    marginLeft: 16,
-    fontWeight: '400',
   },
 });
