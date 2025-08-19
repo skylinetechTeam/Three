@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
-import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
+import { WebView } from 'react-native-webview';
 
 const { width, height } = Dimensions.get('window');
 
@@ -32,9 +32,8 @@ export default function HomeScreen({ navigation }) {
   const [isSearchingDrivers, setIsSearchingDrivers] = useState(false);
   const [driverSearchTime, setDriverSearchTime] = useState(0);
   const [driversFound, setDriversFound] = useState(false);
-  const mapRef = useRef(null);
+  const webViewRef = useRef(null);
   const searchTimeoutRef = useRef(null);
-  const [routeCoords, setRouteCoords] = useState([]);
 
   useEffect(() => {
     (async () => {
@@ -49,7 +48,124 @@ export default function HomeScreen({ navigation }) {
     })();
   }, []);
 
-  // Removido WebView HERE e usando react-native-maps com OpenStreetMap
+  // HERE Maps HTML content
+  const hereMapHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>HERE Map</title>
+        <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-core.js"></script>
+        <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-service.js"></script>
+        <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-ui.js"></script>
+        <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-mapevents.js"></script>
+        <link rel="stylesheet" type="text/css" href="https://js.api.here.com/v3/3.1/mapsjs-ui.css" />
+        <style>
+            body, html { margin: 0; padding: 0; height: 100%; }
+            #mapContainer { height: 100%; width: 100%; }
+        </style>
+    </head>
+    <body>
+        <div id="mapContainer"></div>
+        
+        <script>
+            // Initialize HERE Maps
+            const platform = new H.service.Platform({
+                'apikey': '${HERE_API_KEY}'
+            });
+
+            const defaultLayers = platform.createDefaultLayers();
+            
+            const map = new H.Map(
+              document.getElementById('mapContainer'),
+              defaultLayers.raster.normal.map,
+              {
+                zoom: 15,
+                center: { lat: ${location?.coords.latitude || -8.8390}, lng: ${location?.coords.longitude || 13.2894} },
+                pixelRatio: window.devicePixelRatio || 1,
+                engineType: H.map.render.RenderEngine.EngineType.RASTER
+              }
+            );
+
+            // Enable map interaction (pan, zoom)
+            const behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
+            const ui = H.ui.UI.createDefault(map, defaultLayers);
+            window.addEventListener('resize', () => map.getViewPort().resize());
+
+            // Custom markers
+            let userMarker = null;
+            let destinationMarker = null;
+            let routeLine = null;
+
+            // Add user location marker
+            function addUserLocationMarker(lat, lng) {
+                if (userMarker) {
+                    map.removeObject(userMarker);
+                }
+                
+                const userIcon = new H.map.Icon(
+                    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8" fill="#2563EB" stroke="#ffffff" stroke-width="3"/></svg>',
+                    { size: { w: 24, h: 24 } }
+                );
+                
+                userMarker = new H.map.Marker({ lat: lat, lng: lng }, { icon: userIcon });
+                map.addObject(userMarker);
+            }
+
+            // Add destination marker
+            function addDestinationMarker(lat, lng, title) {
+                if (destinationMarker) {
+                    map.removeObject(destinationMarker);
+                }
+                
+                const destIcon = new H.map.Icon(
+                    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#EF4444"/></svg>',
+                    { size: { w: 32, h: 32 } }
+                );
+                
+                destinationMarker = new H.map.Marker({ lat: lat, lng: lng }, { icon: destIcon });
+                destinationMarker.setData(title);
+                map.addObject(destinationMarker);
+            }
+
+            // Center map on location
+            function centerOnLocation(lat, lng, zoom = 15) {
+                map.setCenter({ lat: lat, lng: lng });
+                map.setZoom(zoom);
+            }
+
+            // Expose functions for React Native to call via injectJavaScript
+            window.__setUserLocation = function(lat, lng) {
+              addUserLocationMarker(lat, lng);
+              centerOnLocation(lat, lng);
+            };
+            window.__setDestination = function(lat, lng, title) {
+              addDestinationMarker(lat, lng, title);
+            };
+            window.__centerOnUser = function() {
+              if (userMarker) {
+                const userPos = userMarker.getGeometry();
+                centerOnLocation(userPos.lat, userPos.lng);
+              }
+            };
+            window.__clearRoute = function() {
+              if (destinationMarker) {
+                map.removeObject(destinationMarker);
+                destinationMarker = null;
+              }
+              if (routeLine) {
+                map.removeObject(routeLine);
+                routeLine = null;
+              }
+            };
+
+            // Initialize with user location if available
+            ${location ? `addUserLocationMarker(${location.coords.latitude}, ${location.coords.longitude});` : ''}
+        </script>
+    </body>
+    </html>
+  `;
 
   // Search places with HERE Maps API
   const searchPlacesWithHERE = async (query) => {
@@ -105,56 +221,42 @@ export default function HomeScreen({ navigation }) {
     setDestination(selectedLocation.name);
     setSelectedDestination(selectedLocation);
     setIsSearchExpanded(false);
-    if (selectedLocation.lat && selectedLocation.lng) {
-      // Ajusta região para o destino
-      if (mapRef.current) {
-        mapRef.current.animateToRegion({
-          latitude: selectedLocation.lat,
-          longitude: selectedLocation.lng,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 600);
+    
+          // Send location to HERE Map
+      if (selectedLocation.lat && selectedLocation.lng) {
+        const js = `window.__setDestination(${selectedLocation.lat}, ${selectedLocation.lng}, ${JSON.stringify(selectedLocation.name)}); true;`;
+        console.log('🗺️ Injecting JavaScript:', js);
+        webViewRef.current?.injectJavaScript(js);
+        
+        // Iniciar busca de motoristas
+        console.log('🚗 Iniciando busca de motoristas...');
+        setIsSearchingDrivers(true);
+        setDriverSearchTime(0);
+        setDriversFound(false);
+        
+        // Simular busca de motoristas por 10 segundos
+        const driverSearchInterval = setInterval(() => {
+          setDriverSearchTime(prev => {
+            const newTime = prev + 1;
+            console.log('⏱️ Tempo de busca:', newTime, 'segundos');
+            
+                       if (newTime >= 10) {
+             clearInterval(driverSearchInterval);
+             setIsSearchingDrivers(false);
+             setDriversFound(false);
+             console.log('❌ Motoristas não encontrados após 10 segundos');
+             return 10; // Manter em 10 para mostrar a modal
+           }
+            return newTime;
+          });
+        }, 1000);
       }
-
-      // Desenha linha simples até o destino
-      if (location?.coords) {
-        setRouteCoords([
-          { latitude: location.coords.latitude, longitude: location.coords.longitude },
-          { latitude: selectedLocation.lat, longitude: selectedLocation.lng },
-        ]);
-      }
-
-      // Iniciar busca de motoristas
-      console.log('🚗 Iniciando busca de motoristas...');
-      setIsSearchingDrivers(true);
-      setDriverSearchTime(0);
-      setDriversFound(false);
-
-      const driverSearchInterval = setInterval(() => {
-        setDriverSearchTime(prev => {
-          const newTime = prev + 1;
-          console.log('⏱️ Tempo de busca:', newTime, 'segundos');
-          if (newTime >= 10) {
-            clearInterval(driverSearchInterval);
-            setIsSearchingDrivers(false);
-            setDriversFound(false);
-            console.log('❌ Motoristas não encontrados após 10 segundos');
-            return 10;
-          }
-          return newTime;
-        });
-      }, 1000);
-    }
   };
 
   const centerOnUserLocation = () => {
-    if (location?.coords && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }, 600);
+    if (location) {
+      const js = `window.__centerOnUser(); true;`;
+      webViewRef.current?.injectJavaScript(js);
     }
   };
 
@@ -191,7 +293,10 @@ export default function HomeScreen({ navigation }) {
     setIsSearchingDrivers(false);
     setDriverSearchTime(0);
     setDriversFound(false);
-    setRouteCoords([]);
+    
+    // Clear route on map
+    const js = `window.__clearRoute(); true;`;
+    webViewRef.current?.injectJavaScript(js);
   };
 
   const getIconForCategory = (categories) => {
@@ -225,45 +330,20 @@ export default function HomeScreen({ navigation }) {
       {console.log('🏠 HomeScreen render - States:', { isSearchingDrivers, selectedDestination: !!selectedDestination, driverSearchTime, driversFound })}
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
-      {/* OpenStreetMap via UrlTile */}
-      <MapView
-        ref={mapRef}
+      {/* HERE Map WebView */}
+      <WebView
+        ref={webViewRef}
+        source={{ html: hereMapHTML }}
         style={styles.map}
-        mapType="none"
-        initialRegion={{
-          latitude: location?.coords?.latitude || -8.8390,
-          longitude: location?.coords?.longitude || 13.2894,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }}
-        showsUserLocation={true}
-        showsMyLocationButton={false}
-      >
-        <UrlTile
-          urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          maximumZ={19}
-          zIndex={-1}
-        />
-
-        {selectedDestination?.lat && selectedDestination?.lng && (
-          <Marker
-            coordinate={{
-              latitude: selectedDestination.lat,
-              longitude: selectedDestination.lng,
-            }}
-            title={selectedDestination?.name}
-            description={selectedDestination?.address}
-          />
-        )}
-
-        {routeCoords.length === 2 && (
-          <Polyline
-            coordinates={routeCoords}
-            strokeColor="#2563EB"
-            strokeWidth={3}
-          />
-        )}
-      </MapView>
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        startInLoadingState={true}
+        scalesPageToFit={true}
+        mixedContentMode="compatibility"
+        onLoad={() => console.log('🗺️ WebView loaded successfully')}
+        onError={(error) => console.error('❌ WebView error:', error)}
+        onHttpError={(error) => console.error('🌐 WebView HTTP error:', error)}
+      />
 
       {/* Location Button */}
       <TouchableOpacity

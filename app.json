@@ -1,31 +1,40 @@
 {
   "expo": {
-    "name": "Travel",
-    "slug": "Travel",
+    "name": "Three",
+    "slug": "Three",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/travel.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
       "backgroundColor": "#1737e8",
       "resizeMode": "contain",
-      "image": {
-        "_": "Removendo a imagem e configurando para usar texto"
-      }
+      "image": "./assets/logo.png"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "splash": {
+        "backgroundColor": "#1737e8",
+        "resizeMode": "contain",
+        "image": "./assets/logo.png"
+      }
     },
     "android": {
-      "package": "com.igorsemedo.travel",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/travel.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#1737e8"
+      },
+      "splash": {
+        "backgroundColor": "#1737e8",
+        "resizeMode": "contain",
+        "image": "./assets/logo.png",
+        "imageWidth": 200,
+        "imageHeight": 200
       }
     },
     "web": {
-      "favicon": "./assets/travel.png"
+      "favicon": "./assets/icon.png"
     },
     "plugins": [
       [
@@ -34,6 +43,11 @@
           "locationAlwaysAndWhenInUsePermission": "Permitir $(PRODUCT_NAME) que use a sua localização."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5b82dbdf-d906-4f6e-91d0-3f7e3fb80d8f"
+      }
+    }
   }
 }
