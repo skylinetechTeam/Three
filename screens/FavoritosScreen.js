@@ -13,6 +13,8 @@ import {
   StyleSheet,
   ScrollView,
   Dimensions,
+  Animated,
+  Keyboard,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS, SHADOWS } from '../config/theme';
@@ -41,12 +43,65 @@ const FavoritosScreen = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [showAddressSearch, setShowAddressSearch] = useState(false);
   const searchTimeoutRef = useRef(null);
+  
+  // Novos estados para melhorias do formulário
+  const [formErrors, setFormErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(300)).current;
 
   // Carregar dados existentes ao montar o componente
   useEffect(() => {
     loadExistingFavorites();
     loadUserLocation();
+    
+    // Listeners do teclado
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      keyboardDidShowListener?.remove();
+      keyboardDidHideListener?.remove();
+    };
   }, []);
+
+  // Animações do modal
+  useEffect(() => {
+    if (showAddModal) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 20,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 300,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [showAddModal]);
 
   const loadUserLocation = async () => {
     try {
@@ -119,6 +174,11 @@ const FavoritosScreen = () => {
   const handleAddressSearch = async (text) => {
     setNewFavorito(prev => ({ ...prev, endereco: text }));
     
+    // Validar campo em tempo real
+    if (text.length >= 5) {
+      validateField('endereco', text);
+    }
+    
     if (text.length < 2) {
       setSearchResults([]);
       return;
@@ -141,11 +201,53 @@ const FavoritosScreen = () => {
     }));
     setSearchResults([]);
     setShowAddressSearch(false);
+    // Limpar erros dos campos quando preenchidos
+    setFormErrors(prev => ({
+      ...prev,
+      endereco: null,
+      nome: null
+    }));
+  };
+
+  // Função de validação de campos
+  const validateField = (fieldName, value) => {
+    let error = null;
+    
+    switch (fieldName) {
+      case 'nome':
+        if (!value || value.trim().length < 2) {
+          error = 'Nome deve ter pelo menos 2 caracteres';
+        }
+        break;
+      case 'endereco':
+        if (!value || value.trim().length < 5) {
+          error = 'Endereço deve ter pelo menos 5 caracteres';
+        }
+        break;
+    }
+    
+    setFormErrors(prev => ({
+      ...prev,
+      [fieldName]: error
+    }));
+    
+    return error === null;
+  };
+
+  // Validar todos os campos do step atual
+  const validateCurrentStep = () => {
+    let isValid = true;
+    
+    if (currentStep === 1) {
+      isValid = validateField('nome', newFavorito.nome) && isValid;
+      isValid = validateField('endereco', newFavorito.endereco) && isValid;
+    }
+    
+    return isValid;
   };
 
   const nextStep = () => {
-    if (currentStep === 1 && (!newFavorito.nome || !newFavorito.endereco)) {
-      Alert.alert('Erro', 'Por favor, preencha nome e endereço para continuar');
+    if (!validateCurrentStep()) {
       return;
     }
     setCurrentStep(currentStep + 1);
@@ -164,6 +266,9 @@ const FavoritosScreen = () => {
     });
     setCurrentStep(1);
     setSearchResults([]);
+    setFormErrors({});
+    setIsSubmitting(false);
+    setIsEditing(false);
     setShowAddModal(false);
   };
 
@@ -198,26 +303,48 @@ const FavoritosScreen = () => {
     );
   };
 
-  const handleAddFavorito = () => {
-    if (!newFavorito.nome || !newFavorito.endereco) {
-      Alert.alert('Erro', 'Por favor, preencha nome e endereço');
+  const handleAddFavorito = async () => {
+    if (!validateCurrentStep()) {
       return;
     }
 
-    const novoFavorito = {
-      id: Date.now().toString(),
-      ...newFavorito,
-      createdAt: new Date().toISOString()
-    };
+    setIsSubmitting(true);
+    
+    try {
+      let updatedFavoritos;
+      
+      if (isEditing && newFavorito.id) {
+        // Atualizar favorito existente
+        updatedFavoritos = favoritos.map(item =>
+          item.id === newFavorito.id ? newFavorito : item
+        );
+      } else {
+        // Adicionar novo favorito
+        const novoFavorito = {
+          id: Date.now().toString(),
+          ...newFavorito,
+          createdAt: new Date().toISOString()
+        };
+        updatedFavoritos = [...favoritos, novoFavorito];
+      }
 
-    const updatedFavoritos = [...favoritos, novoFavorito];
-    setFavoritos(updatedFavoritos);
-    
-    // Salvar no AsyncStorage
-    saveFavoritesToStorage(updatedFavoritos);
-    
-    // Limpar formulário e fechar modal
-    resetForm();
+      setFavoritos(updatedFavoritos);
+      
+      // Salvar no AsyncStorage
+      await saveFavoritesToStorage(updatedFavoritos);
+      
+      // Mostrar feedback de sucesso
+      Alert.alert('Sucesso', 
+        isEditing ? 'Favorito atualizado com sucesso!' : 'Favorito adicionado com sucesso!', 
+        [{ text: 'OK', onPress: resetForm }]
+      );
+      
+    } catch (error) {
+      console.error('Erro ao salvar favorito:', error);
+      Alert.alert('Erro', 'Não foi possível salvar o favorito. Tente novamente.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const saveFavoritesToStorage = async (favoritosList) => {
@@ -250,6 +377,7 @@ const FavoritosScreen = () => {
   const handleEditFavorito = (favorito) => {
     setNewFavorito(favorito);
     setCurrentStep(1);
+    setIsEditing(true);
     setShowAddModal(true);
   };
 
@@ -337,19 +465,38 @@ const FavoritosScreen = () => {
             {/* Nome */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Nome do Local</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Ex: Casa, Trabalho, Shopping"
-                value={newFavorito.nome}
-                onChangeText={(text) => setNewFavorito(prev => ({ ...prev, nome: text }))}
-                placeholderTextColor="#9ca3af"
-              />
+              <View style={[
+                styles.inputContainer,
+                formErrors.nome && styles.inputError
+              ]}>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Ex: Casa, Trabalho, Shopping"
+                  value={newFavorito.nome}
+                  onChangeText={(text) => {
+                    setNewFavorito(prev => ({ ...prev, nome: text }));
+                    if (text.length >= 2) {
+                      validateField('nome', text);
+                    }
+                  }}
+                  placeholderTextColor="#9ca3af"
+                />
+              </View>
+              {formErrors.nome && (
+                <Animated.View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Text style={styles.errorText}>{formErrors.nome}</Text>
+                </Animated.View>
+              )}
             </View>
 
             {/* Endereço com autocomplete */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Endereço</Text>
-              <View style={styles.addressInputContainer}>
+              <View style={[
+                styles.addressInputContainer,
+                formErrors.endereco && styles.inputError
+              ]}>
                 <TextInput
                   style={styles.textInput}
                   placeholder="Digite o endereço"
@@ -367,12 +514,20 @@ const FavoritosScreen = () => {
                         endereco: 'Minha Localização',
                         nome: 'Minha Localização'
                       }));
+                      validateField('endereco', 'Minha Localização');
+                      validateField('nome', 'Minha Localização');
                     }
                   }}
                 >
                   <Ionicons name="location" size={20} color={COLORS.primary} />
                 </TouchableOpacity>
               </View>
+              {formErrors.endereco && (
+                <Animated.View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Text style={styles.errorText}>{formErrors.endereco}</Text>
+                </Animated.View>
+              )}
 
               {/* Opção rápida para minha localização */}
               <TouchableOpacity
@@ -520,12 +675,28 @@ const FavoritosScreen = () => {
             <Text style={styles.backButtonText}>Voltar</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.saveButton}
+            style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
             onPress={handleAddFavorito}
+            disabled={isSubmitting}
           >
-            <Text style={styles.saveButtonText}>
-              {newFavorito.id ? 'Atualizar' : 'Adicionar'}
-            </Text>
+            {isSubmitting ? (
+              <View style={styles.loadingContainer}>
+                <Animated.View style={[
+                  styles.loadingSpinner,
+                  { transform: [{ rotate: fadeAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0deg', '360deg']
+                  }) }] }
+                ]} />
+                <Text style={styles.saveButtonText}>
+                  {isEditing ? 'Atualizando...' : 'Adicionando...'}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.saveButtonText}>
+                {isEditing ? 'Atualizar' : 'Adicionar'}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       );
@@ -603,12 +774,21 @@ const FavoritosScreen = () => {
       {/* Modal para adicionar/editar favorito */}
       <Modal
         visible={showAddModal}
-        animationType="slide"
+        animationType="none"
         transparent={true}
         onRequestClose={resetForm}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <Animated.View style={[
+          styles.modalOverlay,
+          { opacity: fadeAnim }
+        ]}>
+          <Animated.View style={[
+            styles.modalContent,
+            { 
+              transform: [{ translateY: slideAnim }],
+              marginBottom: keyboardHeight > 0 ? keyboardHeight - 50 : 0
+            }
+          ]}>
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
@@ -631,8 +811,8 @@ const FavoritosScreen = () => {
 
             {/* Step Buttons */}
             {renderStepButtons()}
-          </View>
-        </View>
+          </Animated.View>
+        </Animated.View>
       </Modal>
     </SafeAreaView>
   );
@@ -1302,6 +1482,49 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.white,
     textAlign: 'center',
+  },
+  // Novos estilos para melhorias
+  inputContainer: {
+    backgroundColor: COLORS.input.background,
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  inputError: {
+    borderColor: COLORS.notification,
+    borderWidth: 2,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+    paddingHorizontal: 5,
+  },
+  errorText: {
+    color: COLORS.notification,
+    fontSize: 12,
+    marginLeft: 5,
+    flex: 1,
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#9ca3af',
+    opacity: 0.7,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingSpinner: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: COLORS.white,
+    borderTopColor: 'transparent',
+    marginRight: 8,
   },
 });
 

@@ -14,12 +14,15 @@ import {
   ScrollView,
   StyleSheet,
   Dimensions,
+  Animated,
+  Keyboard,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS, SHADOWS } from '../config/theme';
 import { checkForExistingData, clearDataByKey, DATA_KEYS } from '../utils/dataCleaner';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const { width, height } = Dimensions.get('window');
 
@@ -44,12 +47,68 @@ const ReservasScreen = () => {
   const [showAddressSearch, setShowAddressSearch] = useState(false);
   const [searchField, setSearchField] = useState(''); // 'origem' ou 'destino'
   const searchTimeoutRef = useRef(null);
+  
+  // Novos estados para melhorias do formulário
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedTime, setSelectedTime] = useState(new Date());
+  const [formErrors, setFormErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(300)).current;
 
   // Carregar dados existentes ao montar o componente
   useEffect(() => {
     loadExistingReservas();
     loadUserLocation();
+    
+    // Listeners do teclado
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      keyboardDidShowListener?.remove();
+      keyboardDidHideListener?.remove();
+    };
   }, []);
+
+  // Animações do modal
+  useEffect(() => {
+    if (showAddModal) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 20,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 300,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [showAddModal]);
 
   const loadUserLocation = async () => {
     try {
@@ -123,6 +182,11 @@ const ReservasScreen = () => {
     setNovaReserva(prev => ({ ...prev, [field]: text }));
     setSearchField(field);
     
+    // Validar campo em tempo real
+    if (text.length >= 3) {
+      validateField(field, text);
+    }
+    
     if (text.length < 2) {
       setSearchResults([]);
       return;
@@ -144,15 +208,95 @@ const ReservasScreen = () => {
     }));
     setSearchResults([]);
     setShowAddressSearch(false);
+    // Limpar erro do campo quando preenchido
+    if (formErrors[searchField]) {
+      setFormErrors(prev => ({
+        ...prev,
+        [searchField]: null
+      }));
+    }
+  };
+
+  // Função de validação de campos
+  const validateField = (fieldName, value) => {
+    let error = null;
+    
+    switch (fieldName) {
+      case 'origem':
+      case 'destino':
+        if (!value || value.trim().length < 3) {
+          error = 'Deve ter pelo menos 3 caracteres';
+        }
+        break;
+      case 'data':
+        if (!value) {
+          error = 'Data é obrigatória';
+        } else {
+          const selectedDate = new Date(value);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (selectedDate < today) {
+            error = 'Data não pode ser no passado';
+          }
+        }
+        break;
+      case 'hora':
+        if (!value) {
+          error = 'Hora é obrigatória';
+        }
+        break;
+    }
+    
+    setFormErrors(prev => ({
+      ...prev,
+      [fieldName]: error
+    }));
+    
+    return error === null;
+  };
+
+  // Validar todos os campos do step atual
+  const validateCurrentStep = () => {
+    let isValid = true;
+    
+    if (currentStep === 1) {
+      isValid = validateField('origem', novaReserva.origem) && isValid;
+      isValid = validateField('destino', novaReserva.destino) && isValid;
+    } else if (currentStep === 2) {
+      isValid = validateField('data', novaReserva.data) && isValid;
+      isValid = validateField('hora', novaReserva.hora) && isValid;
+    }
+    
+    return isValid;
+  };
+
+  // Manipular mudança de data
+  const onDateChange = (event, selectedDate) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setSelectedDate(selectedDate);
+      const formattedDate = selectedDate.toLocaleDateString('pt-BR');
+      setNovaReserva(prev => ({ ...prev, data: formattedDate }));
+      validateField('data', formattedDate);
+    }
+  };
+
+  // Manipular mudança de hora
+  const onTimeChange = (event, selectedTime) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    if (selectedTime) {
+      setSelectedTime(selectedTime);
+      const formattedTime = selectedTime.toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      setNovaReserva(prev => ({ ...prev, hora: formattedTime }));
+      validateField('hora', formattedTime);
+    }
   };
 
   const nextStep = () => {
-    if (currentStep === 1 && (!novaReserva.origem || !novaReserva.destino)) {
-      Alert.alert('Erro', 'Por favor, preencha origem e destino para continuar');
-      return;
-    }
-    if (currentStep === 2 && (!novaReserva.data || !novaReserva.hora)) {
-      Alert.alert('Erro', 'Por favor, preencha data e hora para continuar');
+    if (!validateCurrentStep()) {
       return;
     }
     setCurrentStep(currentStep + 1);
@@ -173,6 +317,10 @@ const ReservasScreen = () => {
     });
     setCurrentStep(1);
     setSearchResults([]);
+    setFormErrors({});
+    setIsSubmitting(false);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
     setShowAddModal(false);
   };
 
@@ -207,28 +355,39 @@ const ReservasScreen = () => {
     );
   };
 
-  const handleAddReserva = () => {
-    if (!novaReserva.origem || !novaReserva.destino || !novaReserva.data || !novaReserva.hora) {
-      Alert.alert('Erro', 'Por favor, preencha origem, destino, data e hora');
+  const handleAddReserva = async () => {
+    if (!validateCurrentStep()) {
       return;
     }
 
-    const novaReservaCompleta = {
-      id: Date.now().toString(),
-      ...novaReserva,
-      status: 'Pendente',
-      createdAt: new Date().toISOString(),
-      preco: novaReserva.tipoTaxi === 'Coletivo' ? 500 : 800
-    };
+    setIsSubmitting(true);
+    
+    try {
+      const novaReservaCompleta = {
+        id: Date.now().toString(),
+        ...novaReserva,
+        status: 'Pendente',
+        createdAt: new Date().toISOString(),
+        preco: novaReserva.tipoTaxi === 'Coletivo' ? 500 : 800
+      };
 
-    const updatedReservas = [...reservas, novaReservaCompleta];
-    setReservas(updatedReservas);
-    
-    // Salvar no AsyncStorage
-    saveReservasToStorage(updatedReservas);
-    
-    // Limpar formulário e fechar modal
-    resetForm();
+      const updatedReservas = [...reservas, novaReservaCompleta];
+      setReservas(updatedReservas);
+      
+      // Salvar no AsyncStorage
+      await saveReservasToStorage(updatedReservas);
+      
+      // Mostrar feedback de sucesso
+      Alert.alert('Sucesso', 'Reserva criada com sucesso!', [
+        { text: 'OK', onPress: resetForm }
+      ]);
+      
+    } catch (error) {
+      console.error('Erro ao criar reserva:', error);
+      Alert.alert('Erro', 'Não foi possível criar a reserva. Tente novamente.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const saveReservasToStorage = async (reservasList) => {
@@ -409,7 +568,10 @@ const ReservasScreen = () => {
             {/* Origem com autocomplete */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Origem</Text>
-              <View style={styles.addressInputContainer}>
+              <View style={[
+                styles.addressInputContainer,
+                formErrors.origem && styles.inputError
+              ]}>
                 <TextInput
                   style={styles.textInput}
                   placeholder="Digite o endereço de origem"
@@ -429,12 +591,19 @@ const ReservasScreen = () => {
                         ...prev, 
                         origem: 'Minha Localização'
                       }));
+                      validateField('origem', 'Minha Localização');
                     }
                   }}
                 >
                   <Ionicons name="location" size={20} color={COLORS.primary} />
                 </TouchableOpacity>
               </View>
+              {formErrors.origem && (
+                <Animated.View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Text style={styles.errorText}>{formErrors.origem}</Text>
+                </Animated.View>
+              )}
               
               {/* Opção rápida para minha localização */}
               <TouchableOpacity
@@ -456,7 +625,10 @@ const ReservasScreen = () => {
             {/* Destino com autocomplete */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Destino</Text>
-              <View style={styles.addressInputContainer}>
+              <View style={[
+                styles.addressInputContainer,
+                formErrors.destino && styles.inputError
+              ]}>
                 <TextInput
                   style={styles.textInput}
                   placeholder="Digite o endereço de destino"
@@ -476,12 +648,19 @@ const ReservasScreen = () => {
                         ...prev, 
                         destino: 'Minha Localização'
                       }));
+                      validateField('destino', 'Minha Localização');
                     }
                   }}
                 >
                   <Ionicons name="location" size={20} color={COLORS.primary} />
                 </TouchableOpacity>
               </View>
+              {formErrors.destino && (
+                <Animated.View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Text style={styles.errorText}>{formErrors.destino}</Text>
+                </Animated.View>
+              )}
             </View>
 
             {/* Resultados da busca de endereços */}
@@ -532,25 +711,55 @@ const ReservasScreen = () => {
             {/* Data */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Data</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="DD/MM/AAAA"
-                value={novaReserva.data}
-                onChangeText={(text) => setNovaReserva(prev => ({ ...prev, data: text }))}
-                placeholderTextColor="#9ca3af"
-              />
+              <TouchableOpacity
+                style={[
+                  styles.dateTimeButton,
+                  formErrors.data && styles.inputError
+                ]}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Ionicons name="calendar-outline" size={20} color={COLORS.primary} />
+                <Text style={[
+                  styles.dateTimeText,
+                  !novaReserva.data && styles.placeholderText
+                ]}>
+                  {novaReserva.data || 'Selecione a data'}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#9ca3af" />
+              </TouchableOpacity>
+              {formErrors.data && (
+                <Animated.View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Text style={styles.errorText}>{formErrors.data}</Text>
+                </Animated.View>
+              )}
             </View>
 
             {/* Hora */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Hora</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="HH:MM"
-                value={novaReserva.hora}
-                onChangeText={(text) => setNovaReserva(prev => ({ ...prev, hora: text }))}
-                placeholderTextColor="#9ca3af"
-              />
+              <TouchableOpacity
+                style={[
+                  styles.dateTimeButton,
+                  formErrors.hora && styles.inputError
+                ]}
+                onPress={() => setShowTimePicker(true)}
+              >
+                <Ionicons name="time-outline" size={20} color={COLORS.primary} />
+                <Text style={[
+                  styles.dateTimeText,
+                  !novaReserva.hora && styles.placeholderText
+                ]}>
+                  {novaReserva.hora || 'Selecione a hora'}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#9ca3af" />
+              </TouchableOpacity>
+              {formErrors.hora && (
+                <Animated.View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Text style={styles.errorText}>{formErrors.hora}</Text>
+                </Animated.View>
+              )}
             </View>
 
             {/* Tipo de táxi */}
@@ -677,10 +886,24 @@ const ReservasScreen = () => {
             <Text style={styles.backButtonText}>Voltar</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.saveButton}
+            style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
             onPress={handleAddReserva}
+            disabled={isSubmitting}
           >
-            <Text style={styles.saveButtonText}>Criar Reserva</Text>
+            {isSubmitting ? (
+              <View style={styles.loadingContainer}>
+                <Animated.View style={[
+                  styles.loadingSpinner,
+                  { transform: [{ rotate: fadeAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0deg', '360deg']
+                  }) }] }
+                ]} />
+                <Text style={styles.saveButtonText}>Criando...</Text>
+              </View>
+            ) : (
+              <Text style={styles.saveButtonText}>Criar Reserva</Text>
+            )}
           </TouchableOpacity>
         </View>
       );
@@ -743,12 +966,21 @@ const ReservasScreen = () => {
       {/* Modal para adicionar reserva */}
       <Modal
         visible={showAddModal}
-        animationType="slide"
+        animationType="none"
         transparent={true}
         onRequestClose={resetForm}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <Animated.View style={[
+          styles.modalOverlay,
+          { opacity: fadeAnim }
+        ]}>
+          <Animated.View style={[
+            styles.modalContent,
+            { 
+              transform: [{ translateY: slideAnim }],
+              marginBottom: keyboardHeight > 0 ? keyboardHeight - 50 : 0
+            }
+          ]}>
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Nova Reserva</Text>
@@ -769,9 +1001,32 @@ const ReservasScreen = () => {
 
             {/* Step Buttons */}
             {renderStepButtons()}
-          </View>
-        </View>
+          </Animated.View>
+        </Animated.View>
       </Modal>
+
+      {/* Date Picker */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onDateChange}
+          minimumDate={new Date()}
+          locale="pt-BR"
+        />
+      )}
+
+      {/* Time Picker */}
+      {showTimePicker && (
+        <DateTimePicker
+          value={selectedTime}
+          mode="time"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onTimeChange}
+          locale="pt-BR"
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -1332,6 +1587,61 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#1F2937',
+  },
+  // Novos estilos para melhorias
+  inputError: {
+    borderColor: COLORS.notification,
+    borderWidth: 2,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+    paddingHorizontal: 5,
+  },
+  errorText: {
+    color: COLORS.notification,
+    fontSize: 12,
+    marginLeft: 5,
+    flex: 1,
+  },
+  dateTimeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    justifyContent: 'space-between',
+  },
+  dateTimeText: {
+    fontSize: 16,
+    color: '#1F2937',
+    flex: 1,
+    marginLeft: 10,
+  },
+  placeholderText: {
+    color: '#9ca3af',
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#9ca3af',
+    opacity: 0.7,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingSpinner: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    borderTopColor: 'transparent',
+    marginRight: 8,
   },
 });
 
