@@ -758,56 +758,82 @@ const FavoritosScreen = () => {
         onRequestClose={resetForm}
         statusBarTranslucent={true}
       >
-        <View style={styles.bottomSheetOverlay}>
+        <View style={styles.modalContainer}>
           <TouchableOpacity 
-            style={styles.bottomSheetBackdrop}
+            style={styles.backdrop}
             activeOpacity={1}
             onPress={resetForm}
           />
           
           <Animated.View style={[
-            styles.bottomSheetContainer,
+            styles.bottomSheet,
             { 
               transform: [{ translateY: slideAnim }],
             }
           ]}>
-            {/* Handle bar */}
-            <View style={styles.handleBar} />
+            {/* Handle */}
+            <View style={styles.handle} />
             
-            {/* Modal Header */}
-            <View style={styles.bottomSheetHeader}>
-              <Text style={styles.bottomSheetTitle}>
-                {isEditing ? 'Editar Favorito' : 'Adicionar Favorito'}
-              </Text>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerContent}>
+                <Text style={styles.title}>
+                  {isEditing ? 'Editar Favorito' : 'Novo Favorito'}
+                </Text>
+                <Text style={styles.subtitle}>Passo {currentStep} de 2</Text>
+              </View>
               <TouchableOpacity
-                style={styles.closeButton}
+                style={styles.closeBtn}
                 onPress={resetForm}
               >
-                <Ionicons name="close" size={24} color="#6b7280" />
+                <Ionicons name="close" size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
-            {/* Step Indicator */}
-            <View style={styles.stepIndicatorContainer}>
-              {renderStepIndicator()}
+            {/* Progress */}
+            <View style={styles.progressContainer}>
+              {[1, 2].map((step) => (
+                <View key={step} style={styles.progressStep}>
+                  <View style={[
+                    styles.progressDot,
+                    currentStep >= step && styles.progressDotActive
+                  ]}>
+                    {currentStep > step ? (
+                      <Ionicons name="checkmark" size={12} color="#fff" />
+                    ) : (
+                      <Text style={[
+                        styles.progressNumber,
+                        currentStep >= step && styles.progressNumberActive
+                      ]}>
+                        {step}
+                      </Text>
+                    )}
+                  </View>
+                  {step < 2 && (
+                    <View style={[
+                      styles.progressLine,
+                      currentStep > step && styles.progressLineActive
+                    ]} />
+                  )}
+                </View>
+              ))}
             </View>
 
             {/* Content */}
-            <ScrollView 
-              style={styles.bottomSheetContent} 
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={[
-                styles.scrollContentContainer,
-                { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 20 : 20 }
-              ]}
-              keyboardDismissMode="on-drag"
-            >
-              {renderStepContent()}
-            </ScrollView>
+            <View style={styles.content}>
+              <ScrollView 
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                bounces={false}
+              >
+                {renderStepContent()}
+              </ScrollView>
+            </View>
 
-            {/* Step Buttons - Fixed at bottom */}
-            <View style={styles.bottomSheetFooter}>
+            {/* Footer */}
+            <View style={styles.footer}>
               {renderStepButtons()}
             </View>
           </Animated.View>

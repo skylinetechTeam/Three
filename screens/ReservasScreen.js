@@ -829,59 +829,62 @@ const ReservasScreen = () => {
   const renderStepButtons = () => {
     if (currentStep === 1) {
       return (
-        <View style={styles.modalFooter}>
+        <View style={styles.buttonRow}>
           <TouchableOpacity
-            style={styles.cancelButton}
+            style={styles.buttonSecondary}
             onPress={resetForm}
           >
-            <Text style={styles.cancelButtonText}>Cancelar</Text>
+            <Text style={styles.buttonSecondaryText}>Cancelar</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.nextButton}
+            style={styles.buttonPrimary}
             onPress={nextStep}
           >
-            <Text style={styles.nextButtonText}>Próximo</Text>
+            <Text style={styles.buttonPrimaryText}>Continuar</Text>
           </TouchableOpacity>
         </View>
       );
     } else if (currentStep === 2) {
       return (
-        <View style={styles.modalFooter}>
+        <View style={styles.buttonRow}>
           <TouchableOpacity
-            style={styles.backButton}
+            style={styles.buttonSecondary}
             onPress={prevStep}
           >
-            <Text style={styles.backButtonText}>Voltar</Text>
+            <Text style={styles.buttonSecondaryText}>Voltar</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.nextButton}
+            style={styles.buttonPrimary}
             onPress={nextStep}
           >
-            <Text style={styles.nextButtonText}>Próximo</Text>
+            <Text style={styles.buttonPrimaryText}>Continuar</Text>
           </TouchableOpacity>
         </View>
       );
     } else if (currentStep === 3) {
       return (
-        <View style={styles.modalFooter}>
+        <View style={styles.buttonRow}>
           <TouchableOpacity
-            style={styles.backButton}
+            style={styles.buttonSecondary}
             onPress={prevStep}
           >
-            <Text style={styles.backButtonText}>Voltar</Text>
+            <Text style={styles.buttonSecondaryText}>Voltar</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
+            style={[
+              styles.buttonPrimary,
+              isSubmitting && styles.buttonPrimaryDisabled
+            ]}
             onPress={handleAddReserva}
             disabled={isSubmitting}
           >
             {isSubmitting ? (
               <View style={styles.loadingContainer}>
                 <View style={styles.loadingSpinner} />
-                <Text style={styles.saveButtonText}>Criando...</Text>
+                <Text style={styles.buttonPrimaryText}>Criando...</Text>
               </View>
             ) : (
-              <Text style={styles.saveButtonText}>Criar Reserva</Text>
+              <Text style={styles.buttonPrimaryText}>Criar Reserva</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -950,54 +953,80 @@ const ReservasScreen = () => {
         onRequestClose={resetForm}
         statusBarTranslucent={true}
       >
-        <View style={styles.bottomSheetOverlay}>
+        <View style={styles.modalContainer}>
           <TouchableOpacity 
-            style={styles.bottomSheetBackdrop}
+            style={styles.backdrop}
             activeOpacity={1}
             onPress={resetForm}
           />
           
           <Animated.View style={[
-            styles.bottomSheetContainer,
+            styles.bottomSheet,
             { 
               transform: [{ translateY: slideAnim }],
             }
           ]}>
-            {/* Handle bar */}
-            <View style={styles.handleBar} />
+            {/* Handle */}
+            <View style={styles.handle} />
             
-            {/* Modal Header */}
-            <View style={styles.bottomSheetHeader}>
-              <Text style={styles.bottomSheetTitle}>Nova Reserva</Text>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerContent}>
+                <Text style={styles.title}>Nova Reserva</Text>
+                <Text style={styles.subtitle}>Passo {currentStep} de 3</Text>
+              </View>
               <TouchableOpacity
-                style={styles.closeButton}
+                style={styles.closeBtn}
                 onPress={resetForm}
               >
-                <Ionicons name="close" size={24} color="#6b7280" />
+                <Ionicons name="close" size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
-            {/* Step Indicator */}
-            <View style={styles.stepIndicatorContainer}>
-              {renderStepIndicator()}
+            {/* Progress */}
+            <View style={styles.progressContainer}>
+              {[1, 2, 3].map((step) => (
+                <View key={step} style={styles.progressStep}>
+                  <View style={[
+                    styles.progressDot,
+                    currentStep >= step && styles.progressDotActive
+                  ]}>
+                    {currentStep > step ? (
+                      <Ionicons name="checkmark" size={12} color="#fff" />
+                    ) : (
+                      <Text style={[
+                        styles.progressNumber,
+                        currentStep >= step && styles.progressNumberActive
+                      ]}>
+                        {step}
+                      </Text>
+                    )}
+                  </View>
+                  {step < 3 && (
+                    <View style={[
+                      styles.progressLine,
+                      currentStep > step && styles.progressLineActive
+                    ]} />
+                  )}
+                </View>
+              ))}
             </View>
 
             {/* Content */}
-            <ScrollView 
-              style={styles.bottomSheetContent} 
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={[
-                styles.scrollContentContainer,
-                { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 20 : 20 }
-              ]}
-              keyboardDismissMode="on-drag"
-            >
-              {renderStepContent()}
-            </ScrollView>
+            <View style={styles.content}>
+              <ScrollView 
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                bounces={false}
+              >
+                {renderStepContent()}
+              </ScrollView>
+            </View>
 
-            {/* Step Buttons - Fixed at bottom */}
-            <View style={styles.bottomSheetFooter}>
+            {/* Footer */}
+            <View style={styles.footer}>
               {renderStepButtons()}
             </View>
           </Animated.View>
@@ -1078,84 +1107,127 @@ const styles = StyleSheet.create({
   reservasList: {
     paddingBottom: 20,
   },
-  // Bottom Sheet styles
-  bottomSheetOverlay: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  bottomSheetBackdrop: {
+  // Modal styles
+  modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  bottomSheetContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    height: height * 0.85,
-    paddingTop: 8,
-    ...SHADOWS.large,
+  backdrop: {
+    flex: 1,
   },
-  handleBar: {
-    width: 40,
+  bottomSheet: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: height * 0.9,
+    minHeight: height * 0.7,
+    ...SHADOWS.large,
+    paddingTop: 12,
+  },
+  handle: {
+    width: 32,
     height: 4,
     backgroundColor: '#E5E7EB',
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 12,
+    marginBottom: 20,
   },
-  bottomSheetHeader: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    alignItems: 'flex-start',
+    paddingHorizontal: 24,
+    marginBottom: 24,
   },
-  bottomSheetTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  closeButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-  },
-  stepIndicatorContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  bottomSheetContent: {
+  headerContent: {
     flex: 1,
-    paddingHorizontal: 20,
   },
-  scrollContentContainer: {
-    paddingBottom: 100, // Espaço para os botões
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
   },
-  bottomSheetFooter: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16, // Safe area para iOS
+  subtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 16,
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    marginBottom: 32,
+  },
+  progressStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  progressDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  progressDotActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  progressNumber: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#9CA3AF',
+  },
+  progressNumberActive: {
+    color: '#ffffff',
+  },
+  progressLine: {
+    width: 40,
+    height: 2,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 8,
+  },
+  progressLineActive: {
+    backgroundColor: COLORS.primary,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  footer: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
-    backgroundColor: '#ffffff',
   },
   inputGroup: {
-    marginBottom: 15,
+    marginBottom: 24,
   },
   inputLabel: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#1F2937',
+    fontWeight: '600',
+    color: '#111827',
     marginBottom: 8,
   },
   textInput: {
@@ -1187,10 +1259,12 @@ const styles = StyleSheet.create({
   // Search results styles
   searchResultsContainer: {
     backgroundColor: '#ffffff',
-    borderRadius: 10,
-    marginTop: 10,
-    maxHeight: 150,
-    ...SHADOWS.small,
+    borderRadius: 12,
+    marginTop: 8,
+    maxHeight: 200,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    ...SHADOWS.medium,
   },
   searchResultsList: {
     maxHeight: 150,
@@ -1274,11 +1348,41 @@ const styles = StyleSheet.create({
   optionButtonTextActive: {
     color: '#ffffff',
   },
-  // Modal footer
-  modalFooter: {
+  // Buttons
+  buttonRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     gap: 12,
+  },
+  buttonSecondary: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  buttonSecondaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  buttonPrimary: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    ...SHADOWS.medium,
+  },
+  buttonPrimaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  buttonPrimaryDisabled: {
+    backgroundColor: '#9CA3AF',
+    ...SHADOWS.small,
   },
   cancelButton: {
     backgroundColor: '#ef4444',
