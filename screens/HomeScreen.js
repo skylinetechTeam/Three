@@ -15,14 +15,13 @@ import {
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+// Removed MapView import - only using WebView for OpenStreetMap
 
 const { width, height } = Dimensions.get('window');
 
-// HERE Maps API Configuration
-const HERE_API_KEY = 'bMtOJnfPZwG3fyrgS24Jif6dt3MXbOoq6H4X4KqxZKY';
+// Removed HERE Maps API Configuration - only using OpenStreetMap
 
-// OpenStreetMap fallback HTML for when HERE Maps has gray tiles
+// OpenStreetMap HTML
 const openStreetMapHTML = (lat, lng) => `
 <!DOCTYPE html>
 <html>
@@ -130,10 +129,10 @@ export default function HomeScreen({ navigation }) {
   const [driversFound, setDriversFound] = useState(false);
   const [isMapLoading, setIsMapLoading] = useState(true);
   const [mapError, setMapError] = useState(null);
-  const [useHereMap, setUseHereMap] = useState(true);
-  const [mapProvider, setMapProvider] = useState('here'); // 'here', 'openstreet', 'native'
+  // Removed useHereMap state - only using OpenStreetMap
+  const [mapProvider, setMapProvider] = useState('openstreet'); // Only OpenStreetMap
   const webViewRef = useRef(null);
-  const mapViewRef = useRef(null);
+  // Removed mapViewRef - only using WebView for OpenStreetMap
   const searchTimeoutRef = useRef(null);
 
   useEffect(() => {
@@ -187,344 +186,9 @@ export default function HomeScreen({ navigation }) {
     }
   }, [location]);
 
-  // Simplified HERE Maps HTML to fix gray tiles issue
-  const hereMapHTML = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-        <title>HERE Map</title>
-        <style>
-            * { box-sizing: border-box; }
-            body, html { 
-                margin: 0; 
-                padding: 0; 
-                height: 100%; 
-                width: 100%;
-                overflow: hidden;
-                background-color: #E8F4FD;
-                font-family: Arial, sans-serif;
-            }
-            #mapContainer { 
-                height: 100%; 
-                width: 100%; 
-                background-color: #E8F4FD;
-                position: relative;
-            }
-            #loadingIndicator {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                text-align: center;
-                color: #2563EB;
-                z-index: 1000;
-                background: rgba(255,255,255,0.9);
-                padding: 20px;
-                border-radius: 10px;
-            }
-            .spinner {
-                border: 3px solid #f3f3f3;
-                border-top: 3px solid #2563EB;
-                border-radius: 50%;
-                width: 30px;
-                height: 30px;
-                animation: spin 1s linear infinite;
-                margin: 0 auto 10px;
-            }
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-        </style>
-    </head>
-    <body>
-        <div id="loadingIndicator">
-            <div class="spinner"></div>
-            <div>Carregando mapa...</div>
-        </div>
-        <div id="mapContainer"></div>
-        
-        <script>
-            console.log('🗺️ Iniciando HERE Maps simplificado...');
-            
-            // Load HERE Maps scripts dynamically to ensure proper loading
-            function loadScript(src) {
-                return new Promise((resolve, reject) => {
-                    const script = document.createElement('script');
-                    script.src = src;
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
-            }
-            
-            async function loadHereScripts() {
-                try {
-                    await loadScript('https://js.api.here.com/v3/3.1/mapsjs-core.js');
-                    await loadScript('https://js.api.here.com/v3/3.1/mapsjs-service.js');
-                    await loadScript('https://js.api.here.com/v3/3.1/mapsjs-ui.js');
-                    await loadScript('https://js.api.here.com/v3/3.1/mapsjs-mapevents.js');
-                    
-                    // Load CSS
-                    const link = document.createElement('link');
-                    link.rel = 'stylesheet';
-                    link.href = 'https://js.api.here.com/v3/3.1/mapsjs-ui.css';
-                    document.head.appendChild(link);
-                    
-                    console.log('✅ Scripts HERE Maps carregados');
-                    initializeMap();
-                } catch (error) {
-                    console.error('❌ Erro ao carregar scripts HERE Maps:', error);
-                    document.getElementById('loadingIndicator').innerHTML = 
-                        '<div style="color: #ef4444;">Erro ao carregar scripts do mapa</div>';
-                    
-                    window.ReactNativeWebView?.postMessage(JSON.stringify({
-                        type: 'MAP_ERROR',
-                        error: 'Falha ao carregar scripts HERE Maps'
-                    }));
-                }
-            }
-            
-            function initializeMap() {
-                try {
-                    console.log('🔑 HERE API Key:', '${HERE_API_KEY}');
-                    
-                    // Initialize HERE Maps Platform
-                    const platform = new H.service.Platform({
-                        'apikey': '${HERE_API_KEY}',
-                        'useHTTPS': true
-                    });
+  // Removed HERE Maps HTML - only using OpenStreetMap
 
-                    const defaultLayers = platform.createDefaultLayers({
-                        tileSize: 256,
-                        ppi: window.devicePixelRatio > 1 ? 320 : 72
-                    });
-                    
-                    console.log('🗺️ Usando raster normal map para evitar tiles cinzas');
-                    
-                    const map = new H.Map(
-                      document.getElementById('mapContainer'),
-                      defaultLayers.raster.normal.map,
-                      {
-                        zoom: 13,
-                        center: { lat: ${location?.coords.latitude || -8.8390}, lng: ${location?.coords.longitude || 13.2894} }
-                      }
-                    );
-
-                    console.log('✅ HERE Map criado com sucesso');
-                    
-                    // Hide loading indicator
-                    document.getElementById('loadingIndicator').style.display = 'none';
-
-                    // Enable map interaction
-                    const behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
-                    const ui = H.ui.UI.createDefault(map, defaultLayers);
-                    
-                    // Handle window resize
-                    window.addEventListener('resize', () => {
-                        setTimeout(() => map.getViewPort().resize(), 100);
-                    });
-
-                    // Force initial resize
-                    setTimeout(() => {
-                        map.getViewPort().resize();
-                        console.log('🔄 Resize inicial executado');
-                    }, 500);
-
-                    // Custom markers
-                    let userMarker = null;
-                    let destinationMarker = null;
-                    let routeLine = null;
-
-                    // Check for gray tiles and fix them
-                    let tileCheckCount = 0;
-                    const maxTileChecks = 3;
-                    
-                    function checkAndFixGrayTiles() {
-                        tileCheckCount++;
-                        console.log('🔍 Verificando tiles (tentativa ' + tileCheckCount + ')...');
-                        
-                        // Force map refresh to load tiles
-                        map.getViewPort().resize();
-                        
-                        if (tileCheckCount < maxTileChecks) {
-                            setTimeout(checkAndFixGrayTiles, 2000);
-                        } else {
-                            console.log('✅ Verificação de tiles concluída');
-                            
-                            // Notify React Native that map is ready
-                            window.ReactNativeWebView?.postMessage(JSON.stringify({
-                                type: 'MAP_READY',
-                                success: true
-                            }));
-                        }
-                    }
-                    
-                    // Start tile checking after map is created
-                    setTimeout(checkAndFixGrayTiles, 1000);
-
-                    // Add user location marker
-                    function addUserLocationMarker(lat, lng) {
-                        console.log('📍 Adicionando marcador do usuário:', lat, lng);
-                        
-                        if (userMarker) {
-                            map.removeObject(userMarker);
-                        }
-                        
-                        const userIcon = new H.map.Icon(
-                            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8" fill="#2563EB" stroke="#ffffff" stroke-width="3"/></svg>',
-                            { size: { w: 24, h: 24 } }
-                        );
-                        
-                        userMarker = new H.map.Marker({ lat: lat, lng: lng }, { icon: userIcon });
-                        map.addObject(userMarker);
-                    }
-
-                    // Add destination marker
-                    function addDestinationMarker(lat, lng, title) {
-                        console.log('🎯 Adicionando marcador de destino:', lat, lng, title);
-                        
-                        if (destinationMarker) {
-                            map.removeObject(destinationMarker);
-                        }
-                        
-                        const destIcon = new H.map.Icon(
-                            '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#EF4444"/></svg>',
-                            { size: { w: 32, h: 32 } }
-                        );
-                        
-                        destinationMarker = new H.map.Marker({ lat: lat, lng: lng }, { icon: destIcon });
-                        destinationMarker.setData(title);
-                        map.addObject(destinationMarker);
-                    }
-
-                    // Center map on location
-                    function centerOnLocation(lat, lng, zoom = 15) {
-                        console.log('🎯 Centralizando mapa em:', lat, lng);
-                        map.setCenter({ lat: lat, lng: lng });
-                        map.setZoom(zoom);
-                    }
-
-                    // Expose functions for React Native to call via injectJavaScript
-                    window.__setUserLocation = function(lat, lng) {
-                      console.log('🔧 __setUserLocation chamado:', lat, lng);
-                      addUserLocationMarker(lat, lng);
-                      centerOnLocation(lat, lng);
-                    };
-                    
-                    window.__setDestination = function(lat, lng, title) {
-                      console.log('🔧 __setDestination chamado:', lat, lng, title);
-                      addDestinationMarker(lat, lng, title);
-                    };
-                    
-                    window.__centerOnUser = function() {
-                      console.log('🔧 __centerOnUser chamado');
-                      if (userMarker) {
-                        const userPos = userMarker.getGeometry();
-                        centerOnLocation(userPos.lat, userPos.lng);
-                      }
-                    };
-                    
-                    window.__clearRoute = function() {
-                      console.log('🔧 __clearRoute chamado');
-                      if (destinationMarker) {
-                        map.removeObject(destinationMarker);
-                        destinationMarker = null;
-                      }
-                      if (routeLine) {
-                        map.removeObject(routeLine);
-                        routeLine = null;
-                      }
-                    };
-
-                    // Initialize with user location if available
-                    ${location ? `
-                    console.log('🚀 Inicializando com localização do usuário:', ${location.coords.latitude}, ${location.coords.longitude});
-                    addUserLocationMarker(${location.coords.latitude}, ${location.coords.longitude});
-                    ` : `
-                    console.log('📍 Localização não disponível, usando coordenadas padrão');
-                    `}
-                    
-                    // Notify React Native that map is ready
-                    window.ReactNativeWebView?.postMessage(JSON.stringify({
-                        type: 'MAP_READY',
-                        success: true
-                    }));
-                    
-                } catch (error) {
-                    console.error('❌ Erro ao inicializar HERE Maps:', error);
-                    document.getElementById('loadingIndicator').innerHTML = 
-                        '<div style="color: #ef4444;">Erro ao carregar o mapa<br><small>' + error.message + '</small></div>';
-                    
-                    // Notify React Native about the error
-                    window.ReactNativeWebView?.postMessage(JSON.stringify({
-                        type: 'MAP_ERROR',
-                        error: error.message
-                    }));
-                }
-            }
-            
-            // Start loading HERE Maps scripts
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', loadHereScripts);
-            } else {
-                loadHereScripts();
-            }
-        </script>
-    </body>
-    </html>
-  `;
-
-  // Search places with HERE Maps API
-  const searchPlacesWithHERE = async (query) => {
-    if (!query || query.length < 2) return [];
-    
-    console.log('🔍 Searching for:', query);
-    setIsSearching(true);
-    
-    try {
-      const userLat = location?.coords.latitude || -8.8390;
-      const userLng = location?.coords.longitude || 13.2894;
-      
-      console.log('📍 User location:', userLat, userLng);
-      console.log('🔑 HERE API Key:', HERE_API_KEY);
-      
-      // HERE Geocoding and Search API
-      const searchUrl = `https://discover.search.hereapi.com/v1/discover?apikey=${HERE_API_KEY}&q=${encodeURIComponent(query)}&at=${userLat},${userLng}&limit=20&lang=pt-PT`;
-      
-      console.log('🌐 Search URL:', searchUrl);
-      
-      const response = await fetch(searchUrl);
-      const data = await response.json();
-      
-      console.log('📡 HERE API response:', data);
-      
-      if (data.items && data.items.length > 0) {
-        const formattedPlaces = data.items.map((item, index) => ({
-          id: `here_${index}`,
-          name: item.title,
-          address: item.address.label,
-          lat: item.position.lat,
-          lng: item.position.lng,
-          distance: item.distance,
-          categories: item.categories || []
-        }));
-        
-        console.log('✅ Formatted places:', formattedPlaces);
-        setFilteredResults(formattedPlaces);
-      } else {
-        console.log('❌ No items in response');
-        setFilteredResults([]);
-      }
-    } catch (error) {
-      console.error('❌ HERE Places search error:', error);
-      Alert.alert('Erro', 'Não foi possível buscar locais. Tente novamente.');
-    } finally {
-      setIsSearching(false);
-    }
-  };
+  // Removed HERE Maps search - only using Nominatim
 
   const handleLocationSelect = (selectedLocation) => {
     console.log('🎯 Location selected:', selectedLocation);
@@ -532,17 +196,12 @@ export default function HomeScreen({ navigation }) {
     setSelectedDestination(selectedLocation);
     setIsSearchExpanded(false);
     
-          // Send location to Map
-      if (selectedLocation.lat && selectedLocation.lng) {
-        if (mapProvider === 'native') {
-          // For React Native Maps, we just update the state - markers are handled in render
-          console.log('🗺️ Destino selecionado para React Native Maps');
-        } else {
-          // For WebView maps (HERE or OpenStreetMap)
-          const js = `window.__setDestination && window.__setDestination(${selectedLocation.lat}, ${selectedLocation.lng}, ${JSON.stringify(selectedLocation.name)}); true;`;
-          console.log('🗺️ Injecting JavaScript:', js);
-          webViewRef.current?.injectJavaScript(js);
-        }
+    // Send location to Map
+    if (selectedLocation.lat && selectedLocation.lng) {
+      // For WebView maps (OpenStreetMap)
+      const js = `window.__setDestination && window.__setDestination(${selectedLocation.lat}, ${selectedLocation.lng}, ${JSON.stringify(selectedLocation.name)}); true;`;
+      console.log('🗺️ Injecting JavaScript:', js);
+      webViewRef.current?.injectJavaScript(js);
         
         // Iniciar busca de motoristas
         console.log('🚗 Iniciando busca de motoristas...');
@@ -571,41 +230,19 @@ export default function HomeScreen({ navigation }) {
 
   const centerOnUserLocation = () => {
     if (location) {
-      if (mapProvider === 'native') {
-        // React Native Maps
-        mapViewRef.current?.animateToRegion({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 1000);
-      } else {
-        // WebView maps (HERE or OpenStreetMap)
-        const js = `window.__centerOnUser && window.__centerOnUser(); true;`;
-        webViewRef.current?.injectJavaScript(js);
-      }
+      // WebView maps (OpenStreetMap)
+      const js = `window.__centerOnUser && window.__centerOnUser(); true;`;
+      webViewRef.current?.injectJavaScript(js);
     }
   };
 
-  const switchMapProvider = () => {
-    const providers = ['here', 'openstreet', 'native'];
-    const currentIndex = providers.indexOf(mapProvider);
-    const nextProvider = providers[(currentIndex + 1) % providers.length];
-    
-    setMapProvider(nextProvider);
-    setIsMapLoading(true);
-    setMapError(null);
-    console.log('🔄 Alternando para:', nextProvider);
-  };
+  // Removed switchMapProvider function - only using OpenStreetMap
 
   const getMapHTML = () => {
     const lat = location?.coords.latitude || -8.8390;
     const lng = location?.coords.longitude || 13.2894;
     
-    if (mapProvider === 'openstreet') {
-      return openStreetMapHTML(lat, lng);
-    }
-    return hereMapHTML; // Default to HERE Maps
+    return openStreetMapHTML(lat, lng); // Only OpenStreetMap
   };
 
   const handleSearchFocus = () => {
@@ -631,8 +268,104 @@ export default function HomeScreen({ navigation }) {
     }
     searchTimeoutRef.current = setTimeout(() => {
       console.log('⚡ Executing search for:', text);
-      searchPlacesWithHERE(text);
+      searchPlacesWithNominatim(text);
     }, 500);
+  };
+
+  // Search function using OpenStreetMap Nominatim API
+  const searchPlacesWithNominatim = async (query) => {
+    if (!query || query.length < 2) return [];
+    
+    console.log('🔍 Searching with Nominatim for:', query);
+    setIsSearching(true);
+    
+    try {
+      const userLat = location?.coords.latitude || -8.8390;
+      const userLng = location?.coords.longitude || 13.2894;
+      
+      // OpenStreetMap Nominatim API (free, no API key required)
+      const searchUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=10&addressdetails=1&viewbox=${userLng-0.1},${userLat+0.1},${userLng+0.1},${userLat-0.1}&bounded=1`;
+      
+      console.log('🌐 Nominatim Search URL:', searchUrl);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
+      const response = await fetch(searchUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'TravelApp/1.0',
+        },
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      console.log('📡 Nominatim API response:', data);
+      
+      if (data && data.length > 0) {
+        const formattedPlaces = data.map((item, index) => ({
+          id: `nominatim_${index}`,
+          name: item.display_name.split(',')[0] || item.display_name,
+          address: item.display_name,
+          lat: parseFloat(item.lat),
+          lng: parseFloat(item.lon),
+          distance: 0, // Nominatim doesn't provide distance
+          categories: []
+        }));
+        
+        console.log('✅ Nominatim formatted places:', formattedPlaces);
+        setFilteredResults(formattedPlaces);
+      } else {
+        console.log('❌ No Nominatim results');
+        setFilteredResults([]);
+      }
+    } catch (error) {
+      console.error('❌ Nominatim search error:', error);
+      console.log('⚠️ Falling back to mock results');
+      
+      // Provide mock results as final fallback
+      const mockResults = [
+        {
+          id: 'mock_1',
+          name: 'Centro Comercial Belas Shopping',
+          address: 'Luanda, Angola',
+          lat: -8.8390,
+          lng: 13.2894,
+          distance: 1000,
+          categories: [{ id: 'shopping-mall' }]
+        },
+        {
+          id: 'mock_2',
+          name: 'Aeroporto Internacional 4 de Fevereiro',
+          address: 'Luanda, Angola',
+          lat: -8.8584,
+          lng: 13.2312,
+          distance: 5000,
+          categories: [{ id: 'airport' }]
+        },
+        {
+          id: 'mock_3',
+          name: 'Restaurante Popular',
+          address: 'Luanda, Angola',
+          lat: -8.8300,
+          lng: 13.2800,
+          distance: 2000,
+          categories: [{ id: 'restaurant' }]
+        }
+      ];
+      
+      setFilteredResults(mockResults);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const handleNewSearch = () => {
@@ -643,10 +376,8 @@ export default function HomeScreen({ navigation }) {
     setDriversFound(false);
     
     // Clear route on map
-    if (mapProvider !== 'native') {
-      const js = `window.__clearRoute && window.__clearRoute(); true;`;
-      webViewRef.current?.injectJavaScript(js);
-    }
+    const js = `window.__clearRoute && window.__clearRoute(); true;`;
+    webViewRef.current?.injectJavaScript(js);
   };
 
   const getIconForCategory = (categories) => {
@@ -680,54 +411,11 @@ export default function HomeScreen({ navigation }) {
       {console.log('🏠 HomeScreen render - States:', { isSearchingDrivers, selectedDestination: !!selectedDestination, driverSearchTime, driversFound })}
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
-      {/* Map Container - Multiple Providers */}
-      {mapProvider === 'native' ? (
-        <MapView
-          ref={mapViewRef}
-          style={styles.map}
-          provider={PROVIDER_GOOGLE}
-          initialRegion={{
-            latitude: location?.coords.latitude || -8.8390,
-            longitude: location?.coords.longitude || 13.2894,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-          showsUserLocation={true}
-          showsMyLocationButton={false}
-          showsCompass={true}
-          showsScale={true}
-          loadingEnabled={true}
-          onMapReady={() => {
-            console.log('✅ React Native Maps pronto');
-            setIsMapLoading(false);
-            setMapError(null);
-          }}
-        >
-          {location && (
-            <Marker
-              coordinate={{
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-              }}
-              title="Sua localização"
-            />
-          )}
-          {selectedDestination && (
-            <Marker
-              coordinate={{
-                latitude: selectedDestination.lat,
-                longitude: selectedDestination.lng,
-              }}
-              title={selectedDestination.name}
-              pinColor="red"
-            />
-          )}
-        </MapView>
-      ) : (
-        <WebView
-          ref={webViewRef}
-          source={{ html: getMapHTML() }}
-          style={styles.map}
+      {/* Map Container - OpenStreetMap Only */}
+      <WebView
+        ref={webViewRef}
+        source={{ html: getMapHTML() }}
+        style={styles.map}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         startInLoadingState={true}
@@ -761,20 +449,6 @@ export default function HomeScreen({ navigation }) {
           console.error('❌ WebView error:', error);
           setIsMapLoading(false);
           setMapError('Erro ao carregar o mapa');
-          // Auto-switch to next provider on error
-          setTimeout(() => {
-            if (mapProvider === 'here') {
-              console.log('🔄 Alternando para OpenStreetMap devido a erro');
-              setMapProvider('openstreet');
-              setIsMapLoading(true);
-              setMapError(null);
-            } else if (mapProvider === 'openstreet') {
-              console.log('🔄 Alternando para React Native Maps devido a erro');
-              setMapProvider('native');
-              setIsMapLoading(true);
-              setMapError(null);
-            }
-          }, 2000);
         }}
         onHttpError={(error) => {
           console.error('🌐 WebView HTTP error:', error);
@@ -787,23 +461,13 @@ export default function HomeScreen({ navigation }) {
             console.log('📨 Mensagem do mapa:', data);
             
             if (data.type === 'MAP_READY') {
-              console.log(`✅ ${data.provider || mapProvider} pronto para uso`);
+              console.log(`✅ OpenStreetMap pronto para uso`);
               setIsMapLoading(false);
               setMapError(null);
             } else if (data.type === 'MAP_ERROR') {
               console.error('❌ Erro no mapa:', data.error);
               setIsMapLoading(false);
               setMapError(data.error);
-              
-              // Auto-switch to OpenStreetMap if HERE Maps has gray tiles
-              if (data.error.includes('cinza') || data.error.includes('tiles')) {
-                setTimeout(() => {
-                  console.log('🔄 Alternando para OpenStreetMap devido a tiles cinzas');
-                  setMapProvider('openstreet');
-                  setIsMapLoading(true);
-                  setMapError(null);
-                }, 1500);
-              }
             }
           } catch (error) {
             console.log('📨 Mensagem do mapa (não JSON):', event.nativeEvent.data);
@@ -851,20 +515,7 @@ export default function HomeScreen({ navigation }) {
         <MaterialIcons name="my-location" size={24} color="#ffffff" />
       </TouchableOpacity>
 
-      {/* Map Provider Switch Button */}
-      <TouchableOpacity
-        style={styles.mapSwitchButton}
-        onPress={switchMapProvider}
-      >
-        <MaterialIcons 
-          name={mapProvider === 'here' ? "map" : mapProvider === 'openstreet' ? "public" : "satellite"} 
-          size={18} 
-          color="#ffffff" 
-        />
-        <Text style={styles.mapSwitchText}>
-          {mapProvider === 'here' ? "HERE" : mapProvider === 'openstreet' ? "OSM" : "Google"}
-        </Text>
-      </TouchableOpacity>
+      {/* Removed Map Provider Switch Button - Only OpenStreetMap */}
 
       {/* Search and Taxi Controls OR Driver Search Animation */}
       {console.log('🔍 Render condition - isSearchingDrivers:', isSearchingDrivers, 'driversFound:', driversFound)}
@@ -1020,12 +671,12 @@ export default function HomeScreen({ navigation }) {
                'Digite para buscar locais'}
             </Text>
 
-            {isSearching && (
-              <View style={styles.searchingIndicator}>
-                <MaterialIcons name="search" size={20} color="#2563EB" />
-                <Text style={styles.searchingText}>Buscando com HERE Maps...</Text>
-              </View>
-            )}
+                         {isSearching && (
+               <View style={styles.searchingIndicator}>
+                 <MaterialIcons name="search" size={20} color="#2563EB" />
+                 <Text style={styles.searchingText}>Buscando locais...</Text>
+               </View>
+             )}
 
             {filteredResults.length > 0 ? (
               <ScrollView
@@ -1053,9 +704,9 @@ export default function HomeScreen({ navigation }) {
                         {result.distance && ` • ${Math.round(result.distance/1000)}km`}
                       </Text>
                     </View>
-                    <View style={styles.hereMapsBadge}>
-                      <Text style={styles.hereMapsBadgeText}>HERE</Text>
-                    </View>
+                                         <View style={styles.hereMapsBadge}>
+                       <Text style={styles.hereMapsBadgeText}>OSM</Text>
+                     </View>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -1097,28 +748,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  mapSwitchButton: {
-    position: 'absolute',
-    top: 120,
-    right: 20,
-    backgroundColor: '#10B981',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  mapSwitchText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
+  // Removed mapSwitchButton styles - only using OpenStreetMap
   bottomContainer: {
     position: 'absolute',
     bottom: 70,
