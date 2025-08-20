@@ -49,7 +49,7 @@ const FavoritosScreen = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
-  const slideAnim = useRef(new Animated.Value(height)).current;
+  const slideAnim = useRef(new Animated.Value(height * 0.85)).current;
 
   // Carregar dados existentes ao montar o componente
   useEffect(() => {
@@ -81,7 +81,7 @@ const FavoritosScreen = () => {
       }).start();
     } else {
       Animated.timing(slideAnim, {
-        toValue: height,
+        toValue: height * 0.85,
         duration: 250,
         useNativeDriver: true,
       }).start();
@@ -769,7 +769,6 @@ const FavoritosScreen = () => {
             styles.bottomSheetContainer,
             { 
               transform: [{ translateY: slideAnim }],
-              paddingBottom: keyboardHeight > 0 ? keyboardHeight : 0
             }
           ]}>
             {/* Handle bar */}
@@ -798,7 +797,11 @@ const FavoritosScreen = () => {
               style={styles.bottomSheetContent} 
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.scrollContentContainer}
+              contentContainerStyle={[
+                styles.scrollContentContainer,
+                { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 20 : 20 }
+              ]}
+              keyboardDismissMode="on-drag"
             >
               {renderStepContent()}
             </ScrollView>
@@ -973,11 +976,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   bottomSheetContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    minHeight: height * 0.75,
-    maxHeight: height * 0.9,
+    height: height * 0.85,
     paddingTop: 8,
     ...SHADOWS.large,
   },
@@ -1017,11 +1023,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   scrollContentContainer: {
-    paddingBottom: 20,
+    paddingBottom: 100, // Espaço para os botões
   },
   bottomSheetFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 20,
     paddingVertical: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16, // Safe area para iOS
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
     backgroundColor: COLORS.white,
