@@ -49,8 +49,7 @@ const FavoritosScreen = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(300)).current;
+  const slideAnim = useRef(new Animated.Value(height)).current;
 
   // Carregar dados existentes ao montar o componente
   useEffect(() => {
@@ -71,35 +70,21 @@ const FavoritosScreen = () => {
     };
   }, []);
 
-  // Animações do modal
+  // Animações do bottom sheet
   useEffect(() => {
     if (showAddModal) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 20,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 20,
+        friction: 7,
+        useNativeDriver: true,
+      }).start();
     } else {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 300,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      Animated.timing(slideAnim, {
+        toValue: height,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
     }
   }, [showAddModal]);
 
@@ -681,13 +666,7 @@ const FavoritosScreen = () => {
           >
             {isSubmitting ? (
               <View style={styles.loadingContainer}>
-                <Animated.View style={[
-                  styles.loadingSpinner,
-                  { transform: [{ rotate: fadeAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0deg', '360deg']
-                  }) }] }
-                ]} />
+                <View style={styles.loadingSpinner} />
                 <Text style={styles.saveButtonText}>
                   {isEditing ? 'Atualizando...' : 'Adicionando...'}
                 </Text>
@@ -771,28 +750,35 @@ const FavoritosScreen = () => {
         <Ionicons name="add" size={24} color="#ffffff" />
       </TouchableOpacity>
 
-      {/* Modal para adicionar/editar favorito */}
+      {/* Bottom Sheet Modal para adicionar/editar favorito */}
       <Modal
         visible={showAddModal}
         animationType="none"
         transparent={true}
         onRequestClose={resetForm}
+        statusBarTranslucent={true}
       >
-        <Animated.View style={[
-          styles.modalOverlay,
-          { opacity: fadeAnim }
-        ]}>
+        <View style={styles.bottomSheetOverlay}>
+          <TouchableOpacity 
+            style={styles.bottomSheetBackdrop}
+            activeOpacity={1}
+            onPress={resetForm}
+          />
+          
           <Animated.View style={[
-            styles.modalContent,
+            styles.bottomSheetContainer,
             { 
               transform: [{ translateY: slideAnim }],
-              marginBottom: keyboardHeight > 0 ? keyboardHeight - 50 : 0
+              paddingBottom: keyboardHeight > 0 ? keyboardHeight : 0
             }
           ]}>
+            {/* Handle bar */}
+            <View style={styles.handleBar} />
+            
             {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {newFavorito.id ? 'Editar Favorito' : 'Adicionar Favorito'}
+            <View style={styles.bottomSheetHeader}>
+              <Text style={styles.bottomSheetTitle}>
+                {isEditing ? 'Editar Favorito' : 'Adicionar Favorito'}
               </Text>
               <TouchableOpacity
                 style={styles.closeButton}
@@ -803,16 +789,26 @@ const FavoritosScreen = () => {
             </View>
 
             {/* Step Indicator */}
-            {renderStepIndicator()}
+            <View style={styles.stepIndicatorContainer}>
+              {renderStepIndicator()}
+            </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            {/* Content */}
+            <ScrollView 
+              style={styles.bottomSheetContent} 
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.scrollContentContainer}
+            >
               {renderStepContent()}
             </ScrollView>
 
-            {/* Step Buttons */}
-            {renderStepButtons()}
+            {/* Step Buttons - Fixed at bottom */}
+            <View style={styles.bottomSheetFooter}>
+              {renderStepButtons()}
+            </View>
           </Animated.View>
-        </Animated.View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -967,30 +963,68 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 8,
   },
-  modalOverlay: {
+  // Bottom Sheet styles
+  bottomSheetOverlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'transparent',
   },
-  modalContent: {
+  bottomSheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  bottomSheetContainer: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 20,
-    width: '80%',
-    alignItems: 'center',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    minHeight: height * 0.75,
+    maxHeight: height * 0.9,
+    paddingTop: 8,
+    ...SHADOWS.large,
   },
-  modalHeader: {
+  handleBar: {
+    width: 40,
+    height: 4,
+    backgroundColor: COLORS.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  bottomSheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    width: '100%',
-    marginBottom: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  bottomSheetTitle: {
+    fontSize: 20,
+    fontWeight: '600',
     color: COLORS.text.primary,
+  },
+  closeButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.input.background,
+  },
+  stepIndicatorContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  bottomSheetContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  scrollContentContainer: {
+    paddingBottom: 20,
+  },
+  bottomSheetFooter: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    backgroundColor: COLORS.white,
   },
   inputContainer: {
     width: '100%',
@@ -1211,9 +1245,8 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    marginTop: 20,
+    justifyContent: 'space-between',
+    gap: 12,
   },
   saveButton: {
     backgroundColor: COLORS.primary,

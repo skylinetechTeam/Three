@@ -56,8 +56,7 @@ const ReservasScreen = () => {
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(300)).current;
+  const slideAnim = useRef(new Animated.Value(height)).current;
 
   // Carregar dados existentes ao montar o componente
   useEffect(() => {
@@ -78,35 +77,21 @@ const ReservasScreen = () => {
     };
   }, []);
 
-  // Animações do modal
+  // Animações do bottom sheet
   useEffect(() => {
     if (showAddModal) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 20,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 20,
+        friction: 7,
+        useNativeDriver: true,
+      }).start();
     } else {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 300,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      Animated.timing(slideAnim, {
+        toValue: height,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
     }
   }, [showAddModal]);
 
@@ -892,13 +877,7 @@ const ReservasScreen = () => {
           >
             {isSubmitting ? (
               <View style={styles.loadingContainer}>
-                <Animated.View style={[
-                  styles.loadingSpinner,
-                  { transform: [{ rotate: fadeAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0deg', '360deg']
-                  }) }] }
-                ]} />
+                <View style={styles.loadingSpinner} />
                 <Text style={styles.saveButtonText}>Criando...</Text>
               </View>
             ) : (
@@ -963,27 +942,34 @@ const ReservasScreen = () => {
         <Ionicons name="add" size={24} color="#ffffff" />
       </TouchableOpacity>
 
-      {/* Modal para adicionar reserva */}
+      {/* Bottom Sheet Modal para adicionar reserva */}
       <Modal
         visible={showAddModal}
         animationType="none"
         transparent={true}
         onRequestClose={resetForm}
+        statusBarTranslucent={true}
       >
-        <Animated.View style={[
-          styles.modalOverlay,
-          { opacity: fadeAnim }
-        ]}>
+        <View style={styles.bottomSheetOverlay}>
+          <TouchableOpacity 
+            style={styles.bottomSheetBackdrop}
+            activeOpacity={1}
+            onPress={resetForm}
+          />
+          
           <Animated.View style={[
-            styles.modalContent,
+            styles.bottomSheetContainer,
             { 
               transform: [{ translateY: slideAnim }],
-              marginBottom: keyboardHeight > 0 ? keyboardHeight - 50 : 0
+              paddingBottom: keyboardHeight > 0 ? keyboardHeight : 0
             }
           ]}>
+            {/* Handle bar */}
+            <View style={styles.handleBar} />
+            
             {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nova Reserva</Text>
+            <View style={styles.bottomSheetHeader}>
+              <Text style={styles.bottomSheetTitle}>Nova Reserva</Text>
               <TouchableOpacity
                 style={styles.closeButton}
                 onPress={resetForm}
@@ -993,16 +979,26 @@ const ReservasScreen = () => {
             </View>
 
             {/* Step Indicator */}
-            {renderStepIndicator()}
+            <View style={styles.stepIndicatorContainer}>
+              {renderStepIndicator()}
+            </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            {/* Content */}
+            <ScrollView 
+              style={styles.bottomSheetContent} 
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.scrollContentContainer}
+            >
               {renderStepContent()}
             </ScrollView>
 
-            {/* Step Buttons */}
-            {renderStepButtons()}
+            {/* Step Buttons - Fixed at bottom */}
+            <View style={styles.bottomSheetFooter}>
+              {renderStepButtons()}
+            </View>
           </Animated.View>
-        </Animated.View>
+        </View>
       </Modal>
 
       {/* Date Picker */}
@@ -1079,40 +1075,68 @@ const styles = StyleSheet.create({
   reservasList: {
     paddingBottom: 20,
   },
-  // Modal styles
-  modalOverlay: {
+  // Bottom Sheet styles
+  bottomSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  bottomSheetBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  modalContent: {
+  bottomSheetContainer: {
     backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    minHeight: height * 0.75,
+    maxHeight: height * 0.9,
+    paddingTop: 8,
     ...SHADOWS.large,
   },
-  modalHeader: {
+  handleBar: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  bottomSheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 15,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#F3F4F6',
   },
-  modalTitle: {
+  bottomSheetTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#1F2937',
   },
   closeButton: {
-    padding: 5,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
   },
-  modalBody: {
-    width: '100%',
+  stepIndicatorContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  bottomSheetContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  scrollContentContainer: {
+    paddingBottom: 20,
+  },
+  bottomSheetFooter: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    backgroundColor: '#ffffff',
   },
   inputGroup: {
     marginBottom: 15,
@@ -1242,8 +1266,8 @@ const styles = StyleSheet.create({
   // Modal footer
   modalFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 20,
+    justifyContent: 'space-between',
+    gap: 12,
   },
   cancelButton: {
     backgroundColor: '#ef4444',
