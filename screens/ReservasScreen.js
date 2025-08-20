@@ -973,7 +973,7 @@ const ReservasScreen = () => {
             <View style={styles.header}>
               <View style={styles.headerContent}>
                 <Text style={styles.title}>Nova Reserva</Text>
-                <Text style={styles.subtitle}>Passo {currentStep} de 3</Text>
+                <Text style={styles.subtitle}>Passo {currentStep} de 4</Text>
               </View>
               <TouchableOpacity
                 style={styles.closeBtn}
@@ -985,7 +985,7 @@ const ReservasScreen = () => {
 
             {/* Progress */}
             <View style={styles.progressContainer}>
-              {[1, 2, 3].map((step) => (
+              {[1, 2, 3, 4].map((step) => (
                 <View key={step} style={styles.progressStep}>
                   <View style={[
                     styles.progressDot,
@@ -1002,7 +1002,7 @@ const ReservasScreen = () => {
                       </Text>
                     )}
                   </View>
-                  {step < 3 && (
+                  {step < 4 && (
                     <View style={[
                       styles.progressLine,
                       currentStep > step && styles.progressLineActive
@@ -1195,10 +1195,10 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   progressLine: {
-    width: 40,
+    width: 30,
     height: 2,
     backgroundColor: '#E5E7EB',
-    marginHorizontal: 8,
+    marginHorizontal: 6,
   },
   progressLineActive: {
     backgroundColor: COLORS.primary,
