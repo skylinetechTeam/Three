@@ -693,6 +693,108 @@ const ReservasScreen = () => {
       case 2:
         return (
           <>
+            {/* Header do Step */}
+            <View style={styles.stepHeader}>
+              <Ionicons name="flag" size={32} color={COLORS.primary} />
+              <Text style={styles.stepTitle}>Destino</Text>
+              <Text style={styles.stepDescription}>Para onde você quer ir?</Text>
+            </View>
+
+            {/* Destino com autocomplete */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Endereço de Destino</Text>
+              <View style={[
+                styles.addressInputContainer,
+                formErrors.destino && styles.inputError
+              ]}>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Digite o endereço de destino"
+                  value={novaReserva.destino}
+                  onChangeText={(text) => handleAddressSearch(text, 'destino')}
+                  onFocus={() => {
+                    setShowAddressSearch(true);
+                    setSearchField('destino');
+                  }}
+                  placeholderTextColor="#9ca3af"
+                  autoFocus={true}
+                />
+                <TouchableOpacity
+                  style={styles.locationButton}
+                  onPress={() => {
+                    if (location) {
+                      setNovaReserva(prev => ({ 
+                        ...prev, 
+                        destino: 'Minha Localização'
+                      }));
+                      validateField('destino', 'Minha Localização');
+                    }
+                  }}
+                >
+                  <Ionicons name="navigate" size={20} color={COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+              {formErrors.destino && (
+                <Animated.View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Text style={styles.errorText}>{formErrors.destino}</Text>
+                </Animated.View>
+              )}
+            </View>
+
+            {/* Resultados da busca de endereços */}
+            {showAddressSearch && searchResults.length > 0 && (
+              <View style={styles.searchResultsContainer}>
+                <Text style={styles.searchResultsTitle}>Sugestões</Text>
+                <ScrollView style={styles.searchResultsList} nestedScrollEnabled={true}>
+                  {searchResults.map((result, index) => (
+                    <TouchableOpacity
+                      key={result.id || `result_${index}`}
+                      style={styles.searchResultItem}
+                      onPress={() => handleLocationSelect(result)}
+                    >
+                      <View style={styles.searchResultIcon}>
+                        <MaterialIcons 
+                          name={getIconForCategory(result.categories)} 
+                          size={20} 
+                          color={COLORS.primary} 
+                        />
+                      </View>
+                      <View style={styles.searchResultInfo}>
+                        <Text style={styles.searchResultName}>{result.name}</Text>
+                        <Text style={styles.searchResultAddress}>
+                          {result.address}
+                          {result.distance && ` • ${Math.round(result.distance/1000)}km`}
+                        </Text>
+                      </View>
+                      <View style={styles.hereMapsBadge}>
+                        <Text style={styles.hereMapsBadgeText}>HERE</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {isSearching && (
+              <View style={styles.searchingIndicator}>
+                <MaterialIcons name="search" size={20} color={COLORS.primary} />
+                <Text style={styles.searchingText}>Buscando locais...</Text>
+              </View>
+            )}
+          </>
+        );
+
+      case 3:
+        return (
+          <>
+            {/* Header do Step */}
+            <View style={styles.stepHeader}>
+              <Ionicons name="calendar" size={32} color={COLORS.primary} />
+              <Text style={styles.stepTitle}>Data e Hora</Text>
+              <Text style={styles.stepDescription}>Quando você precisa da viagem?</Text>
+            </View>
+
             {/* Data */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Data</Text>
@@ -773,9 +875,16 @@ const ReservasScreen = () => {
           </>
         );
 
-      case 3:
+      case 4:
         return (
           <>
+            {/* Header do Step */}
+            <View style={styles.stepHeader}>
+              <Ionicons name="checkmark-circle" size={32} color={COLORS.primary} />
+              <Text style={styles.stepTitle}>Finalizar</Text>
+              <Text style={styles.stepDescription}>Revise os detalhes da sua reserva</Text>
+            </View>
+
             {/* Observações */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Observações (opcional)</Text>
@@ -1213,6 +1322,24 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 20,
   },
+  
+  // Step Header Styles
+  stepHeader: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  stepTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  stepDescription: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
   footer: {
     paddingHorizontal: 24,
     paddingTop: 20,
@@ -1259,15 +1386,23 @@ const styles = StyleSheet.create({
   // Search results styles
   searchResultsContainer: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    marginTop: 8,
-    maxHeight: 200,
+    borderRadius: 16,
+    marginTop: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     ...SHADOWS.medium,
+    maxHeight: 300,
+  },
+  searchResultsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   searchResultsList: {
-    maxHeight: 150,
+    maxHeight: 250,
   },
   searchResultItem: {
     flexDirection: 'row',
@@ -1603,6 +1738,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: COLORS.primary,
+  },
+  // Quick Location Card
+  quickLocationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  quickLocationIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#EBF4FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  quickLocationInfo: {
+    flex: 1,
+  },
+  quickLocationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  quickLocationSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
   },
   // Step indicator styles
   stepIndicator: {
