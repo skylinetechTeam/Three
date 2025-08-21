@@ -8,6 +8,7 @@ export const COLORS = {
   background: '#ffffff',
   card: '#ffffff',
   white: '#ffffff', // Add white color explicitly
+  gray: '#6b7280', // Adicionando cor gray
   text: {
     primary: '#1f2937',
     secondary: '#6b7280',

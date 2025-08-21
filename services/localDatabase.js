@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Database keys
 const DB_KEYS = {
   USER_PROFILE: 'user_profile',
+  DRIVER_PROFILE: 'driver_profile',
   TRIP_HISTORY: 'trip_history',
   FAVORITE_DESTINATIONS: 'favorite_destinations',
   DRIVER_DATA: 'driver_data',
@@ -44,6 +45,62 @@ class LocalDatabase {
       return true;
     } catch (error) {
       console.error('Error updating user profile:', error);
+      return false;
+    }
+  }
+
+  // Driver Profile Management
+  async saveDriverProfile(profile) {
+    try {
+      await AsyncStorage.setItem(DB_KEYS.DRIVER_PROFILE, JSON.stringify(profile));
+      return true;
+    } catch (error) {
+      console.error('Error saving driver profile:', error);
+      return false;
+    }
+  }
+
+  async getDriverProfile() {
+    try {
+      const profile = await AsyncStorage.getItem(DB_KEYS.DRIVER_PROFILE);
+      return profile ? JSON.parse(profile) : null;
+    } catch (error) {
+      console.error('Error getting driver profile:', error);
+      return null;
+    }
+  }
+
+  async updateDriverProfile(updates) {
+    try {
+      const currentProfile = await this.getDriverProfile() || {};
+      const updatedProfile = { ...currentProfile, ...updates };
+      await AsyncStorage.setItem(DB_KEYS.DRIVER_PROFILE, JSON.stringify(updatedProfile));
+      return true;
+    } catch (error) {
+      console.error('Error updating driver profile:', error);
+      return false;
+    }
+  }
+
+  // Driver Status Management
+  async setDriverOnlineStatus(isOnline) {
+    try {
+      return await this.updateDriverProfile({ 
+        isOnline, 
+        lastStatusChange: new Date().toISOString() 
+      });
+    } catch (error) {
+      console.error('Error setting driver online status:', error);
+      return false;
+    }
+  }
+
+  async getDriverOnlineStatus() {
+    try {
+      const profile = await this.getDriverProfile();
+      return profile ? profile.isOnline || false : false;
+    } catch (error) {
+      console.error('Error getting driver online status:', error);
       return false;
     }
   }

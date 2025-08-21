@@ -14,12 +14,15 @@ import {
   ScrollView,
   StyleSheet,
   Dimensions,
+  Animated,
+  Keyboard,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS, SHADOWS } from '../config/theme';
 import { checkForExistingData, clearDataByKey, DATA_KEYS } from '../utils/dataCleaner';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const { width, height } = Dimensions.get('window');
 
@@ -44,12 +47,53 @@ const ReservasScreen = () => {
   const [showAddressSearch, setShowAddressSearch] = useState(false);
   const [searchField, setSearchField] = useState(''); // 'origem' ou 'destino'
   const searchTimeoutRef = useRef(null);
+  
+  // Novos estados para melhorias do formulário
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedTime, setSelectedTime] = useState(new Date());
+  const [formErrors, setFormErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const slideAnim = useRef(new Animated.Value(height * 0.85)).current;
 
   // Carregar dados existentes ao montar o componente
   useEffect(() => {
     loadExistingReservas();
     loadUserLocation();
+    
+    // Listeners do teclado
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      keyboardDidShowListener?.remove();
+      keyboardDidHideListener?.remove();
+    };
   }, []);
+
+  // Animações do bottom sheet
+  useEffect(() => {
+    if (showAddModal) {
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 20,
+        friction: 7,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: height * 0.85,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showAddModal]);
 
   const loadUserLocation = async () => {
     try {
@@ -123,6 +167,11 @@ const ReservasScreen = () => {
     setNovaReserva(prev => ({ ...prev, [field]: text }));
     setSearchField(field);
     
+    // Validar campo em tempo real
+    if (text.length >= 3) {
+      validateField(field, text);
+    }
+    
     if (text.length < 2) {
       setSearchResults([]);
       return;
@@ -144,15 +193,95 @@ const ReservasScreen = () => {
     }));
     setSearchResults([]);
     setShowAddressSearch(false);
+    // Limpar erro do campo quando preenchido
+    if (formErrors[searchField]) {
+      setFormErrors(prev => ({
+        ...prev,
+        [searchField]: null
+      }));
+    }
+  };
+
+  // Função de validação de campos
+  const validateField = (fieldName, value) => {
+    let error = null;
+    
+    switch (fieldName) {
+      case 'origem':
+      case 'destino':
+        if (!value || value.trim().length < 3) {
+          error = 'Deve ter pelo menos 3 caracteres';
+        }
+        break;
+      case 'data':
+        if (!value) {
+          error = 'Data é obrigatória';
+        } else {
+          const selectedDate = new Date(value);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (selectedDate < today) {
+            error = 'Data não pode ser no passado';
+          }
+        }
+        break;
+      case 'hora':
+        if (!value) {
+          error = 'Hora é obrigatória';
+        }
+        break;
+    }
+    
+    setFormErrors(prev => ({
+      ...prev,
+      [fieldName]: error
+    }));
+    
+    return error === null;
+  };
+
+  // Validar todos os campos do step atual
+  const validateCurrentStep = () => {
+    let isValid = true;
+    
+    if (currentStep === 1) {
+      isValid = validateField('origem', novaReserva.origem) && isValid;
+      isValid = validateField('destino', novaReserva.destino) && isValid;
+    } else if (currentStep === 2) {
+      isValid = validateField('data', novaReserva.data) && isValid;
+      isValid = validateField('hora', novaReserva.hora) && isValid;
+    }
+    
+    return isValid;
+  };
+
+  // Manipular mudança de data
+  const onDateChange = (event, selectedDate) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setSelectedDate(selectedDate);
+      const formattedDate = selectedDate.toLocaleDateString('pt-BR');
+      setNovaReserva(prev => ({ ...prev, data: formattedDate }));
+      validateField('data', formattedDate);
+    }
+  };
+
+  // Manipular mudança de hora
+  const onTimeChange = (event, selectedTime) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    if (selectedTime) {
+      setSelectedTime(selectedTime);
+      const formattedTime = selectedTime.toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      setNovaReserva(prev => ({ ...prev, hora: formattedTime }));
+      validateField('hora', formattedTime);
+    }
   };
 
   const nextStep = () => {
-    if (currentStep === 1 && (!novaReserva.origem || !novaReserva.destino)) {
-      Alert.alert('Erro', 'Por favor, preencha origem e destino para continuar');
-      return;
-    }
-    if (currentStep === 2 && (!novaReserva.data || !novaReserva.hora)) {
-      Alert.alert('Erro', 'Por favor, preencha data e hora para continuar');
+    if (!validateCurrentStep()) {
       return;
     }
     setCurrentStep(currentStep + 1);
@@ -173,6 +302,10 @@ const ReservasScreen = () => {
     });
     setCurrentStep(1);
     setSearchResults([]);
+    setFormErrors({});
+    setIsSubmitting(false);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
     setShowAddModal(false);
   };
 
@@ -207,28 +340,39 @@ const ReservasScreen = () => {
     );
   };
 
-  const handleAddReserva = () => {
-    if (!novaReserva.origem || !novaReserva.destino || !novaReserva.data || !novaReserva.hora) {
-      Alert.alert('Erro', 'Por favor, preencha origem, destino, data e hora');
+  const handleAddReserva = async () => {
+    if (!validateCurrentStep()) {
       return;
     }
 
-    const novaReservaCompleta = {
-      id: Date.now().toString(),
-      ...novaReserva,
-      status: 'Pendente',
-      createdAt: new Date().toISOString(),
-      preco: novaReserva.tipoTaxi === 'Coletivo' ? 500 : 800
-    };
+    setIsSubmitting(true);
+    
+    try {
+      const novaReservaCompleta = {
+        id: Date.now().toString(),
+        ...novaReserva,
+        status: 'Pendente',
+        createdAt: new Date().toISOString(),
+        preco: novaReserva.tipoTaxi === 'Coletivo' ? 500 : 800
+      };
 
-    const updatedReservas = [...reservas, novaReservaCompleta];
-    setReservas(updatedReservas);
-    
-    // Salvar no AsyncStorage
-    saveReservasToStorage(updatedReservas);
-    
-    // Limpar formulário e fechar modal
-    resetForm();
+      const updatedReservas = [...reservas, novaReservaCompleta];
+      setReservas(updatedReservas);
+      
+      // Salvar no AsyncStorage
+      await saveReservasToStorage(updatedReservas);
+      
+      // Mostrar feedback de sucesso
+      Alert.alert('Sucesso', 'Reserva criada com sucesso!', [
+        { text: 'OK', onPress: resetForm }
+      ]);
+      
+    } catch (error) {
+      console.error('Erro ao criar reserva:', error);
+      Alert.alert('Erro', 'Não foi possível criar a reserva. Tente novamente.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const saveReservasToStorage = async (reservasList) => {
@@ -409,7 +553,10 @@ const ReservasScreen = () => {
             {/* Origem com autocomplete */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Origem</Text>
-              <View style={styles.addressInputContainer}>
+              <View style={[
+                styles.addressInputContainer,
+                formErrors.origem && styles.inputError
+              ]}>
                 <TextInput
                   style={styles.textInput}
                   placeholder="Digite o endereço de origem"
@@ -429,12 +576,19 @@ const ReservasScreen = () => {
                         ...prev, 
                         origem: 'Minha Localização'
                       }));
+                      validateField('origem', 'Minha Localização');
                     }
                   }}
                 >
                   <Ionicons name="location" size={20} color={COLORS.primary} />
                 </TouchableOpacity>
               </View>
+              {formErrors.origem && (
+                <Animated.View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Text style={styles.errorText}>{formErrors.origem}</Text>
+                </Animated.View>
+              )}
               
               {/* Opção rápida para minha localização */}
               <TouchableOpacity
@@ -456,7 +610,10 @@ const ReservasScreen = () => {
             {/* Destino com autocomplete */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Destino</Text>
-              <View style={styles.addressInputContainer}>
+              <View style={[
+                styles.addressInputContainer,
+                formErrors.destino && styles.inputError
+              ]}>
                 <TextInput
                   style={styles.textInput}
                   placeholder="Digite o endereço de destino"
@@ -476,12 +633,19 @@ const ReservasScreen = () => {
                         ...prev, 
                         destino: 'Minha Localização'
                       }));
+                      validateField('destino', 'Minha Localização');
                     }
                   }}
                 >
                   <Ionicons name="location" size={20} color={COLORS.primary} />
                 </TouchableOpacity>
               </View>
+              {formErrors.destino && (
+                <Animated.View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Text style={styles.errorText}>{formErrors.destino}</Text>
+                </Animated.View>
+              )}
             </View>
 
             {/* Resultados da busca de endereços */}
@@ -532,25 +696,55 @@ const ReservasScreen = () => {
             {/* Data */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Data</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="DD/MM/AAAA"
-                value={novaReserva.data}
-                onChangeText={(text) => setNovaReserva(prev => ({ ...prev, data: text }))}
-                placeholderTextColor="#9ca3af"
-              />
+              <TouchableOpacity
+                style={[
+                  styles.dateTimeButton,
+                  formErrors.data && styles.inputError
+                ]}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Ionicons name="calendar-outline" size={20} color={COLORS.primary} />
+                <Text style={[
+                  styles.dateTimeText,
+                  !novaReserva.data && styles.placeholderText
+                ]}>
+                  {novaReserva.data || 'Selecione a data'}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#9ca3af" />
+              </TouchableOpacity>
+              {formErrors.data && (
+                <Animated.View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Text style={styles.errorText}>{formErrors.data}</Text>
+                </Animated.View>
+              )}
             </View>
 
             {/* Hora */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Hora</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="HH:MM"
-                value={novaReserva.hora}
-                onChangeText={(text) => setNovaReserva(prev => ({ ...prev, hora: text }))}
-                placeholderTextColor="#9ca3af"
-              />
+              <TouchableOpacity
+                style={[
+                  styles.dateTimeButton,
+                  formErrors.hora && styles.inputError
+                ]}
+                onPress={() => setShowTimePicker(true)}
+              >
+                <Ionicons name="time-outline" size={20} color={COLORS.primary} />
+                <Text style={[
+                  styles.dateTimeText,
+                  !novaReserva.hora && styles.placeholderText
+                ]}>
+                  {novaReserva.hora || 'Selecione a hora'}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#9ca3af" />
+              </TouchableOpacity>
+              {formErrors.hora && (
+                <Animated.View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Text style={styles.errorText}>{formErrors.hora}</Text>
+                </Animated.View>
+              )}
             </View>
 
             {/* Tipo de táxi */}
@@ -635,52 +829,63 @@ const ReservasScreen = () => {
   const renderStepButtons = () => {
     if (currentStep === 1) {
       return (
-        <View style={styles.modalFooter}>
+        <View style={styles.buttonRow}>
           <TouchableOpacity
-            style={styles.cancelButton}
+            style={styles.buttonSecondary}
             onPress={resetForm}
           >
-            <Text style={styles.cancelButtonText}>Cancelar</Text>
+            <Text style={styles.buttonSecondaryText}>Cancelar</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.nextButton}
+            style={styles.buttonPrimary}
             onPress={nextStep}
           >
-            <Text style={styles.nextButtonText}>Próximo</Text>
+            <Text style={styles.buttonPrimaryText}>Continuar</Text>
           </TouchableOpacity>
         </View>
       );
     } else if (currentStep === 2) {
       return (
-        <View style={styles.modalFooter}>
+        <View style={styles.buttonRow}>
           <TouchableOpacity
-            style={styles.backButton}
+            style={styles.buttonSecondary}
             onPress={prevStep}
           >
-            <Text style={styles.backButtonText}>Voltar</Text>
+            <Text style={styles.buttonSecondaryText}>Voltar</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.nextButton}
+            style={styles.buttonPrimary}
             onPress={nextStep}
           >
-            <Text style={styles.nextButtonText}>Próximo</Text>
+            <Text style={styles.buttonPrimaryText}>Continuar</Text>
           </TouchableOpacity>
         </View>
       );
     } else if (currentStep === 3) {
       return (
-        <View style={styles.modalFooter}>
+        <View style={styles.buttonRow}>
           <TouchableOpacity
-            style={styles.backButton}
+            style={styles.buttonSecondary}
             onPress={prevStep}
           >
-            <Text style={styles.backButtonText}>Voltar</Text>
+            <Text style={styles.buttonSecondaryText}>Voltar</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.saveButton}
+            style={[
+              styles.buttonPrimary,
+              isSubmitting && styles.buttonPrimaryDisabled
+            ]}
             onPress={handleAddReserva}
+            disabled={isSubmitting}
           >
-            <Text style={styles.saveButtonText}>Criar Reserva</Text>
+            {isSubmitting ? (
+              <View style={styles.loadingContainer}>
+                <View style={styles.loadingSpinner} />
+                <Text style={styles.buttonPrimaryText}>Criando...</Text>
+              </View>
+            ) : (
+              <Text style={styles.buttonPrimaryText}>Criar Reserva</Text>
+            )}
           </TouchableOpacity>
         </View>
       );
@@ -740,38 +945,116 @@ const ReservasScreen = () => {
         <Ionicons name="add" size={24} color="#ffffff" />
       </TouchableOpacity>
 
-      {/* Modal para adicionar reserva */}
+      {/* Bottom Sheet Modal para adicionar reserva */}
       <Modal
         visible={showAddModal}
-        animationType="slide"
+        animationType="none"
         transparent={true}
         onRequestClose={resetForm}
+        statusBarTranslucent={true}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nova Reserva</Text>
+        <View style={styles.modalContainer}>
+          <TouchableOpacity 
+            style={styles.backdrop}
+            activeOpacity={1}
+            onPress={resetForm}
+          />
+          
+          <Animated.View style={[
+            styles.bottomSheet,
+            { 
+              transform: [{ translateY: slideAnim }],
+            }
+          ]}>
+            {/* Handle */}
+            <View style={styles.handle} />
+            
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerContent}>
+                <Text style={styles.title}>Nova Reserva</Text>
+                <Text style={styles.subtitle}>Passo {currentStep} de 4</Text>
+              </View>
               <TouchableOpacity
-                style={styles.closeButton}
+                style={styles.closeBtn}
                 onPress={resetForm}
               >
-                <Ionicons name="close" size={24} color="#6b7280" />
+                <Ionicons name="close" size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
-            {/* Step Indicator */}
-            {renderStepIndicator()}
+            {/* Progress */}
+            <View style={styles.progressContainer}>
+              {[1, 2, 3, 4].map((step) => (
+                <View key={step} style={styles.progressStep}>
+                  <View style={[
+                    styles.progressDot,
+                    currentStep >= step && styles.progressDotActive
+                  ]}>
+                    {currentStep > step ? (
+                      <Ionicons name="checkmark" size={12} color="#fff" />
+                    ) : (
+                      <Text style={[
+                        styles.progressNumber,
+                        currentStep >= step && styles.progressNumberActive
+                      ]}>
+                        {step}
+                      </Text>
+                    )}
+                  </View>
+                  {step < 4 && (
+                    <View style={[
+                      styles.progressLine,
+                      currentStep > step && styles.progressLineActive
+                    ]} />
+                  )}
+                </View>
+              ))}
+            </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {renderStepContent()}
-            </ScrollView>
+            {/* Content */}
+            <View style={styles.content}>
+              <ScrollView 
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                bounces={false}
+              >
+                {renderStepContent()}
+              </ScrollView>
+            </View>
 
-            {/* Step Buttons */}
-            {renderStepButtons()}
-          </View>
+            {/* Footer */}
+            <View style={styles.footer}>
+              {renderStepButtons()}
+            </View>
+          </Animated.View>
         </View>
       </Modal>
+
+      {/* Date Picker */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onDateChange}
+          minimumDate={new Date()}
+          locale="pt-BR"
+        />
+      )}
+
+      {/* Time Picker */}
+      {showTimePicker && (
+        <DateTimePicker
+          value={selectedTime}
+          mode="time"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onTimeChange}
+          locale="pt-BR"
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -825,47 +1108,126 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   // Modal styles
-  modalOverlay: {
+  modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  modalContent: {
+  backdrop: {
+    flex: 1,
+  },
+  bottomSheet: {
     backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: height * 0.9,
+    minHeight: height * 0.7,
     ...SHADOWS.large,
+    paddingTop: 12,
   },
-  modalHeader: {
+  handle: {
+    width: 32,
+    height: 4,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 24,
+    marginBottom: 24,
+  },
+  headerContent: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    marginLeft: 16,
   },
-  modalTitle: {
-    fontSize: 20,
+  progressContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    marginBottom: 32,
+  },
+  progressStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  progressDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  progressDotActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  progressNumber: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#9CA3AF',
   },
-  closeButton: {
-    padding: 5,
+  progressNumberActive: {
+    color: '#ffffff',
   },
-  modalBody: {
-    width: '100%',
+  progressLine: {
+    width: 30,
+    height: 2,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 6,
+  },
+  progressLineActive: {
+    backgroundColor: COLORS.primary,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  footer: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
   },
   inputGroup: {
-    marginBottom: 15,
+    marginBottom: 24,
   },
   inputLabel: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#1F2937',
+    fontWeight: '600',
+    color: '#111827',
     marginBottom: 8,
   },
   textInput: {
@@ -897,10 +1259,12 @@ const styles = StyleSheet.create({
   // Search results styles
   searchResultsContainer: {
     backgroundColor: '#ffffff',
-    borderRadius: 10,
-    marginTop: 10,
-    maxHeight: 150,
-    ...SHADOWS.small,
+    borderRadius: 12,
+    marginTop: 8,
+    maxHeight: 200,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    ...SHADOWS.medium,
   },
   searchResultsList: {
     maxHeight: 150,
@@ -984,11 +1348,41 @@ const styles = StyleSheet.create({
   optionButtonTextActive: {
     color: '#ffffff',
   },
-  // Modal footer
-  modalFooter: {
+  // Buttons
+  buttonRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 20,
+    gap: 12,
+  },
+  buttonSecondary: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  buttonSecondaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  buttonPrimary: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    ...SHADOWS.medium,
+  },
+  buttonPrimaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  buttonPrimaryDisabled: {
+    backgroundColor: '#9CA3AF',
+    ...SHADOWS.small,
   },
   cancelButton: {
     backgroundColor: '#ef4444',
@@ -1332,6 +1726,61 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#1F2937',
+  },
+  // Novos estilos para melhorias
+  inputError: {
+    borderColor: COLORS.notification,
+    borderWidth: 2,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+    paddingHorizontal: 5,
+  },
+  errorText: {
+    color: COLORS.notification,
+    fontSize: 12,
+    marginLeft: 5,
+    flex: 1,
+  },
+  dateTimeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    justifyContent: 'space-between',
+  },
+  dateTimeText: {
+    fontSize: 16,
+    color: '#1F2937',
+    flex: 1,
+    marginLeft: 10,
+  },
+  placeholderText: {
+    color: '#9ca3af',
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#9ca3af',
+    opacity: 0.7,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingSpinner: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    borderTopColor: 'transparent',
+    marginRight: 8,
   },
 });
 
