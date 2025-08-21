@@ -10,11 +10,14 @@ import {
   Platform,
   ScrollView,
   SafeAreaView,
+  Dimensions,
 } from "react-native";
+import { LinearGradient } from 'expo-linear-gradient';
 import Toast from "react-native-toast-message";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import LocalDatabase from "../services/localDatabase";
-import { COLORS, SIZES, FONTS, SHADOWS, COMMON_STYLES } from "../config/theme";
+
+const { width, height } = Dimensions.get('window');
 
 export default function DriverLoginScreen({ navigation }) {
   const [emailOrPhone, setEmailOrPhone] = useState("");
@@ -46,7 +49,7 @@ export default function DriverLoginScreen({ navigation }) {
         const defaultDriverProfile = {
           nome: 'João Silva',
           email: 'joao.motorista@email.com',
-          telefone: '+244 900 000 000',
+          telefone: '912345678',
           veiculo: {
             modelo: 'Toyota Corolla',
             placa: 'LD-12-34-AB',
@@ -156,36 +159,47 @@ export default function DriverLoginScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+    <LinearGradient
+      colors={['#1F2937', '#374151', '#4B5563']}
+      style={styles.container}
+    >
+      <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.keyboardContainer}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity 
-              style={styles.backButton} 
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
-            </TouchableOpacity>
-          </View>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Header */}
+            <View style={styles.header}>
+              <TouchableOpacity 
+                style={styles.backButton} 
+                onPress={() => navigation.goBack()}
+              >
+                <Ionicons name="arrow-back" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
 
-          {/* Title */}
-          <Text style={styles.title}>
-            {isSettingPassword ? "Definir Nova Senha" : "Área do Motorista"}
-          </Text>
-          <Text style={styles.subtitle}>
-            {isSettingPassword 
-              ? "Crie uma senha segura para acessar sua conta"
-              : "Digite seu email ou telefone cadastrado"
-            }
-          </Text>
+            {/* Logo/Icon */}
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCircle}>
+                <MaterialIcons name="local-taxi" size={48} color="#ffffff" />
+              </View>
+            </View>
+
+            {/* Title */}
+            <Text style={styles.title}>
+              {isSettingPassword ? "Definir Nova Senha" : "Área do Motorista"}
+            </Text>
+            <Text style={styles.subtitle}>
+              {isSettingPassword 
+                ? "Crie uma senha segura para acessar sua conta"
+                : "Digite 912345678 ou joao.motorista@email.com"
+              }
+            </Text>
 
           {/* Form Container */}
           <View style={styles.formContainer}>
@@ -195,10 +209,11 @@ export default function DriverLoginScreen({ navigation }) {
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Email ou Telefone</Text>
                   <View style={styles.inputWrapper}>
-                    <Ionicons name="person-outline" size={20} color={COLORS.gray} />
+                    <Ionicons name="person-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
                     <TextInput
                       style={styles.input}
                       placeholder="Digite seu email ou telefone"
+                      placeholderTextColor="rgba(255, 255, 255, 0.6)"
                       value={emailOrPhone}
                       onChangeText={setEmailOrPhone}
                       keyboardType="email-address"
@@ -217,11 +232,12 @@ export default function DriverLoginScreen({ navigation }) {
                 {/* New Password Input */}
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Nova Senha</Text>
-                  <View style={styles.inputWrapper}>
-                    <Ionicons name="lock-closed-outline" size={20} color={COLORS.gray} />
+                                  <View style={styles.inputWrapper}>
+                    <Ionicons name="lock-closed-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
                     <TextInput
                       style={styles.input}
                       placeholder="Digite sua nova senha"
+                      placeholderTextColor="rgba(255, 255, 255, 0.6)"
                       value={newPassword}
                       onChangeText={setNewPassword}
                       secureTextEntry={!showPassword}
@@ -230,7 +246,7 @@ export default function DriverLoginScreen({ navigation }) {
                       <Ionicons
                         name={showPassword ? "eye-off-outline" : "eye-outline"}
                         size={20}
-                        color={COLORS.gray}
+                        color="rgba(255, 255, 255, 0.7)"
                       />
                     </TouchableOpacity>
                   </View>
@@ -239,11 +255,12 @@ export default function DriverLoginScreen({ navigation }) {
                 {/* Confirm Password Input */}
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Confirmar Senha</Text>
-                  <View style={styles.inputWrapper}>
-                    <Ionicons name="lock-closed-outline" size={20} color={COLORS.gray} />
+                                  <View style={styles.inputWrapper}>
+                    <Ionicons name="lock-closed-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
                     <TextInput
                       style={styles.input}
                       placeholder="Confirme sua nova senha"
+                      placeholderTextColor="rgba(255, 255, 255, 0.6)"
                       value={confirmPassword}
                       onChangeText={setConfirmPassword}
                       secureTextEntry={!showConfirmPassword}
@@ -252,7 +269,7 @@ export default function DriverLoginScreen({ navigation }) {
                       <Ionicons
                         name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
                         size={20}
-                        color={COLORS.gray}
+                        color="rgba(255, 255, 255, 0.7)"
                       />
                     </TouchableOpacity>
                   </View>
@@ -282,103 +299,152 @@ export default function DriverLoginScreen({ navigation }) {
               </Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  keyboardContainer: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: SIZES.padding,
+    paddingHorizontal: 24,
   },
   header: {
-    paddingTop: SIZES.padding,
-    marginBottom: SIZES.padding,
+    paddingTop: 20,
+    marginBottom: 20,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.lightGray,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  logoCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   title: {
-    ...FONTS.h1,
-    color: COLORS.black,
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#ffffff',
     textAlign: 'center',
-    marginBottom: SIZES.base,
+    marginBottom: 8,
   },
   subtitle: {
-    ...FONTS.body3,
-    color: COLORS.gray,
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
-    marginBottom: SIZES.padding * 2,
+    marginBottom: 40,
+    lineHeight: 24,
   },
   formContainer: {
     flex: 1,
   },
   inputContainer: {
-    marginBottom: SIZES.padding,
+    marginBottom: 24,
   },
   inputLabel: {
-    ...FONTS.body3,
-    color: COLORS.black,
-    marginBottom: SIZES.base,
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.lightGray,
-    borderRadius: SIZES.radius,
-    paddingHorizontal: SIZES.padding,
-    height: 50,
-    backgroundColor: COLORS.white,
-    ...SHADOWS.light,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 56,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   input: {
     flex: 1,
-    marginLeft: SIZES.base,
-    ...FONTS.body3,
-    color: COLORS.black,
+    marginLeft: 12,
+    fontSize: 16,
+    color: '#ffffff',
+    placeholderTextColor: 'rgba(255, 255, 255, 0.6)',
   },
   loginButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: SIZES.radius,
-    paddingVertical: SIZES.padding,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    paddingVertical: 18,
     alignItems: 'center',
-    marginTop: SIZES.padding,
-    ...SHADOWS.medium,
+    marginTop: 32,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 5.46,
+    elevation: 8,
   },
   loginButtonText: {
-    ...FONTS.h3,
-    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
   },
   backToEmailButton: {
     alignItems: 'center',
-    marginTop: SIZES.padding,
+    marginTop: 24,
   },
   backToEmailText: {
-    ...FONTS.body3,
-    color: COLORS.primary,
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '600',
   },
   footer: {
     alignItems: 'center',
-    paddingVertical: SIZES.padding * 2,
+    paddingVertical: 40,
+    marginTop: 20,
   },
   footerText: {
-    ...FONTS.body3,
-    color: COLORS.gray,
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   linkText: {
-    color: COLORS.primary,
+    color: '#ffffff',
     fontWeight: 'bold',
   },
 });
