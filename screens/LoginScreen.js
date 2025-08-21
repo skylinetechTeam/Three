@@ -170,6 +170,17 @@ export default function LoginScreen({ navigation }) {
                 <Text style={styles.registerLink}>Inscrever-se</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Driver Access */}
+            <View style={styles.driverContainer}>
+              <TouchableOpacity 
+                style={styles.driverButton}
+                onPress={() => navigation.navigate("DriverLogin")}
+              >
+                <Ionicons name="car-outline" size={20} color="#2563EB" />
+                <Text style={styles.driverButtonText}>Sou motorista</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -285,5 +296,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#2563EB',
     fontWeight: '600',
+  },
+  driverContainer: {
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  driverButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#2563EB',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+  },
+  driverButtonText: {
+    fontSize: 16,
+    color: '#2563EB',
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });

@@ -18,6 +18,13 @@ import TermsScreen from './screens/TermsScreen';
 import AboutScreen from './screens/AboutScreen';
 import EditProfileScreen from './screens/EditProfileScreen';
 import SetPasswordScreen from './screens/SetPasswordScreen';
+
+// Driver Screens
+import DriverLoginScreen from './screens/DriverLoginScreen';
+import DriverMapScreen from './screens/DriverMapScreen';
+import DriverRequestsScreen from './screens/DriverRequestsScreen';
+import DriverProfileScreen from './screens/DriverProfileScreen';
+import DriverSettingsScreen from './screens/DriverSettingsScreen';
 import Toast from 'react-native-toast-message';
 import SplashScreen from './components/SplashScreen';
 import LocalDatabase from './services/localDatabase';
@@ -92,6 +99,77 @@ function HomeTabs() {
   );
 }
 
+function DriverTabs() {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        tabBarStyle: {
+          height: 70,
+          backgroundColor: '#1F2937',
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+        tabBarIconStyle: {
+          height: 30,
+          width: 30,
+        },
+        tabBarActiveTintColor: '#ffffff',
+        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
+      }}
+    >
+      <Tab.Screen
+        name="DriverMap"
+        component={DriverMapScreen}
+        options={{
+          headerShown: false,
+          tabBarLabel: 'Mapa',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="map-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="DriverRequests"
+        component={DriverRequestsScreen}
+        options={{
+          headerShown: false,
+          tabBarLabel: 'Solicitações',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="list-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="DriverProfile"
+        component={DriverProfileScreen}
+        options={{
+          headerShown: false,
+          tabBarLabel: 'Perfil',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="DriverSettings"
+        component={DriverSettingsScreen}
+        options={{
+          headerShown: false,
+          tabBarLabel: 'Configurações',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="settings-outline" size={size} color={color} />
+          ),
+        }}
+      />
+    </Tab.Navigator>
+  );
+}
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -138,6 +216,16 @@ export default function App() {
         <Stack.Screen
           name="HomeTabs"
           component={HomeTabs}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="DriverLogin"
+          component={DriverLoginScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="DriverTabs"
+          component={DriverTabs}
           options={{ headerShown: false }}
         />
         <Stack.Screen
