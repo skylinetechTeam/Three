@@ -1133,7 +1133,7 @@ export default function DriverMapScreen({ navigation, route }) {
                      
                      try {
                          console.log('📡 Fetching route from OSRM...');
-                         const routeUrl = `https://router.project-osrm.org/route/v1/driving/${driverPos.lng},${driverPos.lat};${destinationLng},${destinationLat}?overview=full&geometries=geojson`;
+                         const routeUrl = 'https://router.project-osrm.org/route/v1/driving/' + driverPos.lng + ',' + driverPos.lat + ';' + destinationLng + ',' + destinationLat + '?overview=full&geometries=geojson';
                          const response = await fetch(routeUrl);
                          const data = await response.json();
                          
