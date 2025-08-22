@@ -42,6 +42,9 @@ export default function HomeScreen({ navigation }) {
   const [isNavDropdownOpen, setIsNavDropdownOpen] = useState(false);
   const [passengerProfile, setPassengerProfile] = useState(null);
   const [currentRide, setCurrentRide] = useState(null);
+  const [requestStatus, setRequestStatus] = useState(null); // 'pending', 'accepted', 'rejected'
+  const [driverInfo, setDriverInfo] = useState(null);
+  const [requestId, setRequestId] = useState(null);
   const webViewRef = useRef(null);
   const searchTimeoutRef = useRef(null);
   
@@ -119,6 +122,23 @@ export default function HomeScreen({ navigation }) {
             socket.on('ride_accepted', (data) => {
               console.log('🎉 Corrida aceita pelo motorista:', data);
               
+              // Update request status
+              setRequestStatus('accepted');
+              setDriverInfo({
+                id: data.driver?.id || data.driverId,
+                name: data.driver?.name || 'Motorista',
+                phone: data.driver?.phone || '',
+                vehicle: data.driver?.vehicle || {},
+                rating: data.driver?.rating || 0,
+                location: data.driver?.location || null,
+                estimatedArrival: data.estimatedArrival || '5-10 minutos'
+              });
+              
+              // Store request ID for tracking
+              if (data.rideId) {
+                setRequestId(data.rideId);
+              }
+              
               // Parar busca imediatamente
               setIsSearchingDrivers(false);
               setDriversFound(true);
@@ -140,26 +160,88 @@ export default function HomeScreen({ navigation }) {
                 }));
               }
               
-              // Mostrar toast de sucesso
+              // Mostrar toast de sucesso com detalhes do motorista
               Toast.show({
                 type: "success",
-                text1: "Motorista encontrado!",
-                text2: `${data.driver.name} está a caminho`,
+                text1: "Solicitação Aceita! 🎉",
+                text2: `${data.driver?.name || 'Motorista'} está a caminho - ${data.estimatedArrival || '5-10 min'}`,
+                visibilityTime: 6000,
+              });
+            });
+
+            socket.on('ride_rejected', (data) => {
+              console.log('❌ Solicitação rejeitada pelo motorista:', data);
+              
+              // Update request status
+              setRequestStatus('rejected');
+              
+              // Show rejection message
+              Toast.show({
+                type: "error",
+                text1: "Solicitação Recusada",
+                text2: data.reason || "O motorista não pode aceitar sua solicitação no momento",
+                visibilityTime: 4000,
+              });
+              
+              // Continue searching for other drivers
+              console.log('🔄 Continuando busca por outros motoristas...');
+            });
+
+            socket.on('no_drivers_available', (data) => {
+              console.log('🚫 Nenhum motorista disponível:', data);
+              
+              // Update request status
+              setRequestStatus('rejected');
+              
+              // Stop driver search
+              if (window.driverSearchInterval) {
+                clearInterval(window.driverSearchInterval);
+                window.driverSearchInterval = null;
+              }
+              
+              setIsSearchingDrivers(false);
+              setDriversFound(false);
+              
+              Toast.show({
+                type: "error",
+                text1: "Nenhum motorista disponível",
+                text2: "Tente novamente em alguns minutos",
+                visibilityTime: 5000,
               });
             });
             
             socket.on('ride_started', (data) => {
-              console.log('Corrida iniciada:', data);
-              // Update UI for ride in progress
+              console.log('🚗 Corrida iniciada:', data);
+              setRequestStatus('started');
+              
+              Toast.show({
+                type: "info",
+                text1: "Corrida Iniciada",
+                text2: "Sua viagem começou. Tenha uma boa viagem!",
+                visibilityTime: 3000,
+              });
             });
             
             socket.on('ride_completed', (data) => {
-              console.log('Corrida finalizada:', data);
-              // Show completion UI and rating
+              console.log('✅ Corrida finalizada:', data);
+              setRequestStatus('completed');
+              setCurrentRide(null);
+              setDriverInfo(null);
+              setRequestId(null);
+              
+              Toast.show({
+                type: "success",
+                text1: "Viagem Concluída",
+                text2: "Obrigado por usar nosso serviço!",
+                visibilityTime: 4000,
+              });
             });
             
             socket.on('ride_cancelled', (data) => {
               console.log('❌ Corrida cancelada:', data);
+              
+              // Update request status
+              setRequestStatus('cancelled');
               
               // Parar busca se estava buscando
               setIsSearchingDrivers(false);
@@ -174,13 +256,67 @@ export default function HomeScreen({ navigation }) {
               
               // Limpar corrida atual
               setCurrentRide(null);
+              setDriverInfo(null);
+              setRequestId(null);
               
               Toast.show({
                 type: "error",
-                text1: "Corrida cancelada",
+                text1: "Corrida Cancelada",
                 text2: data.reason || "A corrida foi cancelada",
+                visibilityTime: 4000,
               });
             });
+
+            // Listen for driver location updates
+            socket.on('driver_location_update', (data) => {
+              console.log('📍 Atualização de localização do motorista:', data);
+              if (driverInfo && data.driverId === driverInfo.id) {
+                setDriverInfo(prev => ({
+                  ...prev,
+                  location: data.location,
+                  estimatedArrival: data.estimatedArrival
+                }));
+              }
+            });
+
+            // Test function to simulate ride acceptance (for development)
+            window.simulateRideAcceptance = () => {
+              console.log('🧪 Simulando aceitação de corrida...');
+              const testData = {
+                rideId: 'test_ride_123',
+                driver: {
+                  id: 'test_driver_456',
+                  name: 'João Motorista',
+                  phone: '+244 923 456 789',
+                  rating: 4.8,
+                  vehicle: {
+                    make: 'Toyota',
+                    model: 'Corolla',
+                    plate: 'LD-123-AB'
+                  },
+                  location: {
+                    lat: -8.8390,
+                    lng: 13.2894
+                  }
+                },
+                estimatedArrival: '5-7 minutos'
+              };
+              
+              // Simulate the ride_accepted event
+              socket.emit('test_ride_accepted', testData);
+            };
+
+            // Test function to simulate ride rejection (for development)
+            window.simulateRideRejection = () => {
+              console.log('🧪 Simulando rejeição de corrida...');
+              const testData = {
+                rideId: 'test_ride_123',
+                reason: 'Motorista não disponível no momento'
+              };
+              
+              // Simulate the ride_rejected event
+              socket.emit('test_ride_rejected', testData);
+            };
           }
           
         } catch (apiError) {
@@ -605,6 +741,9 @@ export default function HomeScreen({ navigation }) {
       setIsSearchingDrivers(true);
       setDriverSearchTime(0);
       setDriversFound(false);
+      setRequestStatus('pending');
+      setDriverInfo(null);
+      setRequestId(null);
       
       // Criar solicitação de corrida via API
       if (passengerProfile?.apiPassengerId) {
@@ -716,10 +855,46 @@ export default function HomeScreen({ navigation }) {
     setDriverSearchTime(0);
     setDriversFound(false);
     setRouteInfo(null);
+    setRequestStatus(null);
+    setDriverInfo(null);
+    setRequestId(null);
+    setCurrentRide(null);
     
     // Clear route on map
     const js = `window.__clearRoute(); true;`;
     webViewRef.current?.injectJavaScript(js);
+    
+    // Clear any ongoing search intervals
+    if (window.driverSearchInterval) {
+      clearInterval(window.driverSearchInterval);
+      window.driverSearchInterval = null;
+    }
+  };
+
+  const handleCallDriver = () => {
+    if (driverInfo && driverInfo.phone) {
+      // In a real app, you would use Linking to make a phone call
+      console.log('📞 Ligando para motorista:', driverInfo.phone);
+      Toast.show({
+        type: "info",
+        text1: "Ligando para motorista",
+        text2: driverInfo.phone,
+        visibilityTime: 3000,
+      });
+      
+      // For development, just show the phone number
+      Alert.alert(
+        "Ligar para motorista",
+        `Deseja ligar para ${driverInfo.name}?\n\nTelefone: ${driverInfo.phone}`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Ligar", onPress: () => {
+            // In production, use: Linking.openURL(`tel:${driverInfo.phone}`)
+            console.log('Fazendo ligação para:', driverInfo.phone);
+          }}
+        ]
+      );
+    }
   };
 
   const getIconForCategory = (categories) => {
@@ -757,6 +932,28 @@ export default function HomeScreen({ navigation }) {
     <View style={styles.container}>
       {console.log('🏠 HomeScreen render - States:', { isSearchingDrivers, selectedDestination: !!selectedDestination, driverSearchTime, driversFound })}
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      
+      {/* Status Indicator - WebSocket Connection & Request Status */}
+      {(requestStatus === 'pending' || requestStatus === 'accepted') && (
+        <View style={styles.statusIndicatorBar}>
+          <View style={styles.statusContent}>
+            {requestStatus === 'pending' && (
+              <>
+                <View style={styles.pendingDot} />
+                <Text style={styles.statusBarText}>Procurando motorista...</Text>
+              </>
+            )}
+            {requestStatus === 'accepted' && driverInfo && (
+              <>
+                <View style={styles.acceptedDot} />
+                <Text style={styles.statusBarText}>
+                  {driverInfo.name} está a caminho - {driverInfo.estimatedArrival}
+                </Text>
+              </>
+            )}
+          </View>
+        </View>
+      )}
       
       {/* Overlay para fechar dropdowns */}
       {(isDropdownOpen || isNavDropdownOpen) && (
@@ -1051,6 +1248,72 @@ export default function HomeScreen({ navigation }) {
             <TouchableOpacity style={styles.cancelButton} onPress={handleNewSearch}>
               <Text style={styles.cancelButtonText}>Cancelar busca</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Request Status - Solicitação Aceita */}
+      {requestStatus === 'accepted' && driverInfo && (
+        <View style={styles.driverSearchOverlay}>
+          <View style={styles.acceptedCard}>
+            {/* Cabeçalho de sucesso */}
+            <View style={styles.acceptedHeader}>
+              <View style={styles.successIconContainer}>
+                <MaterialIcons name="check-circle" size={50} color="#10B981" />
+              </View>
+              <Text style={styles.acceptedTitle}>Solicitação Aceita!</Text>
+              <Text style={styles.acceptedSubtitle}>Motorista encontrado e confirmado</Text>
+            </View>
+
+            {/* Informações do motorista */}
+            <View style={styles.driverInfoCard}>
+              <View style={styles.driverInfoHeader}>
+                <View style={styles.driverAvatar}>
+                  <MaterialIcons name="person" size={30} color="#4285F4" />
+                </View>
+                <View style={styles.driverDetails}>
+                  <Text style={styles.driverName}>{driverInfo.name}</Text>
+                  <View style={styles.ratingContainer}>
+                    <MaterialIcons name="star" size={16} color="#FFC107" />
+                    <Text style={styles.driverRating}>{driverInfo.rating || 4.8}</Text>
+                  </View>
+                </View>
+                <View style={styles.estimatedTimeContainer}>
+                  <MaterialIcons name="access-time" size={16} color="#6B7280" />
+                  <Text style={styles.estimatedTime}>{driverInfo.estimatedArrival}</Text>
+                </View>
+              </View>
+
+              {/* Informações do veículo */}
+              {driverInfo.vehicle && (
+                <View style={styles.vehicleInfo}>
+                  <MaterialIcons name="directions-car" size={16} color="#6B7280" />
+                  <Text style={styles.vehicleText}>
+                    {driverInfo.vehicle.make} {driverInfo.vehicle.model} - {driverInfo.vehicle.plate}
+                  </Text>
+                </View>
+              )}
+
+              {/* Status em tempo real */}
+              <View style={styles.statusContainer}>
+                <View style={styles.statusIndicator}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.statusText}>Motorista a caminho</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Ações */}
+            <View style={styles.acceptedActions}>
+              <TouchableOpacity style={styles.callDriverButton} onPress={handleCallDriver}>
+                <MaterialIcons name="phone" size={20} color="#ffffff" />
+                <Text style={styles.callDriverText}>Ligar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.cancelRideButton} onPress={handleNewSearch}>
+                <Text style={styles.cancelRideText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       )}
@@ -1810,5 +2073,188 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     maxWidth: '100%',
+  },
+  // Estilos para Solicitação Aceita
+  acceptedCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    marginHorizontal: 20,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    maxWidth: width - 40,
+  },
+  acceptedHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  successIconContainer: {
+    marginBottom: 12,
+  },
+  acceptedTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#10B981',
+    marginBottom: 4,
+  },
+  acceptedSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  driverInfoCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  driverInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  driverAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#E3F2FD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  driverDetails: {
+    flex: 1,
+  },
+  driverName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  driverRating: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginLeft: 4,
+  },
+  estimatedTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  estimatedTime: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  vehicleInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  vehicleText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginLeft: 8,
+  },
+  statusContainer: {
+    marginTop: 4,
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginRight: 8,
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#10B981',
+    fontWeight: '500',
+  },
+  acceptedActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  callDriverButton: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#4285F4',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  callDriverText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  cancelRideButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  cancelRideText: {
+    color: '#6B7280',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Status Indicator Bar
+  statusIndicatorBar: {
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  statusContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusBarText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  pendingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#F59E0B',
+  },
+  acceptedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
   },
 });
