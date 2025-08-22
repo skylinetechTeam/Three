@@ -45,14 +45,8 @@ export default function DriverMapScreen({ navigation, route }) {
       setRidePhase(route.params.navigateTo || 'pickup');
     }
     
-    // Simular solicitações quando estiver online
-    const requestInterval = setInterval(() => {
-      if (isOnline && !showRequestModal && !navigationMode && Math.random() > 0.7) {
-        simulateNewRequest();
-      }
-    }, 15000); // A cada 15 segundos
-
-    return () => clearInterval(requestInterval);
+    // Cleanup function
+    return () => {};
   }, [isOnline, showRequestModal, navigationMode]);
 
   useEffect(() => {
@@ -212,31 +206,7 @@ export default function DriverMapScreen({ navigation, route }) {
     }
   };
 
-  const simulateNewRequest = () => {
-    const mockRequest = {
-      id: `req_${Date.now()}`,
-      passengerName: `${['Ana', 'João', 'Maria', 'Carlos', 'Sofia', 'Pedro'][Math.floor(Math.random() * 6)]} ${['Silva', 'Santos', 'Costa', 'Ferreira', 'Oliveira'][Math.floor(Math.random() * 5)]}`,
-      pickup: {
-        address: ['Rua da Liberdade, 123', 'Avenida Marginal, 456', 'Rua do Comércio, 789', 'Largo do Ambiente, 321'][Math.floor(Math.random() * 4)],
-        lat: location?.coords.latitude + (Math.random() - 0.5) * 0.01 || -8.8390,
-        lng: location?.coords.longitude + (Math.random() - 0.5) * 0.01 || 13.2894,
-      },
-      destination: {
-        address: ['Shopping Belas, Talatona', 'Aeroporto Internacional, Luanda', 'Universidade Agostinho Neto', 'Hospital Américo Boavida'][Math.floor(Math.random() * 4)],
-        lat: location?.coords.latitude + (Math.random() - 0.5) * 0.02 || -8.8390,
-        lng: location?.coords.longitude + (Math.random() - 0.5) * 0.02 || 13.2894,
-      },
-      fare: Math.floor(Math.random() * 800 + 300), // 300-1100 AOA
-      distance: (Math.random() * 15 + 2).toFixed(1), // 2-17 km
-      estimatedTime: Math.floor(Math.random() * 35 + 8), // 8-43 min
-      paymentMethod: Math.random() > 0.6 ? 'Dinheiro' : 'Cartão',
-      requestTime: new Date().toISOString(),
-      status: 'pending'
-    };
 
-    setCurrentRequest(mockRequest);
-    setShowRequestModal(true);
-  };
 
   const acceptRequest = async () => {
     if (!currentRequest || !driverProfile) return;

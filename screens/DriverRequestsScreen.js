@@ -76,9 +76,23 @@ export default function DriverRequestsScreen({ navigation }) {
       const profile = await LocalDatabase.getDriverProfile();
       if (profile) {
         setDriverProfile(profile);
+        
+        // Clear any existing fake requests from local storage
+        await clearFakeRequests();
       }
     } catch (error) {
       console.error('Error initializing driver:', error);
+    }
+  };
+
+  const clearFakeRequests = async () => {
+    try {
+      // Clear only local ride requests since we're only using API now
+      const AsyncStorage = await import('@react-native-async-storage/async-storage');
+      await AsyncStorage.default.removeItem('ride_requests');
+      console.log('Cleared fake requests from local storage');
+    } catch (error) {
+      console.error('Error clearing fake requests:', error);
     }
   };
 
@@ -98,25 +112,24 @@ export default function DriverRequestsScreen({ navigation }) {
 
   const loadRideRequests = async () => {
     try {
-      // Load from API if driver is registered
+      // Only load from API if driver is registered
       if (driverProfile?.apiDriverId && location) {
         try {
           const apiResponse = await apiService.getPendingRides(location.coords, 10);
           setRideRequests(apiResponse.data || []);
           return;
         } catch (apiError) {
-          console.warn('Failed to load from API, using local data:', apiError);
+          console.error('Failed to load from API:', apiError);
+          setRideRequests([]);
+          return;
         }
       }
       
-      // Fallback to local database
-      const requests = await LocalDatabase.getRideRequests();
-      const driverRequests = requests.filter(request => 
-        request.status === 'pending' || request.status === 'accepted'
-      );
-      setRideRequests(driverRequests);
+      // If no API driver ID or location, show empty state
+      setRideRequests([]);
     } catch (error) {
       console.error('Error loading ride requests:', error);
+      setRideRequests([]);
     }
   };
 
@@ -129,84 +142,33 @@ export default function DriverRequestsScreen({ navigation }) {
     }
   };
 
-  const simulateNewRequest = async () => {
-    try {
-      // Simulate a new ride request
-      const mockRequest = {
-        passengerName: `Passageiro ${Math.floor(Math.random() * 100)}`,
-        pickup: {
-          address: 'Rua da Liberdade, 123',
-          lat: -8.8390 + (Math.random() - 0.5) * 0.01,
-          lng: 13.2894 + (Math.random() - 0.5) * 0.01,
-        },
-        destination: {
-          address: 'Avenida Principal, 456',
-          lat: -8.8390 + (Math.random() - 0.5) * 0.02,
-          lng: 13.2894 + (Math.random() - 0.5) * 0.02,
-        },
-        fare: (Math.random() * 500 + 200).toFixed(0), // 200-700 AOA
-        distance: (Math.random() * 10 + 2).toFixed(1), // 2-12 km
-        estimatedTime: Math.floor(Math.random() * 30 + 10), // 10-40 min
-        paymentMethod: Math.random() > 0.5 ? 'Dinheiro' : 'Cartão',
-        requestTime: new Date().toISOString(),
-      };
 
-      const requestId = await LocalDatabase.saveRideRequest(mockRequest);
-      if (requestId) {
-        loadRideRequests();
-        
-        // Show notification sound or vibration would go here
-        Toast.show({
-          type: "info",
-          text1: "Nova solicitação!",
-          text2: `Corrida para ${mockRequest.destination.address}`,
-        });
-      }
-    } catch (error) {
-      console.error('Error simulating new request:', error);
-    }
-  };
 
   const acceptRideRequest = async (requestId) => {
     try {
       setAcceptingRequest(true);
       
-      // Accept ride via API if driver is registered
+      // Accept ride via API - only works if driver is registered
       if (driverProfile?.apiDriverId) {
-        try {
-          const driverData = {
-            driverId: driverProfile.apiDriverId,
-            driverName: driverProfile.nome || 'Motorista',
-            driverPhone: driverProfile.telefone || driverProfile.phone,
-            vehicleInfo: {
-              make: driverProfile.veiculo?.marca || 'Toyota',
-              model: driverProfile.veiculo?.modelo || 'Corolla',
-              year: driverProfile.veiculo?.ano || 2020,
-              color: driverProfile.veiculo?.cor || 'Branco',
-              plate: driverProfile.veiculo?.placa || 'LD-12-34-AB'
-            }
-          };
-          
-          await apiService.acceptRide(requestId, driverData);
-          
-          // Remove from local list since it's accepted
-          setRideRequests(prev => prev.filter(req => req.id !== requestId));
-          
-        } catch (apiError) {
-          console.error('API accept failed:', apiError);
-          throw apiError;
-        }
-      } else {
-        // Fallback to local database
-        await LocalDatabase.updateRideRequestStatus(requestId, 'accepted');
+        const driverData = {
+          driverId: driverProfile.apiDriverId,
+          driverName: driverProfile.nome || 'Motorista',
+          driverPhone: driverProfile.telefone || driverProfile.phone,
+          vehicleInfo: {
+            make: driverProfile.veiculo?.marca || 'Toyota',
+            model: driverProfile.veiculo?.modelo || 'Corolla',
+            year: driverProfile.veiculo?.ano || 2020,
+            color: driverProfile.veiculo?.cor || 'Branco',
+            plate: driverProfile.veiculo?.placa || 'LD-12-34-AB'
+          }
+        };
         
-        setRideRequests(prev => 
-          prev.map(request => 
-            request.id === requestId 
-              ? { ...request, status: 'accepted' }
-              : request
-          )
-        );
+        await apiService.acceptRide(requestId, driverData);
+        
+        // Remove from local list since it's accepted
+        setRideRequests(prev => prev.filter(req => req.id !== requestId));
+      } else {
+        throw new Error('Driver not registered with API');
       }
 
       Toast.show({
@@ -237,31 +199,31 @@ export default function DriverRequestsScreen({ navigation }) {
 
   const rejectRideRequest = async (requestId) => {
     try {
-      // Reject ride via API if driver is registered
+      // Reject ride via API - only works if driver is registered
       if (driverProfile?.apiDriverId) {
-        try {
-          await apiService.rejectRide(requestId, driverProfile.apiDriverId, 'Driver declined');
-        } catch (apiError) {
-          console.warn('API reject failed:', apiError);
-        }
+        await apiService.rejectRide(requestId, driverProfile.apiDriverId, 'Driver declined');
+        
+        setRideRequests(prev => 
+          prev.filter(request => request.id !== requestId)
+        );
+
+        Toast.show({
+          type: "info",
+          text1: "Corrida recusada",
+          text2: "A solicitação foi removida",
+        });
+
+        setShowRequestModal(false);
       } else {
-        // Fallback to local database
-        await LocalDatabase.updateRideRequestStatus(requestId, 'rejected');
+        throw new Error('Driver not registered with API');
       }
-      
-      setRideRequests(prev => 
-        prev.filter(request => request.id !== requestId)
-      );
-
-      Toast.show({
-        type: "info",
-        text1: "Corrida recusada",
-        text2: "A solicitação foi removida",
-      });
-
-      setShowRequestModal(false);
     } catch (error) {
       console.error('Error rejecting ride request:', error);
+      Toast.show({
+        type: "error",
+        text1: "Erro",
+        text2: "Não foi possível recusar a corrida",
+      });
     }
   };
 
