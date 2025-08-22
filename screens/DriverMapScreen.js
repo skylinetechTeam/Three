@@ -901,9 +901,7 @@ export default function DriverMapScreen({ navigation, route }) {
     </head>
     <body>
         <div id="map"></div>
-        <div class="driver-status">
-            <div id="statusText" class="status-offline">OFFLINE - Não recebendo solicitações</div>
-        </div>
+       
         <div class="speed-info" id="speedInfo">0 km/h</div>
         <button class="arrival-button" id="arrivalButton" onclick="handleArrival()">
             Cheguei ao local
@@ -1038,13 +1036,7 @@ export default function DriverMapScreen({ navigation, route }) {
             function updateDriverStatus(online) {
                 isDriverOnline = online;
                 const statusElement = document.getElementById('statusText');
-                if (online) {
-                    statusElement.textContent = 'ONLINE - Disponível para corridas';
-                    statusElement.className = 'status-online';
-                } else {
-                    statusElement.textContent = 'OFFLINE - Não recebendo solicitações';
-                    statusElement.className = 'status-offline';
-                }
+  
                 
                 // Update marker icon
                 if (driverMarker) {

@@ -317,4 +317,5 @@ curl -X POST http://localhost:3000/api/rides/request \
 - `404` - Não encontrado
 - `409` - Conflito (já existe)
 - `429` - Muitas requisições
-- `500` - Erro interno do servidor
+- `500` - Erro interno do servidor#   t h r e e - a p i  
+ 
