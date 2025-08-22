@@ -187,6 +187,21 @@ export default function DriverMapScreen({ navigation, route }) {
       });
       
       setShowRequestModal(false);
+      
+      // Start navigation immediately after accepting
+      setTimeout(() => {
+        if (webViewRef.current && location) {
+          const destination = currentRequest.pickup;
+          const script = `
+            if (typeof startNavigation === 'function') {
+              console.log('Triggering navigation to pickup location');
+              startNavigation(${destination.lat}, ${destination.lng}, '${currentRequest.passengerName}', 'pickup');
+            }
+          `;
+          webViewRef.current.postMessage(script);
+        }
+      }, 1000);
+      
       setCurrentRequest(null);
     }
   };
@@ -484,16 +499,17 @@ export default function DriverMapScreen({ navigation, route }) {
                 maxZoom: 19
             }).addTo(map);
 
-            let driverMarker = null;
-            let routeControl = null;
-            let destinationMarker = null;
-            let isDriverOnline = false;
-            let currentSpeed = 0;
-            let routeInstructions = [];
-            let currentInstructionIndex = 0;
-            let routeSummary = null;
-            let simulationInterval = null;
-            let currentPhase = 'pickup';
+                         let driverMarker = null;
+             let routeControl = null;
+             let destinationMarker = null;
+             let routeLine = null;
+             let isDriverOnline = false;
+             let currentSpeed = 0;
+             let routeInstructions = [];
+             let currentInstructionIndex = 0;
+             let routeSummary = null;
+             let simulationInterval = null;
+             let currentPhase = 'pickup';
 
             // Custom driver icon
             const createDriverIcon = (online) => {
@@ -570,12 +586,18 @@ export default function DriverMapScreen({ navigation, route }) {
                     icon: createDriverIcon(isDriverOnline) 
                 }).addTo(map);
                 
-                if (!routeControl) {
-                    map.setView([lat, lng], 16);
-                }
-                
-                currentSpeed = speed || Math.random() * 20 + 20; // Simulate speed
-                document.getElementById('speedInfo').textContent = Math.round(currentSpeed * 3.6) + ' km/h';
+                                 if (!routeControl) {
+                     map.setView([lat, lng], 16);
+                 }
+                 
+                 // More realistic speed simulation
+                 if (speed > 0) {
+                     currentSpeed = speed;
+                 } else {
+                     // Simulate realistic city driving speeds
+                     currentSpeed = Math.random() * 25 + 15; // 15-40 km/h in city
+                 }
+                 document.getElementById('speedInfo').textContent = Math.round(currentSpeed) + ' km/h';
             }
 
             // Update driver status
@@ -600,67 +622,144 @@ export default function DriverMapScreen({ navigation, route }) {
                 }
             }
 
-            // Start navigation to destination with turn-by-turn
-            function startNavigation(destinationLat, destinationLng, passengerName, phase) {
-                if (!driverMarker) return;
-                
-                currentPhase = phase;
-                const driverPos = driverMarker.getLatLng();
-                
-                // Clear previous route
-                if (routeControl) {
-                    map.removeControl(routeControl);
-                }
-                if (destinationMarker) {
-                    map.removeLayer(destinationMarker);
-                }
-                
-                // Add destination marker
-                destinationMarker = L.marker([destinationLat, destinationLng], { 
-                    icon: createDestinationIcon(phase)
-                }).addTo(map);
-                
-                // Create route with turn-by-turn
-                routeControl = L.Routing.control({
-                    waypoints: [
-                        L.latLng(driverPos.lat, driverPos.lng),
-                        L.latLng(destinationLat, destinationLng)
-                    ],
-                    routeWhileDragging: false,
-                    createMarker: function() { return null; }, // Don't create default markers
-                    lineOptions: {
-                        styles: [{
-                            color: phase === 'pickup' ? '#2563EB' : '#10B981',
-                            weight: 8,
-                            opacity: 0.8,
-                            lineCap: 'round'
-                        }]
-                    },
-                    show: false, // Hide default instructions panel
-                }).on('routesfound', function(e) {
-                    const routes = e.routes;
-                    const route = routes[0];
-                    routeSummary = route.summary;
-                    routeInstructions = route.instructions || [];
-                    currentInstructionIndex = 0;
-                    
-                    // Update navigation UI
-                    updateNavigationUI(phase, passengerName);
-                    
-                    // Start turn-by-turn simulation
-                    startTurnByTurnSimulation();
-                    
-                    // Show navigation elements
-                    document.getElementById('arrivalButton').style.display = 'block';
-                    document.getElementById('navigationInfo').style.display = 'block';
-                    
-                    // Fit map to show route
-                    setTimeout(() => {
-                        map.fitBounds(route.getBounds(), { padding: [50, 50] });
-                    }, 500);
-                    
-                }).addTo(map);
-            }
+                         // Start navigation to destination with turn-by-turn
+             function startNavigation(destinationLat, destinationLng, passengerName, phase) {
+                 if (!driverMarker) return;
+                 
+                 currentPhase = phase;
+                 const driverPos = driverMarker.getLatLng();
+                 
+                 console.log('Starting navigation from:', driverPos, 'to:', destinationLat, destinationLng);
+                 
+                 // Clear previous route
+                 clearPreviousRoute();
+                 
+                 // Add destination marker FIRST
+                 destinationMarker = L.marker([destinationLat, destinationLng], { 
+                     icon: createDestinationIcon(phase)
+                 }).addTo(map);
+                 
+                 // ALWAYS create a direct line first (immediate visual feedback)
+                 routeLine = L.polyline([
+                     [driverPos.lat, driverPos.lng],
+                     [destinationLat, destinationLng]
+                 ], {
+                     color: phase === 'pickup' ? '#2563EB' : '#10B981',
+                     weight: 6,
+                     opacity: 0.7,
+                     dashArray: '10, 5' // Dashed line initially
+                 }).addTo(map);
+                 
+                 // Calculate basic distance and time for immediate display
+                 const distance = driverPos.distanceTo(L.latLng(destinationLat, destinationLng));
+                 const estimatedTime = Math.round(distance / 1000 * 2.5); // 2.5 min per km average
+                 
+                 routeSummary = {
+                     totalDistance: distance,
+                     totalTime: estimatedTime * 60
+                 };
+                 
+                 // Set initial instructions
+                 routeInstructions = [
+                     { text: \`Siga em direção a \${phase === 'pickup' ? passengerName : 'destino'}\` },
+                     { text: 'Continue na rota indicada' },
+                     { text: 'Mantenha-se na direção correta' },
+                     { text: 'Você está se aproximando do destino' },
+                     { text: 'Você chegou ao destino!' }
+                 ];
+                 currentInstructionIndex = 0;
+                 
+                 // Update UI immediately
+                 updateNavigationUI(phase, passengerName);
+                 
+                 // Show navigation elements
+                 document.getElementById('arrivalButton').style.display = 'block';
+                 document.getElementById('navigationInfo').style.display = 'block';
+                 
+                 // Fit map to show route
+                 const bounds = L.latLngBounds([
+                     [driverPos.lat, driverPos.lng],
+                     [destinationLat, destinationLng]
+                 ]);
+                 map.fitBounds(bounds, { 
+                     padding: [80, 80],
+                     maxZoom: 15
+                 });
+                 
+                 // Start turn-by-turn simulation
+                 startTurnByTurnSimulation();
+                 
+                 // Try to get better routing in background
+                 setTimeout(() => {
+                     tryAdvancedRouting(driverPos, destinationLat, destinationLng, phase, passengerName);
+                 }, 1000);
+             }
+
+             function clearPreviousRoute() {
+                 if (routeControl) {
+                     map.removeControl(routeControl);
+                     routeControl = null;
+                 }
+                 if (destinationMarker) {
+                     map.removeLayer(destinationMarker);
+                     destinationMarker = null;
+                 }
+                 if (routeLine) {
+                     map.removeLayer(routeLine);
+                     routeLine = null;
+                 }
+             }
+
+             function tryAdvancedRouting(driverPos, destinationLat, destinationLng, phase, passengerName) {
+                 // Try to get better routing with OSRM
+                 routeControl = L.Routing.control({
+                     waypoints: [
+                         L.latLng(driverPos.lat, driverPos.lng),
+                         L.latLng(destinationLat, destinationLng)
+                     ],
+                     routeWhileDragging: false,
+                     addWaypoints: false,
+                     draggableWaypoints: false,
+                     createMarker: function() { return null; },
+                     lineOptions: {
+                         styles: [{
+                             color: phase === 'pickup' ? '#2563EB' : '#10B981',
+                             weight: 6,
+                             opacity: 0.9,
+                             dashArray: null // Solid line for real route
+                         }]
+                     },
+                     show: false,
+                     router: L.Routing.osrmv1({
+                         serviceUrl: 'https://router.project-osrm.org/route/v1',
+                         profile: 'driving'
+                     })
+                 }).on('routesfound', function(e) {
+                     console.log('Advanced route found!');
+                     
+                     // Remove the basic line since we have a proper route now
+                     if (routeLine) {
+                         map.removeLayer(routeLine);
+                         routeLine = null;
+                     }
+                     
+                     const routes = e.routes;
+                     const route = routes[0];
+                     routeSummary = route.summary;
+                     routeInstructions = route.instructions || routeInstructions; // Keep fallback if no instructions
+                     
+                     console.log('Updated route summary:', routeSummary);
+                     
+                     // Update navigation UI with better data
+                     updateNavigationUI(phase, passengerName);
+                     
+                 }).on('routingerror', function(e) {
+                     console.log('Advanced routing failed, keeping basic route');
+                     // Keep the basic polyline route we already created
+                 }).addTo(map);
+             }
+
+
 
             function updateNavigationUI(phase, passengerName) {
                 const phaseElement = document.getElementById('ridePhase');
@@ -689,50 +788,59 @@ export default function DriverMapScreen({ navigation, route }) {
                 document.getElementById('etaInfo').textContent = 'ETA: ' + eta.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
             }
 
-            function startTurnByTurnSimulation() {
-                if (simulationInterval) {
-                    clearInterval(simulationInterval);
-                }
-                
-                // Simulate progress every 4 seconds
-                simulationInterval = setInterval(() => {
-                    if (currentInstructionIndex < routeInstructions.length) {
-                        const instruction = routeInstructions[currentInstructionIndex];
-                        const instructionText = getInstructionText(instruction);
-                        
-                        document.getElementById('nextInstruction').textContent = instructionText;
-                        
-                        // Simulate reducing distance and time
-                        if (routeSummary) {
-                            const progress = (currentInstructionIndex + 1) / routeInstructions.length;
-                            const remainingDistance = routeSummary.totalDistance * (1 - progress);
-                            const remainingDuration = routeSummary.totalTime * (1 - progress);
-                            
-                            document.getElementById('remainingDistance').textContent = (remainingDistance / 1000).toFixed(1) + ' km';
-                            document.getElementById('remainingTime').textContent = Math.round(remainingDuration / 60) + ' min';
-                            
-                            const eta = new Date(Date.now() + remainingDuration * 1000);
-                            document.getElementById('etaInfo').textContent = 'ETA: ' + eta.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                        }
-                        
-                        currentInstructionIndex++;
-                    } else {
-                        // Route completed - show arrival notification
-                        clearInterval(simulationInterval);
-                        document.getElementById('nextInstruction').textContent = 'Você chegou ao destino!';
-                        document.getElementById('remainingDistance').textContent = '0 km';
-                        document.getElementById('remainingTime').textContent = '0 min';
-                        
-                        // Flash the arrival button
-                        const arrivalBtn = document.getElementById('arrivalButton');
-                        arrivalBtn.style.background = '#F59E0B';
-                        arrivalBtn.textContent = 'CHEGOU! Confirmar';
-                        setTimeout(() => {
-                            arrivalBtn.style.background = '#10B981';
-                        }, 1000);
-                    }
-                }, 4000);
-            }
+                         function startTurnByTurnSimulation() {
+                 if (simulationInterval) {
+                     clearInterval(simulationInterval);
+                 }
+                 
+                 console.log('Starting turn-by-turn simulation with', routeInstructions.length, 'instructions');
+                 
+                 // Simulate progress every 5 seconds for more realistic experience
+                 simulationInterval = setInterval(() => {
+                     if (currentInstructionIndex < routeInstructions.length) {
+                         const instruction = routeInstructions[currentInstructionIndex];
+                         const instructionText = getInstructionText(instruction);
+                         
+                         console.log('Current instruction:', instructionText);
+                         document.getElementById('nextInstruction').textContent = instructionText;
+                         
+                         // Simulate reducing distance and time
+                         if (routeSummary) {
+                             const totalSteps = routeInstructions.length;
+                             const progress = (currentInstructionIndex + 1) / totalSteps;
+                             const remainingDistance = routeSummary.totalDistance * (1 - progress);
+                             const remainingDuration = routeSummary.totalTime * (1 - progress);
+                             
+                             document.getElementById('remainingDistance').textContent = (remainingDistance / 1000).toFixed(1) + ' km';
+                             document.getElementById('remainingTime').textContent = Math.round(remainingDuration / 60) + ' min';
+                             
+                             const eta = new Date(Date.now() + remainingDuration * 1000);
+                             document.getElementById('etaInfo').textContent = 'ETA: ' + eta.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                             
+                             // Simulate speed changes
+                             const simulatedSpeed = 30 + Math.random() * 40; // 30-70 km/h
+                             document.getElementById('speedInfo').textContent = Math.round(simulatedSpeed) + ' km/h';
+                         }
+                         
+                         currentInstructionIndex++;
+                     } else {
+                         // Route completed - show arrival notification
+                         clearInterval(simulationInterval);
+                         document.getElementById('nextInstruction').textContent = 'Você chegou ao destino!';
+                         document.getElementById('remainingDistance').textContent = '0 km';
+                         document.getElementById('remainingTime').textContent = '0 min';
+                         
+                         // Flash the arrival button
+                         const arrivalBtn = document.getElementById('arrivalButton');
+                         arrivalBtn.style.background = '#F59E0B';
+                         arrivalBtn.textContent = 'CHEGOU! Confirmar';
+                         setTimeout(() => {
+                             arrivalBtn.style.background = '#10B981';
+                             arrivalBtn.textContent = 'Cheguei ao local';
+                         }, 2000);
+                     }
+                 }, 5000); // Every 5 seconds for more realistic timing
+             }
 
             function getInstructionText(instruction) {
                 const text = instruction.text || instruction.instruction || '';
@@ -763,26 +871,20 @@ export default function DriverMapScreen({ navigation, route }) {
                 }));
             }
 
-            // Clear navigation
-            function clearNavigation() {
-                if (routeControl) {
-                    map.removeControl(routeControl);
-                    routeControl = null;
-                }
-                if (destinationMarker) {
-                    map.removeLayer(destinationMarker);
-                    destinationMarker = null;
-                }
-                if (simulationInterval) {
-                    clearInterval(simulationInterval);
-                    simulationInterval = null;
-                }
-                document.getElementById('navigationInfo').style.display = 'none';
-                document.getElementById('arrivalButton').style.display = 'none';
-                routeInstructions = [];
-                currentInstructionIndex = 0;
-                routeSummary = null;
-            }
+                         // Clear navigation
+             function clearNavigation() {
+                 clearPreviousRoute();
+                 
+                 if (simulationInterval) {
+                     clearInterval(simulationInterval);
+                     simulationInterval = null;
+                 }
+                 document.getElementById('navigationInfo').style.display = 'none';
+                 document.getElementById('arrivalButton').style.display = 'none';
+                 routeInstructions = [];
+                 currentInstructionIndex = 0;
+                 routeSummary = null;
+             }
 
             // Initialize driver marker if location is available
             if (${location?.coords.latitude || 'false'}) {
@@ -896,6 +998,44 @@ export default function DriverMapScreen({ navigation, route }) {
       >
         <MaterialIcons name="my-location" size={24} color="#ffffff" />
       </TouchableOpacity>
+
+      {/* Test Navigation Button (only when not in navigation mode) */}
+      {!navigationMode && isOnline && location && (
+        <TouchableOpacity 
+          style={[styles.testNavigationButton, { bottom: insets.bottom + 170 }]}
+          onPress={() => {
+            const testDestination = {
+              lat: location.coords.latitude + 0.01,
+              lng: location.coords.longitude + 0.01,
+            };
+            
+            const testRide = {
+              id: 'test_ride',
+              passengerName: 'Passageiro Teste',
+              pickup: testDestination,
+              destination: {
+                lat: location.coords.latitude + 0.02,
+                lng: location.coords.longitude + 0.02,
+                address: 'Destino Teste'
+              },
+              fare: 500,
+              paymentMethod: 'Teste'
+            };
+            
+            setActiveRide(testRide);
+            setNavigationMode(true);
+            setRidePhase('pickup');
+            
+            Toast.show({
+              type: "info",
+              text1: "Teste de Navegação",
+              text2: "Simulando corrida para teste",
+            });
+          }}
+        >
+          <MaterialIcons name="navigation" size={20} color="#ffffff" />
+        </TouchableOpacity>
+      )}
 
       {/* Navigation Controls */}
       {navigationMode && (
@@ -1137,6 +1277,24 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     backgroundColor: '#2563EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  testNavigationButton: {
+    position: 'absolute',
+    right: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F59E0B',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
