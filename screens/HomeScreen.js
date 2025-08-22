@@ -126,6 +126,26 @@ export default function HomeScreen({ navigation }) {
             console.log('🎉 Corrida aceita pelo motorista:', data);
             console.log('📱 HomeScreen recebeu evento ride_accepted via ApiService');
             
+            // PARAR BUSCA IMEDIATAMENTE - PRIORIDADE MÁXIMA
+            console.log('🛑 PARANDO BUSCA DE MOTORISTAS IMEDIATAMENTE');
+            setIsSearchingDrivers(false);
+            setDriversFound(true);
+            setDriverSearchTime(0);
+            
+            // Limpar TODOS os intervalos possíveis
+            if (window.driverSearchInterval) {
+              console.log('🗑️ Limpando window.driverSearchInterval');
+              clearInterval(window.driverSearchInterval);
+              window.driverSearchInterval = null;
+            }
+            
+            // Limpar qualquer timeout de busca também
+            if (searchTimeoutRef.current) {
+              console.log('🗑️ Limpando searchTimeoutRef');
+              clearTimeout(searchTimeoutRef.current);
+              searchTimeoutRef.current = null;
+            }
+            
             // Update request status
             setRequestStatus('accepted');
             setDriverInfo({
@@ -143,17 +163,6 @@ export default function HomeScreen({ navigation }) {
               setRequestId(data.rideId);
             }
             
-            // Parar busca imediatamente
-            setIsSearchingDrivers(false);
-            setDriversFound(true);
-            setDriverSearchTime(0);
-            
-            // Limpar intervalos de busca
-            if (window.driverSearchInterval) {
-              clearInterval(window.driverSearchInterval);
-              window.driverSearchInterval = null;
-            }
-            
             // Atualizar dados da corrida com informações do motorista
             if (data.ride) {
               setCurrentRide(prev => ({
@@ -163,6 +172,16 @@ export default function HomeScreen({ navigation }) {
                 status: 'accepted'
               }));
             }
+            
+            // Log final do estado após processamento
+            console.log('✅ Estado final após ride_accepted:', {
+              isSearchingDrivers: false,
+              driversFound: true,
+              driverSearchTime: 0,
+              requestStatus: 'accepted',
+              hasDriverInfo: !!data.driver,
+              intervalCleared: !window.driverSearchInterval
+            });
             
             // Mostrar toast de sucesso com detalhes do motorista
             Toast.show({
@@ -706,6 +725,12 @@ export default function HomeScreen({ navigation }) {
         selectedLocation.lng
       );
       
+      // Verificar se já há uma corrida aceita antes de iniciar nova busca
+      if (requestStatus === 'accepted' || driversFound) {
+        console.log('⚠️ Já há uma corrida aceita, cancelando nova busca');
+        return;
+      }
+      
       // Iniciar busca de motoristas e criar solicitação via API
       console.log('🚗 Iniciando busca de motoristas...');
       setIsSearchingDrivers(true);
@@ -760,6 +785,14 @@ export default function HomeScreen({ navigation }) {
         setDriverSearchTime(prev => {
           const newTime = prev + 1;
           console.log('⏱️ Tempo de busca:', newTime, 'segundos');
+          
+          // Verificar se a corrida já foi aceita durante o intervalo
+          if (requestStatus === 'accepted' || driversFound) {
+            console.log('🛑 Corrida já foi aceita, parando intervalo de busca');
+            clearInterval(driverSearchInterval);
+            window.driverSearchInterval = null;
+            return prev; // Não incrementar mais o tempo
+          }
           
           if (newTime >= 30) {
             clearInterval(driverSearchInterval);
