@@ -284,6 +284,12 @@ router.put('/:id/accept', async (req, res) => {
       for (const [socketId, connection] of activeConnections.entries()) {
         if (connection.userType === 'passenger' && connection.userId === ride.passengerId) {
           console.log(`✅ Encontrado passageiro conectado: ${socketId}`);
+          console.log(`📤 Enviando ride_accepted para socket ${socketId}:`, {
+            rideId: ride.id,
+            passengerId: ride.passengerId,
+            driverName: driverName
+          });
+          
           io.to(socketId).emit('ride_accepted', {
             rideId: ride.id,
             ride: ride,
@@ -295,6 +301,8 @@ router.put('/:id/accept', async (req, res) => {
             },
             estimatedArrival: '5-10 minutos'
           });
+          
+          console.log(`✅ Evento ride_accepted enviado para socket ${socketId}`);
           passengerNotified = true;
           break;
         }
