@@ -70,7 +70,14 @@ io.on('connection', (socket) => {
     const { userType, userId } = data;
     activeConnections.set(socket.id, { userType, userId, socketId: socket.id });
     socket.join(userType); // Join room based on user type
-    console.log(`👤 Usuário registrado: ${userType} - ${userId}`);
+    console.log(`👤 Usuário registrado: ${userType} - ${userId} (Socket: ${socket.id})`);
+    console.log(`📊 Total de conexões ativas: ${activeConnections.size}`);
+    
+    // Log das conexões por tipo
+    const drivers = Array.from(activeConnections.values()).filter(conn => conn.userType === 'driver');
+    const passengers = Array.from(activeConnections.values()).filter(conn => conn.userType === 'passenger');
+    console.log(`🚗 Motoristas conectados: ${drivers.length}`);
+    console.log(`👥 Passageiros conectados: ${passengers.length}`);
   });
   
   // Handle location updates
