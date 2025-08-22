@@ -45,6 +45,8 @@ export default function HomeScreen({ navigation }) {
   const [requestStatus, setRequestStatus] = useState(null); // 'pending', 'accepted', 'rejected'
   const [driverInfo, setDriverInfo] = useState(null);
   const [requestId, setRequestId] = useState(null);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [rideEstimate, setRideEstimate] = useState(null);
   const webViewRef = useRef(null);
   const searchTimeoutRef = useRef(null);
   
@@ -785,22 +787,46 @@ export default function HomeScreen({ navigation }) {
         return;
       }
       
-      // Iniciar busca de motoristas e criar solicitação via API
-      console.log('🚗 Iniciando busca de motoristas...');
+      // Calcular estimativa da corrida
+      console.log('💰 Calculando estimativa da corrida...');
+      const estimatedDistance = routeInfo?.distance || 5;
+      const estimatedTime = routeInfo?.duration || 15;
+      const vehicleType = selectedTaxiType === 'Premium' ? 'privado' : 'coletivo';
+      const estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime, vehicleType);
+      
+      const estimate = {
+        distance: estimatedDistance,
+        distanceText: routeInfo?.distanceText || `${estimatedDistance} km`,
+        time: estimatedTime,
+        timeText: routeInfo?.durationText || `${estimatedTime} min`,
+        fare: estimatedFare,
+        vehicleType: vehicleType,
+        destination: selectedLocation
+      };
+      
+      console.log('📊 Estimativa calculada:', estimate);
+      setRideEstimate(estimate);
+      setShowConfirmationModal(true);
+      
+          }
+  };
+
+  // Nova função para iniciar busca após confirmação
+  const startDriverSearch = async () => {
+    try {
+      console.log('🚗 Iniciando busca de motoristas após confirmação...');
+      
+      setShowConfirmationModal(false);
       setIsSearchingDrivers(true);
       setDriverSearchTime(0);
       setDriversFound(false);
       setRequestStatus('pending');
       setDriverInfo(null);
       setRequestId(null);
-      
+
       // Criar solicitação de corrida via API
-      if (passengerProfile?.apiPassengerId) {
+      if (passengerProfile?.apiPassengerId && rideEstimate) {
         try {
-          const estimatedDistance = routeInfo?.distance || 5;
-          const estimatedTime = routeInfo?.duration || 15;
-          const estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime);
-          
           console.log('🚗 Criando corrida para passageiro:', passengerProfile.apiPassengerId);
           const rideData = {
             passengerId: passengerProfile.apiPassengerId,
@@ -812,15 +838,15 @@ export default function HomeScreen({ navigation }) {
               lng: location.coords.longitude
             },
             destination: {
-              address: selectedLocation.name,
-              lat: selectedLocation.lat,
-              lng: selectedLocation.lng
+              address: rideEstimate.destination.name,
+              lat: rideEstimate.destination.lat,
+              lng: rideEstimate.destination.lng
             },
-            estimatedFare: estimatedFare,
-            estimatedDistance: estimatedDistance,
-            estimatedTime: estimatedTime,
+            estimatedFare: rideEstimate.fare,
+            estimatedDistance: rideEstimate.distance,
+            estimatedTime: rideEstimate.time,
             paymentMethod: passengerProfile.preferredPaymentMethod || 'cash',
-            vehicleType: selectedTaxiType === 'Premium' ? 'premium' : 'standard'
+            vehicleType: rideEstimate.vehicleType === 'privado' ? 'premium' : 'standard'
           };
           
           const rideResponse = await apiService.createRideRequest(rideData);
@@ -833,7 +859,7 @@ export default function HomeScreen({ navigation }) {
           // Continue with simulation if API fails
         }
       }
-      
+
       // Simular busca de motoristas por 30 segundos (tempo para motoristas responderem)
       const driverSearchInterval = setInterval(() => {
         setDriverSearchTime(prev => {
@@ -907,8 +933,14 @@ export default function HomeScreen({ navigation }) {
       
       // Armazenar referência global para poder cancelar de outros lugares
       window.driverSearchInterval = driverSearchInterval;
+      
+    } catch (error) {
+      console.error('Erro ao iniciar busca de motoristas:', error);
+      setIsSearchingDrivers(false);
     }
   };
+
+
 
   const centerOnUserLocation = () => {
     if (location) {
@@ -1570,6 +1602,91 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
       )}
+
+      {/* Modal de Confirmação da Corrida */}
+      <Modal
+        visible={showConfirmationModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowConfirmationModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmationModal}>
+            <View style={styles.confirmationHeader}>
+              <Text style={styles.confirmationTitle}>Confirmar Corrida</Text>
+              <TouchableOpacity
+                onPress={() => setShowConfirmationModal(false)}
+                style={styles.closeButton}
+              >
+                <MaterialIcons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {rideEstimate && (
+              <View style={styles.confirmationBody}>
+                <View style={styles.routePreview}>
+                  <View style={styles.routePoint}>
+                    <MaterialIcons name="radio-button-checked" size={20} color="#10B981" />
+                    <Text style={styles.routePointText}>Sua localização</Text>
+                  </View>
+                  <View style={styles.routeLine} />
+                  <View style={styles.routePoint}>
+                    <MaterialIcons name="place" size={20} color="#EF4444" />
+                    <Text style={styles.routePointText}>{rideEstimate.destination.name}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.estimateCard}>
+                  <View style={styles.estimateRow}>
+                    <MaterialIcons name="straighten" size={20} color="#6B7280" />
+                    <Text style={styles.estimateLabel}>Distância</Text>
+                    <Text style={styles.estimateValue}>{rideEstimate.distanceText}</Text>
+                  </View>
+                  <View style={styles.estimateRow}>
+                    <MaterialIcons name="access-time" size={20} color="#6B7280" />
+                    <Text style={styles.estimateLabel}>Tempo estimado</Text>
+                    <Text style={styles.estimateValue}>{rideEstimate.timeText}</Text>
+                  </View>
+                  <View style={styles.estimateRow}>
+                    <MaterialIcons name="local-taxi" size={20} color="#6B7280" />
+                    <Text style={styles.estimateLabel}>Tipo de veículo</Text>
+                    <Text style={styles.estimateValue}>
+                      {rideEstimate.vehicleType === 'privado' ? 'Privado' : 'Coletivo'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.fareCard}>
+                  <Text style={styles.fareLabel}>Valor da corrida</Text>
+                  <Text style={styles.fareValue}>{rideEstimate.fare} AOA</Text>
+                  <Text style={styles.fareNote}>
+                    {rideEstimate.vehicleType === 'privado' 
+                      ? 'Valor calculado por distância e tempo'
+                      : 'Preço fixo para coletivo'
+                    }
+                  </Text>
+                </View>
+
+                <View style={styles.confirmationActions}>
+                  <TouchableOpacity
+                    style={styles.cancelConfirmButton}
+                    onPress={() => setShowConfirmationModal(false)}
+                  >
+                    <Text style={styles.cancelConfirmText}>Cancelar</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={styles.confirmRideButton}
+                    onPress={startDriverSearch}
+                  >
+                    <Text style={styles.confirmRideText}>Confirmar e Buscar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2352,5 +2469,129 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#10B981',
+  },
+
+  // Estilos do Modal de Confirmação
+  confirmationModal: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    width: '100%',
+    maxHeight: height * 0.85,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  confirmationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  confirmationTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  confirmationBody: {
+    padding: 20,
+  },
+  routePreview: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  routePoint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  routePointText: {
+    fontSize: 16,
+    color: '#374151',
+    marginLeft: 12,
+    flex: 1,
+  },
+  estimateCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  estimateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  estimateLabel: {
+    fontSize: 16,
+    color: '#374151',
+    marginLeft: 12,
+    flex: 1,
+  },
+  estimateValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  fareCard: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  fareLabel: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  fareValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#2563EB',
+    marginBottom: 8,
+  },
+  fareNote: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  confirmationActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelConfirmButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelConfirmText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#6B7280',
+  },
+  confirmRideButton: {
+    flex: 2,
+    backgroundColor: '#10B981',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  confirmRideText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffff',
   },
 });

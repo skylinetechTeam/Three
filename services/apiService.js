@@ -696,14 +696,26 @@ class ApiService {
 
   // Calcular preço estimado da corrida
   calculateEstimatedFare(distance, time, vehicleType = 'standard') {
-    const baseFare = 200; // Taxa base em AOA
-    const perKmRate = vehicleType === 'premium' ? 80 : 50; // AOA por km
-    const perMinuteRate = vehicleType === 'premium' ? 15 : 10; // AOA por minuto
+    if (vehicleType === 'coletivo' || vehicleType === 'standard') {
+      // Coletivo: preço fixo de 500 AOA
+      return 500;
+    } else if (vehicleType === 'privado' || vehicleType === 'premium') {
+      // Privado: a partir de 800 AOA + cálculo por distância
+      const baseFare = 800; // Taxa base mínima em AOA
+      const perKmRate = 100; // AOA por km para privado
+      const perMinuteRate = 20; // AOA por minuto para privado
+      
+      const distanceFare = distance * perKmRate;
+      const timeFare = time * perMinuteRate;
+      
+      const calculatedFare = Math.round(baseFare + distanceFare + timeFare);
+      
+      // Garantir que o preço mínimo seja 800 AOA
+      return Math.max(calculatedFare, 800);
+    }
     
-    const distanceFare = distance * perKmRate;
-    const timeFare = time * perMinuteRate;
-    
-    return Math.round(baseFare + distanceFare + timeFare);
+    // Fallback para standard
+    return 500;
   }
 
   // Calcular distância entre dois pontos
