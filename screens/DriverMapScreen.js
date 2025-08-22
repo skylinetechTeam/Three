@@ -77,6 +77,44 @@ export default function DriverMapScreen({ navigation, route }) {
     }
   }, [activeRide, location, navigationMode]);
 
+  // Send location updates when driver has active ride
+  useEffect(() => {
+    let locationUpdateInterval = null;
+    
+    if (activeRide && location && apiService.socket && apiService.isConnected) {
+      // Send initial location
+      apiService.socket.emit('driverLocationUpdate', {
+        rideId: activeRide.id,
+        driverId: driverProfile?.apiDriverId,
+        location: {
+          lat: location.coords.latitude,
+          lng: location.coords.longitude
+        }
+      });
+      
+      // Send location updates every 5 seconds
+      locationUpdateInterval = setInterval(() => {
+        if (location && activeRide) {
+          apiService.socket.emit('driverLocationUpdate', {
+            rideId: activeRide.id,
+            driverId: driverProfile?.apiDriverId,
+            location: {
+              lat: location.coords.latitude,
+              lng: location.coords.longitude
+            }
+          });
+          console.log('📍 Enviando atualização de localização do motorista');
+        }
+      }, 5000);
+    }
+    
+    return () => {
+      if (locationUpdateInterval) {
+        clearInterval(locationUpdateInterval);
+      }
+    };
+  }, [activeRide, location, driverProfile]);
+
   const initializeDriver = async () => {
     try {
       const profile = await LocalDatabase.getDriverProfile();
@@ -498,10 +536,29 @@ export default function DriverMapScreen({ navigation, route }) {
             year: driverProfile.veiculo?.ano || 2020,
             color: driverProfile.veiculo?.cor || 'Branco',
             plate: driverProfile.veiculo?.placa || 'LD-12-34-AB'
+          },
+          location: {
+            lat: location.coords.latitude,
+            lng: location.coords.longitude
           }
         };
         
         await apiService.acceptRide(currentRequest.id, driverData);
+        
+        // Emit WebSocket event to notify passenger
+        if (apiService.socket && apiService.isConnected) {
+          apiService.socket.emit('rideAccepted', {
+            rideId: currentRequest.id,
+            driver: {
+              id: driverProfile.apiDriverId,
+              name: driverProfile.nome || 'Motorista',
+              phone: driverProfile.telefone || driverProfile.phone,
+              vehicleInfo: driverData.vehicleInfo,
+              location: driverData.location
+            }
+          });
+          console.log('✅ Emitido evento rideAccepted via WebSocket');
+        }
       }
       
       setActiveRide(currentRequest);
