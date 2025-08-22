@@ -18,9 +18,6 @@ import Toast from 'react-native-toast-message';
 
 const { width, height } = Dimensions.get('window');
 
-// HERE Maps API Configuration
-const HERE_API_KEY = 'bMtOJnfPZwG3fyrgS24Jif6dt3MXbOoq6H4X4KqxZKY';
-
 export default function DriverMapScreen({ navigation }) {
   const [location, setLocation] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
@@ -121,19 +118,18 @@ export default function DriverMapScreen({ navigation }) {
     }
   };
 
-  // HERE Maps HTML content with navigation mode
-  const hereMapHTML = `
+  // OpenStreetMap with Leaflet (Free)
+  const openStreetMapHTML = `
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Driver Navigation</title>
-        <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-core.js"></script>
-        <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-service.js"></script>
-        <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-ui.js"></script>
-        <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-mapevents.js"></script>
-        <link rel="stylesheet" type="text/css" href="https://js.api.here.com/v3/3.1/mapsjs-ui.css" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
         <style>
             body, html { 
                 margin: 0; 
@@ -141,7 +137,7 @@ export default function DriverMapScreen({ navigation }) {
                 height: 100%; 
                 font-family: Arial, sans-serif;
             }
-            #mapContainer { 
+            #map { 
                 height: 100%; 
                 width: 100%; 
                 position: relative;
@@ -153,18 +149,21 @@ export default function DriverMapScreen({ navigation }) {
                 right: 20px;
                 background: rgba(255, 255, 255, 0.95);
                 padding: 15px;
-                border-radius: 10px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                border-radius: 12px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.15);
                 z-index: 1000;
                 text-align: center;
+                backdrop-filter: blur(10px);
             }
             .status-online {
                 color: #10B981;
                 font-weight: bold;
+                font-size: 16px;
             }
             .status-offline {
                 color: #EF4444;
                 font-weight: bold;
+                font-size: 16px;
             }
             .navigation-info {
                 position: absolute;
@@ -173,97 +172,137 @@ export default function DriverMapScreen({ navigation }) {
                 right: 20px;
                 background: rgba(37, 99, 235, 0.95);
                 color: white;
-                padding: 15px;
-                border-radius: 10px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                padding: 16px;
+                border-radius: 12px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.2);
                 z-index: 1000;
                 display: none;
+                backdrop-filter: blur(10px);
             }
             .speed-info {
                 position: absolute;
                 bottom: 120px;
                 right: 20px;
                 background: rgba(255, 255, 255, 0.95);
-                padding: 10px 15px;
+                padding: 12px 16px;
                 border-radius: 25px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                box-shadow: 0 4px 15px rgba(0,0,0,0.15);
                 z-index: 1000;
                 font-weight: bold;
+                font-size: 16px;
+                backdrop-filter: blur(10px);
+            }
+            .leaflet-routing-container {
+                display: none;
+            }
+            .leaflet-control-zoom {
+                display: none;
             }
         </style>
     </head>
     <body>
-        <div id="mapContainer">
-            <div class="driver-status">
-                <div id="statusText" class="status-offline">OFFLINE - Não recebendo solicitações</div>
-            </div>
-            <div class="speed-info" id="speedInfo">0 km/h</div>
-            <div class="navigation-info" id="navigationInfo">
-                <div id="nextInstruction">Aguardando rota...</div>
-                <div id="distanceTime">0 km • 0 min</div>
-            </div>
+        <div id="map"></div>
+        <div class="driver-status">
+            <div id="statusText" class="status-offline">OFFLINE - Não recebendo solicitações</div>
+        </div>
+        <div class="speed-info" id="speedInfo">0 km/h</div>
+        <div class="navigation-info" id="navigationInfo">
+            <div id="nextInstruction">Aguardando rota...</div>
+            <div id="distanceTime">0 km • 0 min</div>
         </div>
         
         <script>
-            // Initialize HERE Maps
-            const platform = new H.service.Platform({
-                'apikey': '${HERE_API_KEY}'
-            });
+            // Initialize OpenStreetMap with Leaflet
+            const map = L.map('map', {
+                zoomControl: false,
+                attributionControl: false
+            }).setView([${location?.coords.latitude || -8.8390}, ${location?.coords.longitude || 13.2894}], 16);
 
-            const defaultLayers = platform.createDefaultLayers();
-            
-            const map = new H.Map(
-              document.getElementById('mapContainer'),
-              defaultLayers.vector.normal.map,
-              {
-                zoom: 16,
-                center: { lat: ${location?.coords.latitude || -8.8390}, lng: ${location?.coords.longitude || 13.2894} },
-                pixelRatio: window.devicePixelRatio || 1
-              }
-            );
-
-            // Enable map interaction (pan, zoom)
-            const behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
-            const ui = H.ui.UI.createDefault(map, defaultLayers);
-            
-            // Remove default UI controls and add custom ones
-            ui.removeControl('mapsettings');
-            ui.removeControl('scalebar');
-            ui.removeControl('zoom');
-            
-            window.addEventListener('resize', () => map.getViewPort().resize());
+            // Add OpenStreetMap tiles (free)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
 
             let driverMarker = null;
-            let routeGroup = null;
+            let routeControl = null;
+            let destinationMarker = null;
             let isDriverOnline = false;
             let currentSpeed = 0;
 
-            // Create driver marker
-            function createDriverMarker(lat, lng) {
-                if (driverMarker) {
-                    map.removeObject(driverMarker);
-                }
-                
-                const driverIcon = new H.map.Icon(
-                    'data:image/svg+xml;base64,' + btoa(\`
-                        <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="20" cy="20" r="18" fill="\${isDriverOnline ? '#10B981' : '#EF4444'}" stroke="white" stroke-width="3"/>
-                            <path d="M20 8 L28 32 L20 28 L12 32 Z" fill="white"/>
-                        </svg>
-                    \`),
-                    { size: { w: 40, h: 40 }, anchor: { x: 20, y: 20 } }
-                );
+            // Custom driver icon
+            const createDriverIcon = (online) => {
+                const color = online ? '#10B981' : '#EF4444';
+                return L.divIcon({
+                    html: \`
+                        <div style="
+                            width: 40px; 
+                            height: 40px; 
+                            background: \${color}; 
+                            border: 3px solid white; 
+                            border-radius: 50%; 
+                            display: flex; 
+                            align-items: center; 
+                            justify-content: center;
+                            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                        ">
+                            <div style="
+                                width: 0; 
+                                height: 0; 
+                                border-left: 8px solid transparent; 
+                                border-right: 8px solid transparent; 
+                                border-bottom: 16px solid white;
+                                transform: rotate(0deg);
+                            "></div>
+                        </div>
+                    \`,
+                    className: 'driver-marker',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                });
+            };
 
-                driverMarker = new H.map.Marker({ lat, lng }, { icon: driverIcon });
-                map.addObject(driverMarker);
-                
-                // Center map on driver
-                map.getViewModel().setLookAtData({ position: { lat, lng }, zoom: 16 });
-            }
+            // Create destination icon
+            const destinationIcon = L.divIcon({
+                html: \`
+                    <div style="
+                        width: 30px; 
+                        height: 40px; 
+                        background: #EF4444; 
+                        border: 2px solid white; 
+                        border-radius: 50% 50% 50% 0; 
+                        transform: rotate(-45deg);
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    ">
+                        <div style="
+                            width: 12px;
+                            height: 12px;
+                            background: white;
+                            border-radius: 50%;
+                            transform: rotate(45deg);
+                        "></div>
+                    </div>
+                \`,
+                className: 'destination-marker',
+                iconSize: [30, 40],
+                iconAnchor: [15, 35]
+            });
 
             // Update driver location
             function updateDriverLocation(lat, lng, speed = 0) {
-                createDriverMarker(lat, lng);
+                if (driverMarker) {
+                    map.removeLayer(driverMarker);
+                }
+                
+                driverMarker = L.marker([lat, lng], { 
+                    icon: createDriverIcon(isDriverOnline) 
+                }).addTo(map);
+                
+                map.setView([lat, lng], 16);
+                
                 currentSpeed = speed || 0;
                 document.getElementById('speedInfo').textContent = Math.round(currentSpeed * 3.6) + ' km/h';
             }
@@ -280,10 +319,13 @@ export default function DriverMapScreen({ navigation }) {
                     statusElement.className = 'status-offline';
                 }
                 
-                // Update marker color
+                // Update marker icon
                 if (driverMarker) {
-                    const currentPos = driverMarker.getGeometry();
-                    createDriverMarker(currentPos.lat, currentPos.lng);
+                    const pos = driverMarker.getLatLng();
+                    map.removeLayer(driverMarker);
+                    driverMarker = L.marker([pos.lat, pos.lng], { 
+                        icon: createDriverIcon(online) 
+                    }).addTo(map);
                 }
             }
 
@@ -291,85 +333,67 @@ export default function DriverMapScreen({ navigation }) {
             function startNavigation(destinationLat, destinationLng, passengerName) {
                 if (!driverMarker) return;
                 
-                const driverPos = driverMarker.getGeometry();
-                const router = platform.getRoutingService(null, 8);
+                const driverPos = driverMarker.getLatLng();
                 
-                const routingParameters = {
-                    'routingMode': 'fast',
-                    'transportMode': 'car',
-                    'origin': driverPos.lat + ',' + driverPos.lng,
-                    'destination': destinationLat + ',' + destinationLng,
-                    'return': 'polyline,turnByTurnActions,summary'
-                };
-
-                router.calculateRoute(routingParameters, (result) => {
-                    if (result.routes.length) {
-                        const route = result.routes[0];
-                        
-                        // Clear previous route
-                        if (routeGroup) {
-                            map.removeObject(routeGroup);
-                        }
-                        
-                        routeGroup = new H.map.Group();
-                        
-                        // Add route polyline
-                        const lineString = H.geo.LineString.fromFlexiblePolyline(route.sections[0].polyline);
-                        const routeLine = new H.map.Polyline(lineString, {
-                            style: {
-                                strokeColor: '#2563EB',
-                                lineWidth: 6,
-                                lineCap: 'round',
-                                lineJoin: 'round'
-                            }
-                        });
-                        
-                        // Add destination marker
-                        const destIcon = new H.map.Icon(
-                            'data:image/svg+xml;base64,' + btoa(\`
-                                <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M15 0C6.7 0 0 6.7 0 15c0 15 15 25 15 25s15-10 15-25C30 6.7 23.3 0 15 0z" fill="#EF4444"/>
-                                    <circle cx="15" cy="15" r="8" fill="white"/>
-                                </svg>
-                            \`),
-                            { size: { w: 30, h: 40 }, anchor: { x: 15, y: 40 } }
-                        );
-                        
-                        const destMarker = new H.map.Marker({ lat: destinationLat, lng: destinationLng }, { icon: destIcon });
-                        
-                        routeGroup.addObjects([routeLine, destMarker]);
-                        map.addObject(routeGroup);
-                        
-                        // Show navigation info
-                        const navInfo = document.getElementById('navigationInfo');
-                        const summary = route.sections[0].summary;
-                        const distance = (summary.length / 1000).toFixed(1);
-                        const duration = Math.round(summary.duration / 60);
-                        
-                        document.getElementById('nextInstruction').textContent = 'Navegando até ' + (passengerName || 'destino');
-                        document.getElementById('distanceTime').textContent = distance + ' km • ' + duration + ' min';
-                        navInfo.style.display = 'block';
-                        
-                        // Fit view to show route
-                        map.getViewModel().setLookAtData({ bounds: routeGroup.getBoundingBox() });
+                // Clear previous route
+                if (routeControl) {
+                    map.removeControl(routeControl);
+                }
+                if (destinationMarker) {
+                    map.removeLayer(destinationMarker);
+                }
+                
+                // Add destination marker
+                destinationMarker = L.marker([destinationLat, destinationLng], { 
+                    icon: destinationIcon 
+                }).addTo(map);
+                
+                // Create route
+                routeControl = L.Routing.control({
+                    waypoints: [
+                        L.latLng(driverPos.lat, driverPos.lng),
+                        L.latLng(destinationLat, destinationLng)
+                    ],
+                    routeWhileDragging: false,
+                    createMarker: function() { return null; }, // Don't create default markers
+                    lineOptions: {
+                        styles: [{
+                            color: '#2563EB',
+                            weight: 6,
+                            opacity: 0.8
+                        }]
                     }
-                }, (error) => {
-                    console.error('Routing error:', error);
-                });
+                }).on('routesfound', function(e) {
+                    const routes = e.routes;
+                    const summary = routes[0].summary;
+                    
+                    // Show navigation info
+                    const navInfo = document.getElementById('navigationInfo');
+                    const distance = (summary.totalDistance / 1000).toFixed(1);
+                    const duration = Math.round(summary.totalTime / 60);
+                    
+                    document.getElementById('nextInstruction').textContent = 'Navegando até ' + (passengerName || 'destino');
+                    document.getElementById('distanceTime').textContent = distance + ' km • ' + duration + ' min';
+                    navInfo.style.display = 'block';
+                }).addTo(map);
             }
 
             // Clear navigation
             function clearNavigation() {
-                if (routeGroup) {
-                    map.removeObject(routeGroup);
-                    routeGroup = null;
+                if (routeControl) {
+                    map.removeControl(routeControl);
+                    routeControl = null;
+                }
+                if (destinationMarker) {
+                    map.removeLayer(destinationMarker);
+                    destinationMarker = null;
                 }
                 document.getElementById('navigationInfo').style.display = 'none';
             }
 
             // Initialize driver marker if location is available
             if (${location?.coords.latitude || 'false'}) {
-                createDriverMarker(${location?.coords.latitude || 0}, ${location?.coords.longitude || 0});
+                updateDriverLocation(${location?.coords.latitude || 0}, ${location?.coords.longitude || 0});
             }
 
             // Listen for messages from React Native
@@ -419,7 +443,7 @@ export default function DriverMapScreen({ navigation }) {
       <View style={styles.mapContainer}>
         <WebView
           ref={webViewRef}
-          source={{ html: hereMapHTML }}
+          source={{ html: openStreetMapHTML }}
           style={styles.map}
           javaScriptEnabled={true}
           domStorageEnabled={true}
