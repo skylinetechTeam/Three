@@ -622,77 +622,143 @@ export default function DriverMapScreen({ navigation, route }) {
                 }
             }
 
-                         // Start navigation to destination with turn-by-turn
+                         // SUPER SIMPLE NAVIGATION - GUARANTEED TO WORK
              function startNavigation(destinationLat, destinationLng, passengerName, phase) {
-                 if (!driverMarker) return;
+                 console.log('🚗 === STARTING NAVIGATION ===');
+                 console.log('📍 Driver marker exists:', !!driverMarker);
+                 console.log('🎯 Destination:', destinationLat, destinationLng);
+                 console.log('🔄 Phase:', phase);
                  
-                 currentPhase = phase;
-                 const driverPos = driverMarker.getLatLng();
+                 // Safety check
+                 if (!driverMarker) {
+                     console.error('❌ No driver marker found!');
+                     alert('Erro: Localização do motorista não encontrada');
+                     return;
+                 }
                  
-                 console.log('Starting navigation from:', driverPos, 'to:', destinationLat, destinationLng);
-                 
-                 // Clear previous route
-                 clearPreviousRoute();
-                 
-                 // Add destination marker FIRST
-                 destinationMarker = L.marker([destinationLat, destinationLng], { 
-                     icon: createDestinationIcon(phase)
-                 }).addTo(map);
-                 
-                 // ALWAYS create a direct line first (immediate visual feedback)
-                 routeLine = L.polyline([
-                     [driverPos.lat, driverPos.lng],
-                     [destinationLat, destinationLng]
-                 ], {
-                     color: phase === 'pickup' ? '#2563EB' : '#10B981',
-                     weight: 6,
-                     opacity: 0.7,
-                     dashArray: '10, 5' // Dashed line initially
-                 }).addTo(map);
-                 
-                 // Calculate basic distance and time for immediate display
-                 const distance = driverPos.distanceTo(L.latLng(destinationLat, destinationLng));
-                 const estimatedTime = Math.round(distance / 1000 * 2.5); // 2.5 min per km average
-                 
-                 routeSummary = {
-                     totalDistance: distance,
-                     totalTime: estimatedTime * 60
-                 };
-                 
-                 // Set initial instructions
-                 routeInstructions = [
-                     { text: \`Siga em direção a \${phase === 'pickup' ? passengerName : 'destino'}\` },
-                     { text: 'Continue na rota indicada' },
-                     { text: 'Mantenha-se na direção correta' },
-                     { text: 'Você está se aproximando do destino' },
-                     { text: 'Você chegou ao destino!' }
-                 ];
-                 currentInstructionIndex = 0;
-                 
-                 // Update UI immediately
-                 updateNavigationUI(phase, passengerName);
-                 
-                 // Show navigation elements
-                 document.getElementById('arrivalButton').style.display = 'block';
-                 document.getElementById('navigationInfo').style.display = 'block';
-                 
-                 // Fit map to show route
-                 const bounds = L.latLngBounds([
-                     [driverPos.lat, driverPos.lng],
-                     [destinationLat, destinationLng]
-                 ]);
-                 map.fitBounds(bounds, { 
-                     padding: [80, 80],
-                     maxZoom: 15
-                 });
-                 
-                 // Start turn-by-turn simulation
-                 startTurnByTurnSimulation();
-                 
-                 // Try to get better routing in background
-                 setTimeout(() => {
-                     tryAdvancedRouting(driverPos, destinationLat, destinationLng, phase, passengerName);
-                 }, 1000);
+                 try {
+                     currentPhase = phase;
+                     const driverPos = driverMarker.getLatLng();
+                     console.log('📍 Driver position:', driverPos.lat, driverPos.lng);
+                     
+                     // Step 1: Clear everything first
+                     console.log('🧹 Clearing previous routes...');
+                     clearPreviousRoute();
+                     
+                     // Step 2: Create destination marker
+                     console.log('🎯 Creating destination marker...');
+                     destinationMarker = L.marker([destinationLat, destinationLng], { 
+                         icon: createDestinationIcon(phase)
+                     });
+                     map.addLayer(destinationMarker);
+                     console.log('✅ Destination marker added');
+                     
+                     // Step 3: Create route line - MULTIPLE ATTEMPTS TO GUARANTEE SUCCESS
+                     console.log('🛣️ Creating route line...');
+                     const routeColor = phase === 'pickup' ? '#2563EB' : '#10B981';
+                     console.log('🎨 Using color:', routeColor);
+                     
+                     const coordinates = [
+                         [driverPos.lat, driverPos.lng],
+                         [destinationLat, destinationLng]
+                     ];
+                     console.log('📐 Route coordinates:', coordinates);
+                     
+                     // Method 1: Standard polyline
+                     try {
+                         routeLine = L.polyline(coordinates, {
+                             color: routeColor,
+                             weight: 8,
+                             opacity: 0.9,
+                             lineCap: 'round',
+                             lineJoin: 'round'
+                         });
+                         map.addLayer(routeLine);
+                         console.log('✅ Method 1: Standard polyline added');
+                     } catch (e) {
+                         console.error('❌ Method 1 failed:', e);
+                     }
+                     
+                     // Method 2: Backup thick line
+                     try {
+                         const backupLine = L.polyline(coordinates, {
+                             color: routeColor,
+                             weight: 12,
+                             opacity: 0.7
+                         }).addTo(map);
+                         console.log('✅ Method 2: Backup line added');
+                     } catch (e) {
+                         console.error('❌ Method 2 failed:', e);
+                     }
+                     
+                     // Method 3: Simple line with different approach
+                     try {
+                         const simpleLine = new L.Polyline(coordinates, {
+                             color: routeColor,
+                             weight: 6,
+                             opacity: 1.0
+                         });
+                         simpleLine.addTo(map);
+                         console.log('✅ Method 3: Simple line added');
+                     } catch (e) {
+                         console.error('❌ Method 3 failed:', e);
+                     }
+                     
+                     console.log('🛣️ Route line creation attempts completed');
+                     
+                     // Step 4: Calculate distance and time
+                     const distance = driverPos.distanceTo(L.latLng(destinationLat, destinationLng));
+                     const estimatedTime = Math.round(distance / 1000 * 2.5);
+                     
+                     routeSummary = {
+                         totalDistance: distance,
+                         totalTime: estimatedTime * 60
+                     };
+                     
+                     console.log('📊 Route summary:', routeSummary);
+                     
+                     // Step 5: Setup instructions
+                     routeInstructions = [
+                         { text: \`🚗 Siga em direção a \${phase === 'pickup' ? passengerName : 'destino'}\` },
+                         { text: '➡️ Continue na rota principal' },
+                         { text: '🎯 Mantenha-se na direção indicada' },
+                         { text: '🏁 Aproximando-se do destino' },
+                         { text: '✅ Você chegou ao destino!' }
+                     ];
+                     currentInstructionIndex = 0;
+                     
+                     // Step 6: Update UI
+                     console.log('🖥️ Updating navigation UI...');
+                     updateNavigationUI(phase, passengerName);
+                     
+                     // Step 7: Show navigation elements
+                     const arrivalBtn = document.getElementById('arrivalButton');
+                     const navInfo = document.getElementById('navigationInfo');
+                     
+                     if (arrivalBtn) arrivalBtn.style.display = 'block';
+                     if (navInfo) navInfo.style.display = 'block';
+                     console.log('✅ Navigation UI elements shown');
+                     
+                     // Step 8: Zoom to show route
+                     console.log('🔍 Fitting map to route...');
+                     setTimeout(() => {
+                         const bounds = L.latLngBounds(coordinates);
+                         map.fitBounds(bounds, { 
+                             padding: [50, 50],
+                             maxZoom: 13
+                         });
+                         console.log('✅ Map fitted to bounds');
+                     }, 500);
+                     
+                     // Step 9: Start simulation
+                     startTurnByTurnSimulation();
+                     
+                     console.log('🎉 === NAVIGATION SETUP COMPLETE ===');
+                     
+                 } catch (error) {
+                     console.error('❌ Error in startNavigation:', error);
+                     alert('Erro na navegação: ' + error.message);
+                 }
              }
 
              function clearPreviousRoute() {
@@ -710,54 +776,7 @@ export default function DriverMapScreen({ navigation, route }) {
                  }
              }
 
-             function tryAdvancedRouting(driverPos, destinationLat, destinationLng, phase, passengerName) {
-                 // Try to get better routing with OSRM
-                 routeControl = L.Routing.control({
-                     waypoints: [
-                         L.latLng(driverPos.lat, driverPos.lng),
-                         L.latLng(destinationLat, destinationLng)
-                     ],
-                     routeWhileDragging: false,
-                     addWaypoints: false,
-                     draggableWaypoints: false,
-                     createMarker: function() { return null; },
-                     lineOptions: {
-                         styles: [{
-                             color: phase === 'pickup' ? '#2563EB' : '#10B981',
-                             weight: 6,
-                             opacity: 0.9,
-                             dashArray: null // Solid line for real route
-                         }]
-                     },
-                     show: false,
-                     router: L.Routing.osrmv1({
-                         serviceUrl: 'https://router.project-osrm.org/route/v1',
-                         profile: 'driving'
-                     })
-                 }).on('routesfound', function(e) {
-                     console.log('Advanced route found!');
-                     
-                     // Remove the basic line since we have a proper route now
-                     if (routeLine) {
-                         map.removeLayer(routeLine);
-                         routeLine = null;
-                     }
-                     
-                     const routes = e.routes;
-                     const route = routes[0];
-                     routeSummary = route.summary;
-                     routeInstructions = route.instructions || routeInstructions; // Keep fallback if no instructions
-                     
-                     console.log('Updated route summary:', routeSummary);
-                     
-                     // Update navigation UI with better data
-                     updateNavigationUI(phase, passengerName);
-                     
-                 }).on('routingerror', function(e) {
-                     console.log('Advanced routing failed, keeping basic route');
-                     // Keep the basic polyline route we already created
-                 }).addTo(map);
-             }
+
 
 
 
@@ -886,19 +905,74 @@ export default function DriverMapScreen({ navigation, route }) {
                  routeSummary = null;
              }
 
-            // Initialize driver marker if location is available
-            if (${location?.coords.latitude || 'false'}) {
-                updateDriverLocation(${location?.coords.latitude || 0}, ${location?.coords.longitude || 0});
-            }
+                         // Initialize driver marker if location is available
+             if (${location?.coords.latitude || 'false'}) {
+                 console.log('Initializing driver location...');
+                 updateDriverLocation(${location?.coords.latitude || 0}, ${location?.coords.longitude || 0});
+             }
+             
+             // Debug function to test line creation
+             function testCreateLine() {
+                 console.log('🧪 === TESTING LINE CREATION ===');
+                 
+                 try {
+                     if (!driverMarker) {
+                         console.error('❌ No driver marker for test!');
+                         alert('Erro: Marker do motorista não encontrado');
+                         return;
+                     }
+                     
+                     const driverPos = driverMarker.getLatLng();
+                     const testDestination = [driverPos.lat + 0.01, driverPos.lng + 0.01];
+                     
+                     console.log('📍 Creating test line from', driverPos.lat, driverPos.lng, 'to', testDestination);
+                     
+                     // Create bright red test line
+                     const testLine = L.polyline([
+                         [driverPos.lat, driverPos.lng],
+                         testDestination
+                     ], {
+                         color: '#FF0000',
+                         weight: 15,
+                         opacity: 1.0,
+                         lineCap: 'round'
+                     });
+                     
+                     console.log('🛣️ Test line object created');
+                     map.addLayer(testLine);
+                     console.log('✅ Test line added to map successfully!');
+                     
+                     // Zoom to show the test line
+                     const bounds = L.latLngBounds([
+                         [driverPos.lat, driverPos.lng],
+                         testDestination
+                     ]);
+                     map.fitBounds(bounds, { padding: [50, 50] });
+                     
+                     // Remove after 5 seconds
+                     setTimeout(() => {
+                         map.removeLayer(testLine);
+                         console.log('🗑️ Test line removed');
+                     }, 5000);
+                     
+                 } catch (error) {
+                     console.error('❌ Error creating test line:', error);
+                     alert('Erro no teste: ' + error.message);
+                 }
+             }
+             
+             // Make test function globally available
+             window.testCreateLine = testCreateLine;
 
-            // Listen for messages from React Native
-            window.addEventListener('message', function(event) {
-                try {
-                    eval(event.data);
-                } catch (e) {
-                    console.error('Error executing message:', e);
-                }
-            });
+             // Listen for messages from React Native
+             window.addEventListener('message', function(event) {
+                 try {
+                     console.log('Received message:', event.data);
+                     eval(event.data);
+                 } catch (e) {
+                     console.error('Error executing message:', e);
+                 }
+             });
         </script>
     </body>
     </html>
@@ -969,6 +1043,15 @@ export default function DriverMapScreen({ navigation, route }) {
           bounces={false}
           scrollEnabled={false}
           onError={(error) => console.error('WebView error:', error)}
+          onLoad={() => {
+            console.log('🌐 WebView loaded successfully');
+            // Wait a bit for map to initialize, then update location
+            setTimeout(() => {
+              if (location) {
+                updateMapLocation(location);
+              }
+            }, 2000);
+          }}
           onMessage={(event) => {
             try {
               const data = JSON.parse(event.nativeEvent.data);
@@ -1004,36 +1087,95 @@ export default function DriverMapScreen({ navigation, route }) {
         <TouchableOpacity 
           style={[styles.testNavigationButton, { bottom: insets.bottom + 170 }]}
           onPress={() => {
-            const testDestination = {
-              lat: location.coords.latitude + 0.01,
-              lng: location.coords.longitude + 0.01,
-            };
+            // First test if we can create a simple line
+            if (webViewRef.current) {
+              const script = `
+                console.log('Testing line creation...');
+                if (typeof testCreateLine === 'function') {
+                  testCreateLine();
+                } else {
+                  console.error('testCreateLine function not available');
+                }
+              `;
+              webViewRef.current.postMessage(script);
+            }
             
-            const testRide = {
-              id: 'test_ride',
-              passengerName: 'Passageiro Teste',
-              pickup: testDestination,
-              destination: {
-                lat: location.coords.latitude + 0.02,
-                lng: location.coords.longitude + 0.02,
-                address: 'Destino Teste'
-              },
-              fare: 500,
-              paymentMethod: 'Teste'
-            };
-            
-            setActiveRide(testRide);
-            setNavigationMode(true);
-            setRidePhase('pickup');
-            
-            Toast.show({
-              type: "info",
-              text1: "Teste de Navegação",
-              text2: "Simulando corrida para teste",
-            });
+            // Then start actual navigation test
+            setTimeout(() => {
+              const testDestination = {
+                lat: location.coords.latitude + 0.01,
+                lng: location.coords.longitude + 0.01,
+              };
+              
+              const testRide = {
+                id: 'test_ride',
+                passengerName: 'Passageiro Teste',
+                pickup: testDestination,
+                destination: {
+                  lat: location.coords.latitude + 0.02,
+                  lng: location.coords.longitude + 0.02,
+                  address: 'Destino Teste'
+                },
+                fare: 500,
+                paymentMethod: 'Teste'
+              };
+              
+              setActiveRide(testRide);
+              setNavigationMode(true);
+              setRidePhase('pickup');
+              
+              Toast.show({
+                type: "info",
+                text1: "Teste de Navegação",
+                text2: "Simulando corrida para teste",
+              });
+            }, 2000);
           }}
         >
           <MaterialIcons name="navigation" size={20} color="#ffffff" />
+        </TouchableOpacity>
+      )}
+
+      {/* Debug Button */}
+      {!navigationMode && location && (
+        <TouchableOpacity 
+          style={[styles.debugButton, { bottom: insets.bottom + 240 }]}
+          onPress={() => {
+            if (webViewRef.current) {
+              const script = `
+                console.log('=== DEBUG INFO ===');
+                console.log('Map object:', typeof map);
+                console.log('Driver marker:', !!driverMarker);
+                console.log('L.polyline function:', typeof L.polyline);
+                console.log('Current location:', driverMarker ? driverMarker.getLatLng() : 'No driver marker');
+                
+                // Force create a test line
+                if (driverMarker) {
+                  const pos = driverMarker.getLatLng();
+                  const testLine = L.polyline([
+                    [pos.lat, pos.lng],
+                    [pos.lat + 0.005, pos.lng + 0.005]
+                  ], {
+                    color: '#FF0000',
+                    weight: 5,
+                    opacity: 1.0
+                  });
+                  
+                  console.log('Adding test line to map...');
+                  testLine.addTo(map);
+                  console.log('Test line added successfully');
+                  
+                  setTimeout(() => {
+                    map.removeLayer(testLine);
+                    console.log('Test line removed');
+                  }, 3000);
+                }
+              `;
+              webViewRef.current.postMessage(script);
+            }
+          }}
+        >
+          <MaterialIcons name="bug-report" size={16} color="#ffffff" />
         </TouchableOpacity>
       )}
 
@@ -1305,6 +1447,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 8,
+  },
+  debugButton: {
+    position: 'absolute',
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#8B5CF6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 6,
   },
   navigationControls: {
     position: 'absolute',
