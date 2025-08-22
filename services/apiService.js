@@ -126,14 +126,22 @@ class ApiService {
 
   // Registrar callback para eventos específicos
   onEvent(eventName, callback) {
+    console.log(`📝 [ApiService] Registrando callback para evento: ${eventName}`);
+    
     if (!this.eventCallbacks.has(eventName)) {
       this.eventCallbacks.set(eventName, []);
     }
     this.eventCallbacks.get(eventName).push(callback);
     
+    const totalCallbacks = this.eventCallbacks.get(eventName).length;
+    console.log(`✅ [ApiService] Callback registrado. Total para ${eventName}: ${totalCallbacks}`);
+    
     // Se o socket já existe, adicionar o listener imediatamente
     if (this.socket) {
+      console.log(`🔌 [ApiService] Socket existe, adicionando listener direto para: ${eventName}`);
       this.socket.on(eventName, callback);
+    } else {
+      console.log(`⚠️ [ApiService] Socket não existe ainda, callback será adicionado quando conectar`);
     }
   }
 
@@ -157,6 +165,16 @@ class ApiService {
     if (!this.socket) return;
 
     console.log('🎯 Configurando listeners de eventos de corrida...');
+    console.log('📊 [ApiService] Callbacks registrados até agora:', Array.from(this.eventCallbacks.keys()));
+    
+    // Configurar callbacks já registrados
+    this.eventCallbacks.forEach((callbacks, eventName) => {
+      console.log(`🔄 [ApiService] Configurando ${callbacks.length} callbacks para evento: ${eventName}`);
+      callbacks.forEach((callback, index) => {
+        console.log(`➕ [ApiService] Adicionando callback ${index + 1} para: ${eventName}`);
+        this.socket.on(eventName, callback);
+      });
+    });
 
     // Setup ride event listeners
     this.socket.on('ride_accepted', (data) => {
@@ -197,15 +215,24 @@ class ApiService {
 
   // Trigger callbacks for a specific event
   triggerCallbacks(eventName, data) {
+    console.log(`🔔 [ApiService] Tentando executar callbacks para: ${eventName}`);
     const callbacks = this.eventCallbacks.get(eventName);
-    if (callbacks) {
-      callbacks.forEach(callback => {
+    console.log(`📋 [ApiService] Callbacks registrados para ${eventName}:`, callbacks ? callbacks.length : 0);
+    
+    if (callbacks && callbacks.length > 0) {
+      console.log(`▶️ [ApiService] Executando ${callbacks.length} callbacks para ${eventName}`);
+      callbacks.forEach((callback, index) => {
         try {
+          console.log(`🎯 [ApiService] Executando callback ${index + 1}/${callbacks.length} para ${eventName}`);
           callback(data);
+          console.log(`✅ [ApiService] Callback ${index + 1} executado com sucesso`);
         } catch (error) {
-          console.error(`❌ Erro ao executar callback para ${eventName}:`, error);
+          console.error(`❌ Erro ao executar callback ${index + 1} para ${eventName}:`, error);
         }
       });
+    } else {
+      console.warn(`⚠️ [ApiService] Nenhum callback registrado para evento: ${eventName}`);
+      console.log(`📊 [ApiService] Eventos registrados:`, Array.from(this.eventCallbacks.keys()));
     }
   }
 
