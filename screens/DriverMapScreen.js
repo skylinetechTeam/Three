@@ -404,7 +404,14 @@ export default function DriverMapScreen({ navigation, route }) {
           // Update driver location in API if online and registered
           if (driverProfile?.apiDriverId && isOnline) {
             try {
-              apiService.updateDriverLocation(driverProfile.apiDriverId, newLocation.coords);
+              // Convert location format from {latitude, longitude} to {lat, lng}
+              const locationData = {
+                lat: newLocation.coords.latitude,
+                lng: newLocation.coords.longitude,
+                speed: newLocation.coords.speed || 0,
+                heading: newLocation.coords.heading || 0
+              };
+              apiService.updateDriverLocation(driverProfile.apiDriverId, locationData);
             } catch (error) {
               console.warn('Failed to update location in API:', error);
             }
@@ -413,7 +420,14 @@ export default function DriverMapScreen({ navigation, route }) {
           // Update ride location if in active ride
           if (activeRide?.id && driverProfile?.apiDriverId) {
             try {
-              apiService.updateRideLocation(activeRide.id, driverProfile.apiDriverId, newLocation.coords);
+              // Convert location format from {latitude, longitude} to {lat, lng}
+              const locationData = {
+                lat: newLocation.coords.latitude,
+                lng: newLocation.coords.longitude,
+                speed: newLocation.coords.speed || 0,
+                heading: newLocation.coords.heading || 0
+              };
+              apiService.updateRideLocation(activeRide.id, driverProfile.apiDriverId, locationData);
             } catch (error) {
               console.warn('Failed to update ride location:', error);
             }
