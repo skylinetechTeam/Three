@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const DB_KEYS = {
   USER_PROFILE: 'user_profile',
   DRIVER_PROFILE: 'driver_profile',
+  PASSENGER_PROFILE: 'passenger_profile',
   TRIP_HISTORY: 'trip_history',
   FAVORITE_DESTINATIONS: 'favorite_destinations',
   DRIVER_DATA: 'driver_data',
@@ -547,6 +548,42 @@ class LocalDatabase {
     } catch (error) {
       console.error('Error getting database size:', error);
       return 0;
+    }
+  }
+
+  // === PASSENGER PROFILE METHODS ===
+  async savePassengerProfile(profile) {
+    try {
+      await AsyncStorage.setItem(DB_KEYS.PASSENGER_PROFILE, JSON.stringify(profile));
+      return true;
+    } catch (error) {
+      console.error('Error saving passenger profile:', error);
+      return false;
+    }
+  }
+
+  async getPassengerProfile() {
+    try {
+      const profile = await AsyncStorage.getItem(DB_KEYS.PASSENGER_PROFILE);
+      return profile ? JSON.parse(profile) : null;
+    } catch (error) {
+      console.error('Error getting passenger profile:', error);
+      return null;
+    }
+  }
+
+  async updatePassengerProfile(updates) {
+    try {
+      const currentProfile = await this.getPassengerProfile();
+      if (currentProfile) {
+        const updatedProfile = { ...currentProfile, ...updates };
+        await AsyncStorage.setItem(DB_KEYS.PASSENGER_PROFILE, JSON.stringify(updatedProfile));
+        return updatedProfile;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error updating passenger profile:', error);
+      return null;
     }
   }
 

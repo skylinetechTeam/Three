@@ -16,6 +16,8 @@ import {
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import apiService from '../services/apiService';
+import LocalDatabase from '../services/localDatabase';
 
 const { width, height } = Dimensions.get('window');
 
@@ -37,6 +39,8 @@ export default function HomeScreen({ navigation }) {
   const [routeInfo, setRouteInfo] = useState(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isNavDropdownOpen, setIsNavDropdownOpen] = useState(false);
+  const [passengerProfile, setPassengerProfile] = useState(null);
+  const [currentRide, setCurrentRide] = useState(null);
   const webViewRef = useRef(null);
   const searchTimeoutRef = useRef(null);
   
@@ -56,8 +60,91 @@ export default function HomeScreen({ navigation }) {
         accuracy: Location.Accuracy.High,
       });
       setLocation(location);
+      
+      // Initialize passenger profile
+      await initializePassenger();
     })();
   }, []);
+
+  const initializePassenger = async () => {
+    try {
+      // Get or create passenger profile
+      let profile = await LocalDatabase.getPassengerProfile();
+      
+      if (!profile) {
+        // Create default passenger profile
+        profile = {
+          name: 'Usuário Demo',
+          phone: '923456789',
+          email: 'usuario@demo.com',
+          preferredPaymentMethod: 'cash',
+          apiRegistered: false,
+        };
+        await LocalDatabase.savePassengerProfile(profile);
+      }
+      
+      setPassengerProfile(profile);
+      
+      // Register with API if not already registered
+      if (!profile.apiRegistered) {
+        try {
+          const passengerData = {
+            name: profile.name,
+            phone: profile.phone,
+            email: profile.email,
+            preferredPaymentMethod: profile.preferredPaymentMethod
+          };
+          
+          const apiResponse = await apiService.registerPassenger(passengerData);
+          const passengerId = apiResponse.data.passengerId;
+          
+          // Update local profile with API ID
+          await LocalDatabase.updatePassengerProfile({
+            apiPassengerId: passengerId,
+            apiRegistered: true
+          });
+          
+          setPassengerProfile(prev => ({
+            ...prev,
+            apiPassengerId: passengerId,
+            apiRegistered: true
+          }));
+          
+          // Connect to socket
+          const socket = apiService.connectSocket('passenger', passengerId);
+          
+          if (socket) {
+            // Listen for ride updates
+            socket.on('ride_accepted', (data) => {
+              console.log('Corrida aceita:', data);
+              setIsSearchingDrivers(false);
+              setDriversFound(true);
+              // You can add more UI updates here
+            });
+            
+            socket.on('ride_started', (data) => {
+              console.log('Corrida iniciada:', data);
+              // Update UI for ride in progress
+            });
+            
+            socket.on('ride_completed', (data) => {
+              console.log('Corrida finalizada:', data);
+              // Show completion UI and rating
+            });
+          }
+          
+        } catch (apiError) {
+          console.warn('Passenger API registration failed:', apiError);
+        }
+      } else if (profile.apiPassengerId) {
+        // Connect to socket if already registered
+        apiService.connectSocket('passenger', profile.apiPassengerId);
+      }
+      
+    } catch (error) {
+      console.error('Error initializing passenger:', error);
+    }
+  };
 
   // Update map when location changes
   useEffect(() => {
@@ -463,24 +550,63 @@ export default function HomeScreen({ navigation }) {
         selectedLocation.lng
       );
       
-      // Iniciar busca de motoristas
+      // Iniciar busca de motoristas e criar solicitação via API
       console.log('🚗 Iniciando busca de motoristas...');
       setIsSearchingDrivers(true);
       setDriverSearchTime(0);
       setDriversFound(false);
       
-      // Simular busca de motoristas por 10 segundos
+      // Criar solicitação de corrida via API
+      if (passengerProfile?.apiPassengerId) {
+        try {
+          const estimatedDistance = routeInfo?.distance || 5;
+          const estimatedTime = routeInfo?.duration || 15;
+          const estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime);
+          
+          const rideData = {
+            passengerId: passengerProfile.apiPassengerId,
+            passengerName: passengerProfile.name,
+            passengerPhone: passengerProfile.phone,
+            pickup: {
+              address: 'Localização atual',
+              lat: location.coords.latitude,
+              lng: location.coords.longitude
+            },
+            destination: {
+              address: selectedLocation.name,
+              lat: selectedLocation.lat,
+              lng: selectedLocation.lng
+            },
+            estimatedFare: estimatedFare,
+            estimatedDistance: estimatedDistance,
+            estimatedTime: estimatedTime,
+            paymentMethod: passengerProfile.preferredPaymentMethod || 'cash',
+            vehicleType: selectedTaxiType === 'Premium' ? 'premium' : 'standard'
+          };
+          
+          const rideResponse = await apiService.createRideRequest(rideData);
+          setCurrentRide(rideResponse.data.ride);
+          
+          console.log('✅ Solicitação criada via API:', rideResponse);
+          
+        } catch (apiError) {
+          console.error('❌ Erro ao criar solicitação via API:', apiError);
+          // Continue with simulation if API fails
+        }
+      }
+      
+      // Simular busca de motoristas por 30 segundos (tempo para motoristas responderem)
       const driverSearchInterval = setInterval(() => {
         setDriverSearchTime(prev => {
           const newTime = prev + 1;
           console.log('⏱️ Tempo de busca:', newTime, 'segundos');
           
-          if (newTime >= 10) {
+          if (newTime >= 30) {
             clearInterval(driverSearchInterval);
             setIsSearchingDrivers(false);
             setDriversFound(false);
-            console.log('❌ Motoristas não encontrados após 10 segundos');
-            return 10; // Manter em 10 para mostrar a modal
+            console.log('❌ Nenhum motorista aceitou a corrida após 30 segundos');
+            return 30;
           }
           return newTime;
         });

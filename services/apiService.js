@@ -1,8 +1,9 @@
 // Serviço para integração com a API Node.js
 import io from 'socket.io-client';
+import { API_CONFIG, ENDPOINTS } from '../config/api';
 
-const API_BASE_URL = 'http://localhost:3000/api';
-const SOCKET_URL = 'http://localhost:3000';
+const API_BASE_URL = API_CONFIG.API_BASE_URL;
+const SOCKET_URL = API_CONFIG.SOCKET_URL;
 
 class ApiService {
   constructor() {
@@ -300,6 +301,30 @@ class ApiService {
       return data;
     } catch (error) {
       console.error('❌ Erro ao atualizar status:', error);
+      throw error;
+    }
+  }
+
+  // Atualizar localização do motorista
+  async updateDriverLocation(driverId, location) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/drivers/${driverId}/location`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ location }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Erro ao atualizar localização');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('❌ Erro ao atualizar localização:', error);
       throw error;
     }
   }

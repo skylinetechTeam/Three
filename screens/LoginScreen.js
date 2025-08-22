@@ -14,6 +14,7 @@ import {
 import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
 import LocalDatabase from "../services/localDatabase";
+import apiService from "../services/apiService";
 import { COLORS, SIZES, FONTS, SHADOWS, COMMON_STYLES } from "../config/theme";
 
 export default function LoginScreen({ navigation }) {
@@ -64,6 +65,31 @@ export default function LoginScreen({ navigation }) {
         isLoggedIn: true,
         lastLogin: new Date().toISOString(),
       });
+      
+      // Get or create passenger profile and connect to API
+      let passengerProfile = await LocalDatabase.getPassengerProfile();
+      
+      if (!passengerProfile) {
+        passengerProfile = {
+          name: storedProfile.nome,
+          phone: storedProfile.telefone,
+          email: storedProfile.email,
+          preferredPaymentMethod: 'cash',
+          password: storedProfile.password,
+          isLoggedIn: true,
+          apiRegistered: false,
+        };
+        await LocalDatabase.savePassengerProfile(passengerProfile);
+      }
+      
+      // Connect to API socket if registered
+      if (passengerProfile.apiPassengerId) {
+        try {
+          apiService.connectSocket('passenger', passengerProfile.apiPassengerId);
+        } catch (socketError) {
+          console.warn('Socket connection failed:', socketError);
+        }
+      }
 
       Toast.show({
         type: "success",

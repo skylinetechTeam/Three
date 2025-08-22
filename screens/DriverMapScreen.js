@@ -16,6 +16,7 @@ import * as Location from 'expo-location';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import LocalDatabase from '../services/localDatabase';
+import apiService from '../services/apiService';
 import Toast from 'react-native-toast-message';
 
 const { width, height } = Dimensions.get('window');
@@ -29,6 +30,7 @@ export default function DriverMapScreen({ navigation, route }) {
   const [currentRequest, setCurrentRequest] = useState(null);
   const [navigationMode, setNavigationMode] = useState(false);
   const [ridePhase, setRidePhase] = useState('pickup'); // 'pickup' or 'dropoff'
+  const [acceptingRequest, setAcceptingRequest] = useState(false);
   const webViewRef = useRef(null);
   const insets = useSafeAreaInsets();
 
@@ -67,6 +69,40 @@ export default function DriverMapScreen({ navigation, route }) {
       if (profile) {
         setDriverProfile(profile);
         setIsOnline(onlineStatus);
+        
+        // Conectar ao socket se temos ID da API
+        if (profile.apiDriverId) {
+          const socket = apiService.connectSocket('driver', profile.apiDriverId);
+          
+          if (socket) {
+            // Escutar novas solicitações de corrida
+            socket.on('new_ride_request', (data) => {
+              console.log('Nova solicitação recebida:', data);
+              setCurrentRequest(data.ride);
+              setShowRequestModal(true);
+              
+              Toast.show({
+                type: "info",
+                text1: "Nova solicitação!",
+                text2: `Corrida para ${data.ride.destination.address}`,
+              });
+            });
+            
+            // Escutar quando uma corrida não está mais disponível
+            socket.on('ride_unavailable', (data) => {
+              console.log('Corrida não disponível:', data);
+              if (currentRequest?.id === data.rideId) {
+                setShowRequestModal(false);
+                setCurrentRequest(null);
+                Toast.show({
+                  type: "info",
+                  text1: "Corrida indisponível",
+                  text2: data.message,
+                });
+              }
+            });
+          }
+        }
       }
     } catch (error) {
       console.error('Error initializing driver:', error);
@@ -98,6 +134,24 @@ export default function DriverMapScreen({ navigation, route }) {
         (newLocation) => {
           setLocation(newLocation);
           updateMapLocation(newLocation);
+          
+          // Update driver location in API if online and registered
+          if (driverProfile?.apiDriverId && isOnline) {
+            try {
+              apiService.updateDriverLocation(driverProfile.apiDriverId, newLocation.coords);
+            } catch (error) {
+              console.warn('Failed to update location in API:', error);
+            }
+          }
+          
+          // Update ride location if in active ride
+          if (activeRide?.id && driverProfile?.apiDriverId) {
+            try {
+              apiService.updateRideLocation(activeRide.id, driverProfile.apiDriverId, newLocation.coords);
+            } catch (error) {
+              console.warn('Failed to update ride location:', error);
+            }
+          }
         }
       );
     } catch (error) {
@@ -120,6 +174,16 @@ export default function DriverMapScreen({ navigation, route }) {
   const toggleOnlineStatus = async () => {
     try {
       const newStatus = !isOnline;
+      
+      // Update status in API if driver is registered
+      if (driverProfile?.apiDriverId) {
+        try {
+          await apiService.updateDriverStatus(driverProfile.apiDriverId, newStatus, location?.coords);
+        } catch (apiError) {
+          console.warn('API status update failed:', apiError);
+        }
+      }
+      
       await LocalDatabase.setDriverOnlineStatus(newStatus);
       setIsOnline(newStatus);
 
@@ -174,8 +238,30 @@ export default function DriverMapScreen({ navigation, route }) {
     setShowRequestModal(true);
   };
 
-  const acceptRequest = () => {
-    if (currentRequest) {
+  const acceptRequest = async () => {
+    if (!currentRequest || !driverProfile) return;
+    
+    try {
+      setAcceptingRequest(true);
+      
+      // Aceitar corrida via API
+      if (driverProfile.apiDriverId) {
+        const driverData = {
+          driverId: driverProfile.apiDriverId,
+          driverName: driverProfile.nome || 'Motorista',
+          driverPhone: driverProfile.telefone || driverProfile.phone,
+          vehicleInfo: {
+            make: driverProfile.veiculo?.marca || 'Toyota',
+            model: driverProfile.veiculo?.modelo || 'Corolla',
+            year: driverProfile.veiculo?.ano || 2020,
+            color: driverProfile.veiculo?.cor || 'Branco',
+            plate: driverProfile.veiculo?.placa || 'LD-12-34-AB'
+          }
+        };
+        
+        await apiService.acceptRide(currentRequest.id, driverData);
+      }
+      
       setActiveRide(currentRequest);
       setNavigationMode(true);
       setRidePhase('pickup');
@@ -203,17 +289,42 @@ export default function DriverMapScreen({ navigation, route }) {
       }, 1000);
       
       setCurrentRequest(null);
+      
+    } catch (error) {
+      console.error('Error accepting ride:', error);
+      Toast.show({
+        type: "error",
+        text1: "Erro ao aceitar corrida",
+        text2: "Tente novamente",
+      });
+    } finally {
+      setAcceptingRequest(false);
     }
   };
 
-  const rejectRequest = () => {
-    Toast.show({
-      type: "info",
-      text1: "Corrida recusada",
-      text2: "Aguardando nova solicitação...",
-    });
-    setShowRequestModal(false);
-    setCurrentRequest(null);
+  const rejectRequest = async () => {
+    if (!currentRequest || !driverProfile) return;
+    
+    try {
+      // Rejeitar corrida via API
+      if (driverProfile.apiDriverId) {
+        await apiService.rejectRide(currentRequest.id, driverProfile.apiDriverId, 'Driver declined');
+      }
+      
+      Toast.show({
+        type: "info",
+        text1: "Corrida recusada",
+        text2: "Aguardando nova solicitação...",
+      });
+      setShowRequestModal(false);
+      setCurrentRequest(null);
+      
+    } catch (error) {
+      console.error('Error rejecting ride:', error);
+      // Still hide the modal even if API call fails
+      setShowRequestModal(false);
+      setCurrentRequest(null);
+    }
   };
 
   const startNavigationToDestination = () => {
@@ -238,25 +349,47 @@ export default function DriverMapScreen({ navigation, route }) {
         [
           {
             text: 'Passageiro Embarcou',
-            onPress: () => {
-              setRidePhase('dropoff');
-              Toast.show({
-                type: "success",
-                text1: "Corrida iniciada!",
-                text2: "Navegando para o destino",
-              });
-              
-              // Start navigation to destination
-              setTimeout(() => {
-                if (webViewRef.current) {
-                  const script = `
-                    if (typeof startNavigation === 'function') {
-                      startNavigation(${activeRide.destination.lat}, ${activeRide.destination.lng}, '${activeRide.passengerName}', 'dropoff');
-                    }
-                  `;
-                  webViewRef.current.postMessage(script);
+            onPress: async () => {
+              try {
+                // Start ride via API
+                if (driverProfile?.apiDriverId && activeRide?.id) {
+                  await apiService.startRide(
+                    activeRide.id, 
+                    driverProfile.apiDriverId, 
+                    location?.coords
+                  );
                 }
-              }, 1000);
+                
+                setRidePhase('dropoff');
+                Toast.show({
+                  type: "success",
+                  text1: "Corrida iniciada!",
+                  text2: "Navegando para o destino",
+                });
+                
+                // Start navigation to destination
+                setTimeout(() => {
+                  if (webViewRef.current) {
+                    const script = `
+                      if (typeof startNavigation === 'function') {
+                        startNavigation(${activeRide.destination.lat}, ${activeRide.destination.lng}, '${activeRide.passengerName}', 'dropoff');
+                      }
+                    `;
+                    webViewRef.current.postMessage(script);
+                  }
+                }, 1000);
+                
+              } catch (error) {
+                console.error('Error starting ride:', error);
+                Toast.show({
+                  type: "error",
+                  text1: "Erro ao iniciar corrida",
+                  text2: "Continuando localmente",
+                });
+                
+                // Continue locally even if API fails
+                setRidePhase('dropoff');
+              }
             }
           }
         ]
@@ -269,26 +402,57 @@ export default function DriverMapScreen({ navigation, route }) {
         [
           {
             text: 'Finalizar Corrida',
-            onPress: () => {
-              const fareEarned = activeRide.fare;
-              setActiveRide(null);
-              setNavigationMode(false);
-              setRidePhase('pickup');
-              
-              if (webViewRef.current) {
-                const script = `
-                  if (typeof clearNavigation === 'function') {
-                    clearNavigation();
-                  }
-                `;
-                webViewRef.current.postMessage(script);
+            onPress: async () => {
+              try {
+                const fareEarned = activeRide.estimatedFare || activeRide.fare;
+                
+                // Complete ride via API
+                if (driverProfile?.apiDriverId && activeRide?.id) {
+                  const completionData = {
+                    dropoffLocation: location?.coords,
+                    actualFare: fareEarned,
+                    paymentConfirmed: true
+                  };
+                  
+                  await apiService.completeRide(
+                    activeRide.id, 
+                    driverProfile.apiDriverId, 
+                    completionData
+                  );
+                }
+                
+                setActiveRide(null);
+                setNavigationMode(false);
+                setRidePhase('pickup');
+                
+                if (webViewRef.current) {
+                  const script = `
+                    if (typeof clearNavigation === 'function') {
+                      clearNavigation();
+                    }
+                  `;
+                  webViewRef.current.postMessage(script);
+                }
+                
+                Toast.show({
+                  type: "success",
+                  text1: "Corrida concluída!",
+                  text2: `Você ganhou ${fareEarned} AOA`,
+                });
+                
+              } catch (error) {
+                console.error('Error completing ride:', error);
+                Toast.show({
+                  type: "success",
+                  text1: "Corrida concluída!",
+                  text2: "Finalizando localmente",
+                });
+                
+                // Continue locally even if API fails
+                setActiveRide(null);
+                setNavigationMode(false);
+                setRidePhase('pickup');
               }
-              
-              Toast.show({
-                type: "success",
-                text1: "Corrida concluída!",
-                text2: `Você ganhou ${fareEarned} AOA`,
-              });
             }
           }
         ]

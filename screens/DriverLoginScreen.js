@@ -17,6 +17,7 @@ import {
 import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
 import LocalDatabase from "../services/localDatabase";
+import apiService from "../services/apiService";
 import { COLORS, SIZES, FONTS, SHADOWS, COMMON_STYLES } from "../config/theme";
 import * as ImagePicker from 'expo-image-picker';
 
@@ -132,11 +133,11 @@ export default function DriverLoginScreen({ navigation }) {
     try {
       const input = (emailOrPhone || '').trim();
       
-      // Verificar se existe um perfil de motorista cadastrado
+      // Verificar se existe um perfil de motorista cadastrado localmente
       let storedDriverProfile = await LocalDatabase.getDriverProfile();
       
       if (!storedDriverProfile) {
-        // Criar um perfil padrão para demonstração
+        // Criar um perfil padrão para demonstração (será registrado na API depois)
         const defaultDriverProfile = {
           nome: 'João Silva',
           email: 'joao.motorista@email.com',
@@ -153,6 +154,7 @@ export default function DriverLoginScreen({ navigation }) {
           joinDate: '2023-01-15',
           isLoggedIn: false,
           isOnline: false,
+          apiRegistered: false, // Flag para saber se já foi registrado na API
         };
         
         await LocalDatabase.saveDriverProfile(defaultDriverProfile);
@@ -257,22 +259,67 @@ export default function DriverLoginScreen({ navigation }) {
 
     try {
       const input = (emailOrPhone || '').trim();
+      const driverProfile = await LocalDatabase.getDriverProfile();
+      
+      // Registrar motorista na API se ainda não foi registrado
+      let apiDriverId = driverProfile?.apiDriverId;
+      
+      if (!driverProfile?.apiRegistered) {
+        try {
+          const driverData = {
+            name: driverProfile.nome || 'João Silva',
+            phone: input,
+            email: driverProfile.email,
+            licenseNumber: driverProfile.licenseNumber || 'CNH123456789',
+            vehicleInfo: {
+              make: driverProfile.veiculo?.marca || 'Toyota',
+              model: driverProfile.veiculo?.modelo || 'Corolla',
+              year: driverProfile.veiculo?.ano || 2020,
+              color: driverProfile.veiculo?.cor || 'Branco',
+              plate: driverProfile.veiculo?.placa || 'LD-12-34-AB'
+            }
+          };
+
+          const apiResponse = await apiService.registerDriver(driverData);
+          apiDriverId = apiResponse.data.driverId;
+          
+          Toast.show({
+            type: "success",
+            text1: "Registrado na API!",
+            text2: "Motorista registrado com sucesso no servidor",
+          });
+        } catch (apiError) {
+          console.warn('API registration failed, continuing with local:', apiError);
+          // Continue with local login even if API fails
+        }
+      }
       
       // Atualizar a senha do motorista e garantir que o telefone esteja correto
       await LocalDatabase.updateDriverProfile({
         password: newPassword,
-        telefone: emailOrPhone, // Garantir que o telefone usado no login seja salvo
-        photo: driverPhoto, // Salvar a foto do motorista
+        telefone: input,
+        photo: driverPhoto,
         isLoggedIn: true,
         lastLogin: new Date().toISOString(),
+        apiRegistered: true,
+        apiDriverId: apiDriverId,
       });
 
-      const driverProfile = await LocalDatabase.getDriverProfile();
+      const updatedProfile = await LocalDatabase.getDriverProfile();
+
+      // Conectar ao socket se temos ID da API
+      if (apiDriverId) {
+        try {
+          apiService.connectSocket('driver', apiDriverId);
+        } catch (socketError) {
+          console.warn('Socket connection failed:', socketError);
+        }
+      }
 
       Toast.show({
         type: "success",
         text1: "Bem-vindo!",
-        text2: `Olá, ${driverProfile.nome || driverProfile.fullName || driverProfile.email}!`,
+        text2: `Olá, ${updatedProfile.nome || updatedProfile.fullName || updatedProfile.email}!`,
       });
 
       // Navegar para a área do motorista

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import LocalDatabase from '../services/localDatabase';
+import apiService from '../services/apiService';
 import Toast from 'react-native-toast-message';
 
 const { width, height } = Dimensions.get('window');
@@ -23,25 +24,93 @@ export default function DriverRequestsScreen({ navigation }) {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [acceptingRequest, setAcceptingRequest] = useState(false);
+  const [driverProfile, setDriverProfile] = useState(null);
+  const [location, setLocation] = useState(null);
 
   useEffect(() => {
+    initializeDriver();
     loadRideRequests();
     checkOnlineStatus();
+    getCurrentLocation();
     
-    // Simulate receiving new ride requests when online
-    const interval = setInterval(() => {
-      if (isOnline) {
-        simulateNewRequest();
+    return () => {
+      // Cleanup socket connection if needed
+      if (driverProfile?.apiDriverId) {
+        apiService.disconnectSocket();
       }
-    }, 30000); // Check every 30 seconds
+    };
+  }, []);
 
-    return () => clearInterval(interval);
-  }, [isOnline]);
+  useEffect(() => {
+    // Setup socket listeners when driver profile is loaded
+    if (driverProfile?.apiDriverId) {
+      const socket = apiService.connectSocket('driver', driverProfile.apiDriverId);
+      
+      if (socket) {
+        socket.on('new_ride_request', (data) => {
+          console.log('Nova solicitação recebida:', data);
+          setRideRequests(prev => [data.ride, ...prev]);
+          
+          Toast.show({
+            type: "info",
+            text1: "Nova solicitação!",
+            text2: `Corrida para ${data.ride.destination.address}`,
+          });
+        });
+        
+        socket.on('ride_unavailable', (data) => {
+          console.log('Corrida não disponível:', data);
+          setRideRequests(prev => prev.filter(req => req.id !== data.rideId));
+        });
+      }
+      
+      // Load ride requests when we have both driver profile and location
+      if (location) {
+        loadRideRequests();
+      }
+    }
+  }, [driverProfile, location]);
+
+  const initializeDriver = async () => {
+    try {
+      const profile = await LocalDatabase.getDriverProfile();
+      if (profile) {
+        setDriverProfile(profile);
+      }
+    } catch (error) {
+      console.error('Error initializing driver:', error);
+    }
+  };
+
+  const getCurrentLocation = async () => {
+    try {
+      const Location = await import('expo-location');
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status === 'granted') {
+        const currentLocation = await Location.getCurrentPositionAsync({});
+        setLocation(currentLocation);
+      }
+    } catch (error) {
+      console.error('Error getting location:', error);
+    }
+  };
 
   const loadRideRequests = async () => {
     try {
+      // Load from API if driver is registered
+      if (driverProfile?.apiDriverId && location) {
+        try {
+          const apiResponse = await apiService.getPendingRides(location.coords, 10);
+          setRideRequests(apiResponse.data || []);
+          return;
+        } catch (apiError) {
+          console.warn('Failed to load from API, using local data:', apiError);
+        }
+      }
+      
+      // Fallback to local database
       const requests = await LocalDatabase.getRideRequests();
-      // Filter requests for this driver (pending status)
       const driverRequests = requests.filter(request => 
         request.status === 'pending' || request.status === 'accepted'
       );
@@ -102,17 +171,43 @@ export default function DriverRequestsScreen({ navigation }) {
     try {
       setAcceptingRequest(true);
       
-      // Update request status to accepted
-      await LocalDatabase.updateRideRequestStatus(requestId, 'accepted');
-      
-      // Update local state
-      setRideRequests(prev => 
-        prev.map(request => 
-          request.id === requestId 
-            ? { ...request, status: 'accepted' }
-            : request
-        )
-      );
+      // Accept ride via API if driver is registered
+      if (driverProfile?.apiDriverId) {
+        try {
+          const driverData = {
+            driverId: driverProfile.apiDriverId,
+            driverName: driverProfile.nome || 'Motorista',
+            driverPhone: driverProfile.telefone || driverProfile.phone,
+            vehicleInfo: {
+              make: driverProfile.veiculo?.marca || 'Toyota',
+              model: driverProfile.veiculo?.modelo || 'Corolla',
+              year: driverProfile.veiculo?.ano || 2020,
+              color: driverProfile.veiculo?.cor || 'Branco',
+              plate: driverProfile.veiculo?.placa || 'LD-12-34-AB'
+            }
+          };
+          
+          await apiService.acceptRide(requestId, driverData);
+          
+          // Remove from local list since it's accepted
+          setRideRequests(prev => prev.filter(req => req.id !== requestId));
+          
+        } catch (apiError) {
+          console.error('API accept failed:', apiError);
+          throw apiError;
+        }
+      } else {
+        // Fallback to local database
+        await LocalDatabase.updateRideRequestStatus(requestId, 'accepted');
+        
+        setRideRequests(prev => 
+          prev.map(request => 
+            request.id === requestId 
+              ? { ...request, status: 'accepted' }
+              : request
+          )
+        );
+      }
 
       Toast.show({
         type: "success",
@@ -142,7 +237,17 @@ export default function DriverRequestsScreen({ navigation }) {
 
   const rejectRideRequest = async (requestId) => {
     try {
-      await LocalDatabase.updateRideRequestStatus(requestId, 'rejected');
+      // Reject ride via API if driver is registered
+      if (driverProfile?.apiDriverId) {
+        try {
+          await apiService.rejectRide(requestId, driverProfile.apiDriverId, 'Driver declined');
+        } catch (apiError) {
+          console.warn('API reject failed:', apiError);
+        }
+      } else {
+        // Fallback to local database
+        await LocalDatabase.updateRideRequestStatus(requestId, 'rejected');
+      }
       
       setRideRequests(prev => 
         prev.filter(request => request.id !== requestId)

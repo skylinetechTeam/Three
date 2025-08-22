@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
+import apiService from "../services/apiService";
 
 export default function SetPasswordScreen({ navigation, route = {} }) {
   const [password, setPassword] = useState("");
@@ -55,16 +56,59 @@ export default function SetPasswordScreen({ navigation, route = {} }) {
         password,
         isLoggedIn: true,
         createdAt: userData?.createdAt || new Date().toISOString(),
+        apiRegistered: false,
       };
 
       const LocalDatabase = (await import('../services/localDatabase')).default;
+      
+      // Save locally first
       await LocalDatabase.saveUserProfile(profileToSave);
-
-      Toast.show({
-        type: "success",
-        text1: "Conta criada",
-        text2: "Bem-vindo!",
-      });
+      
+      // Also save as passenger profile
+      const passengerProfile = {
+        name: userData.nome,
+        phone: userData.telefone,
+        email: userData.email,
+        preferredPaymentMethod: 'cash',
+        password: password,
+        isLoggedIn: true,
+        apiRegistered: false,
+      };
+      
+      await LocalDatabase.savePassengerProfile(passengerProfile);
+      
+      // Register with API
+      try {
+        const passengerData = {
+          name: userData.nome,
+          phone: userData.telefone,
+          email: userData.email,
+          preferredPaymentMethod: 'cash'
+        };
+        
+        const apiResponse = await apiService.registerPassenger(passengerData);
+        const passengerId = apiResponse.data.passengerId;
+        
+        // Update with API ID
+        await LocalDatabase.updatePassengerProfile({
+          apiPassengerId: passengerId,
+          apiRegistered: true
+        });
+        
+        Toast.show({
+          type: "success",
+          text1: "Conta criada",
+          text2: "Registrado com sucesso no servidor!",
+        });
+        
+      } catch (apiError) {
+        console.warn('API registration failed:', apiError);
+        Toast.show({
+          type: "success",
+          text1: "Conta criada",
+          text2: "Bem-vindo! (modo offline)",
+        });
+      }
 
       navigation.reset({
         index: 0,

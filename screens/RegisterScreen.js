@@ -15,6 +15,7 @@ import Toast from "react-native-toast-message";
 import { FontAwesome, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { COLORS, SIZES, FONTS, COMMON_STYLES } from "../config/theme";
 import LocalDatabase from "../services/localDatabase";
+import apiService from "../services/apiService";
 
 export default function RegisterScreen({ navigation }) {
   const [nome, setNome] = useState("");
