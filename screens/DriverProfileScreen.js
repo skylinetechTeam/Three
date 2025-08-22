@@ -92,7 +92,7 @@ export default function DriverProfileScreen({ navigation }) {
       await LocalDatabase.saveAppSettings({ notifications: value });
       
       Toast.show({
-        type: "info",
+        type: "success",
         text1: "Notificações",
         text2: value ? "Ativadas" : "Desativadas",
       });
@@ -107,7 +107,7 @@ export default function DriverProfileScreen({ navigation }) {
       await LocalDatabase.saveAppSettings({ autoAccept: value });
       
       Toast.show({
-        type: "info",
+        type: "success",
         text1: "Aceitar automaticamente",
         text2: value ? "Ativado" : "Desativado",
       });
@@ -183,7 +183,9 @@ export default function DriverProfileScreen({ navigation }) {
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         
-        <Text style={styles.headerTitle}>Perfil do Motorista</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Perfil do Motorista</Text>
+        </View>
         
         <TouchableOpacity 
           style={styles.editButton}
@@ -202,18 +204,18 @@ export default function DriverProfileScreen({ navigation }) {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Card */}
         <View style={styles.profileCard}>
-                     <View style={styles.avatarContainer}>
-             {driverProfile.photo ? (
-               <Image source={{ uri: driverProfile.photo }} style={styles.avatarImage} />
-             ) : (
-               <View style={styles.avatar}>
-                 <Text style={styles.avatarText}>
-                   {driverProfile.nome?.charAt(0).toUpperCase() || 'M'}
-                 </Text>
-               </View>
-             )}
-             <View style={[styles.statusIndicator, isOnline ? styles.online : styles.offline]} />
-           </View>
+          <View style={styles.avatarContainer}>
+            {driverProfile.photo ? (
+              <Image source={{ uri: driverProfile.photo }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {driverProfile.nome?.charAt(0).toUpperCase() || 'M'}
+                </Text>
+              </View>
+            )}
+            <View style={[styles.statusIndicator, isOnline ? styles.online : styles.offline]} />
+          </View>
           
           <View style={styles.profileInfo}>
             <Text style={styles.driverName}>{driverProfile.nome}</Text>
@@ -221,15 +223,16 @@ export default function DriverProfileScreen({ navigation }) {
               {isOnline ? 'Online - Disponível' : 'Offline'}
             </Text>
             
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <MaterialIcons name="star" size={16} color="#FFA500" />
-                <Text style={styles.statText}>{driverProfile.rating || '4.8'}</Text>
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <MaterialIcons name="star" size={20} color="#FFA500" />
+                <Text style={styles.statValue}>{driverProfile.rating || '4.8'}</Text>
+                <Text style={styles.statLabel}>Avaliação</Text>
               </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <MaterialIcons name="local-taxi" size={16} color="#2563EB" />
-                <Text style={styles.statText}>{driverProfile.totalTrips || '142'} corridas</Text>
+              <View style={styles.statCard}>
+                <MaterialIcons name="local-taxi" size={20} color="#2563EB" />
+                <Text style={styles.statValue}>{driverProfile.totalTrips || '142'}</Text>
+                <Text style={styles.statLabel}>Corridas</Text>
               </View>
             </View>
           </View>
@@ -426,30 +429,42 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 16,
     backgroundColor: '#2563EB',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
+  headerCenter: {
     flex: 1,
-    fontSize: 18,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#ffffff',
     textAlign: 'center',
   },
   editButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -458,50 +473,76 @@ const styles = StyleSheet.create({
   },
   profileCard: {
     backgroundColor: '#ffffff',
-    margin: 20,
-    borderRadius: 16,
-    padding: 20,
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 24,
+    borderRadius: 20,
+    padding: 24,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
   },
   avatarContainer: {
     position: 'relative',
     marginBottom: 16,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: '#2563EB',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
   avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: 'bold',
     color: '#ffffff',
   },
   statusIndicator: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 3,
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 4,
     borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   online: {
     backgroundColor: '#10B981',
@@ -523,50 +564,56 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginBottom: 16,
   },
-  statsRow: {
+  statsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'space-around',
+    marginTop: 8,
   },
-  statItem: {
-    flexDirection: 'row',
+  statCard: {
     alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    minWidth: 80,
   },
-  statText: {
-    fontSize: 14,
-    color: '#374151',
-    marginLeft: 4,
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
     fontWeight: '500',
-  },
-  statDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: '#D1D5DB',
-    marginHorizontal: 16,
   },
   section: {
     marginHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 12,
+    marginBottom: 16,
+    marginLeft: 4,
   },
   actionCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 4,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 2.22,
-    elevation: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 6,
   },
   actionIcon: {
     marginRight: 16,
@@ -586,18 +633,18 @@ const styles = StyleSheet.create({
   },
   vehicleCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 4,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 2.22,
-    elevation: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 6,
   },
   vehicleIcon: {
     marginRight: 16,
@@ -622,16 +669,16 @@ const styles = StyleSheet.create({
   },
   settingCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 4,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 2.22,
-    elevation: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 6,
   },
   settingRow: {
     flexDirection: 'row',
@@ -665,16 +712,16 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 4,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 2.22,
-    elevation: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 6,
   },
   infoRow: {
     flexDirection: 'row',
@@ -688,19 +735,19 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 4,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 2.22,
-    elevation: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 6,
   },
   actionButtonText: {
     flex: 1,
@@ -711,19 +758,21 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 4,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 2.22,
-    elevation: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
   },
   logoutText: {
     fontSize: 16,

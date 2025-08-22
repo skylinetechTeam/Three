@@ -391,18 +391,13 @@ export default function DriverMapScreen({ navigation }) {
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.menuButton}
-          onPress={() => navigation.openDrawer?.() || navigation.goBack()}
-        >
-          <Ionicons name="menu" size={24} color="#ffffff" />
-        </TouchableOpacity>
-        
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Motorista</Text>
-          <Text style={styles.headerSubtitle}>
-            {driverProfile?.nome || 'Carregando...'}
-          </Text>
+        <View style={styles.headerLeft}>
+          <View style={styles.driverInfo}>
+            <Text style={styles.headerTitle}>Motorista</Text>
+            <Text style={styles.headerSubtitle}>
+              {driverProfile?.nome || 'Carregando...'}
+            </Text>
+          </View>
         </View>
 
         <TouchableOpacity 
@@ -411,9 +406,12 @@ export default function DriverMapScreen({ navigation }) {
         >
           <MaterialIcons 
             name={isOnline ? "radio-button-checked" : "radio-button-unchecked"} 
-            size={20} 
+            size={18} 
             color="#ffffff" 
           />
+          <Text style={styles.statusButtonText}>
+            {isOnline ? 'Online' : 'Offline'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -433,41 +431,22 @@ export default function DriverMapScreen({ navigation }) {
         />
       </View>
 
-      {/* Bottom Controls */}
-      <View style={styles.bottomControls}>
-        <TouchableOpacity 
-          style={styles.controlButton}
-          onPress={() => navigation.navigate('DriverRequests')}
-        >
-          <MaterialIcons name="assignment" size={24} color="#2563EB" />
-          <Text style={styles.controlButtonText}>Solicitações</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.controlButton}
-          onPress={() => {
-            if (webViewRef.current && location) {
-              const script = `
-                if (typeof updateDriverLocation === 'function') {
-                  updateDriverLocation(${location.coords.latitude}, ${location.coords.longitude});
-                }
-              `;
-              webViewRef.current.postMessage(script);
-            }
-          }}
-        >
-          <MaterialIcons name="my-location" size={24} color="#2563EB" />
-          <Text style={styles.controlButtonText}>Centralizar</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.controlButton}
-          onPress={() => navigation.navigate('DriverProfile')}
-        >
-          <MaterialIcons name="person" size={24} color="#2563EB" />
-          <Text style={styles.controlButtonText}>Perfil</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Floating Action Button for Centering */}
+      <TouchableOpacity 
+        style={styles.centerLocationButton}
+        onPress={() => {
+          if (webViewRef.current && location) {
+            const script = `
+              if (typeof updateDriverLocation === 'function') {
+                updateDriverLocation(${location.coords.latitude}, ${location.coords.longitude});
+              }
+            `;
+            webViewRef.current.postMessage(script);
+          }
+        }}
+      >
+        <MaterialIcons name="my-location" size={24} color="#ffffff" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -480,24 +459,27 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 16,
     backgroundColor: '#1F2937',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  menuButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerCenter: {
+  headerLeft: {
     flex: 1,
-    alignItems: 'center',
+  },
+  driverInfo: {
+    alignItems: 'flex-start',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#ffffff',
   },
@@ -509,11 +491,25 @@ const styles = StyleSheet.create({
   statusButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    minWidth: 80,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 25,
+    minWidth: 100,
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  statusButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginLeft: 6,
   },
   onlineButton: {
     backgroundColor: '#10B981',
@@ -527,23 +523,23 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  bottomControls: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  controlButton: {
-    flex: 1,
+  centerLocationButton: {
+    position: 'absolute',
+    bottom: 100,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#2563EB',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 8,
-  },
-  controlButtonText: {
-    fontSize: 12,
-    color: '#2563EB',
-    marginTop: 4,
-    fontWeight: '500',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
   },
 });
