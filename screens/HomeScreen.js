@@ -42,6 +42,12 @@ export default function HomeScreen({ navigation }) {
   const [isNavDropdownOpen, setIsNavDropdownOpen] = useState(false);
   const [passengerProfile, setPassengerProfile] = useState(null);
   const [currentRide, setCurrentRide] = useState(null);
+  const [showRideConfirmation, setShowRideConfirmation] = useState(false);
+  const [rideDetails, setRideDetails] = useState(null);
+  const [driverAccepted, setDriverAccepted] = useState(false);
+  const [assignedDriver, setAssignedDriver] = useState(null);
+  const [driverArrived, setDriverArrived] = useState(false);
+  const [rideStarted, setRideStarted] = useState(false);
   const webViewRef = useRef(null);
   const searchTimeoutRef = useRef(null);
   
@@ -65,6 +71,17 @@ export default function HomeScreen({ navigation }) {
       // Initialize passenger profile
       await initializePassenger();
     })();
+
+    // Cleanup function
+    return () => {
+      if (window.driverSearchInterval) {
+        clearInterval(window.driverSearchInterval);
+        window.driverSearchInterval = null;
+      }
+      if (apiService.socket) {
+        apiService.socket.disconnect();
+      }
+    };
   }, []);
 
   const initializePassenger = async () => {
@@ -85,6 +102,11 @@ export default function HomeScreen({ navigation }) {
       }
       
       setPassengerProfile(profile);
+      
+      // Connect to WebSocket for real-time updates
+      if (profile.apiPassengerId) {
+        apiService.connectSocket('passenger', profile.apiPassengerId);
+      }
       
       // Register with API if not already registered
       if (!profile.apiRegistered) {
@@ -488,6 +510,67 @@ export default function HomeScreen({ navigation }) {
               return await calculateRoute(startLat, startLng, endLat, endLng);
             };
 
+            // Driver location marker
+            let driverMarker = null;
+            
+            window.__updateRouteToDriver = async function(driverLat, driverLng, driverName) {
+              console.log('🚗 Updating route to driver:', driverLat, driverLng);
+              
+              // Clear existing route
+              if (routeLine) {
+                map.removeLayer(routeLine);
+                routeLine = null;
+              }
+              
+              // Add or update driver marker
+              if (driverMarker) {
+                map.removeLayer(driverMarker);
+              }
+              
+              driverMarker = L.marker([driverLat, driverLng], {
+                icon: L.divIcon({
+                  className: 'driver-marker',
+                  html: '<div style="background-color: #4285F4; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>',
+                  iconSize: [26, 26],
+                  iconAnchor: [13, 13]
+                })
+              }).addTo(map);
+              
+              driverMarker.bindPopup(driverName || 'Motorista');
+              
+              // Calculate route from user to driver
+              if (currentUserLocation) {
+                await calculateRoute(currentUserLocation.lat, currentUserLocation.lng, driverLat, driverLng);
+              }
+            };
+            
+            window.__updateDriverLocation = function(driverLat, driverLng) {
+              if (driverMarker) {
+                driverMarker.setLatLng([driverLat, driverLng]);
+                
+                // Update route if needed
+                if (currentUserLocation) {
+                  calculateRoute(currentUserLocation.lat, currentUserLocation.lng, driverLat, driverLng);
+                }
+              }
+            };
+            
+            window.__startRideToDestination = async function() {
+              console.log('🎯 Starting ride to destination');
+              
+              // Clear driver marker
+              if (driverMarker) {
+                map.removeLayer(driverMarker);
+                driverMarker = null;
+              }
+              
+              // Route to original destination
+              if (currentUserLocation && destinationMarker) {
+                const destLatLng = destinationMarker.getLatLng();
+                await calculateRoute(currentUserLocation.lat, currentUserLocation.lng, destLatLng.lat, destLatLng.lng);
+              }
+            };
+
             // Initialize with user location if available
             ${location ? `
               currentUserLocation = { lat: ${location.coords.latitude}, lng: ${location.coords.longitude} };
@@ -593,85 +676,45 @@ export default function HomeScreen({ navigation }) {
       webViewRef.current?.injectJavaScript(js);
       
       // Also calculate route info for React Native UI
-      await calculateRouteInfo(
+      const calculatedRoute = await calculateRouteInfo(
         location.coords.latitude, 
         location.coords.longitude, 
         selectedLocation.lat, 
         selectedLocation.lng
       );
       
-      // Iniciar busca de motoristas e criar solicitação via API
-      console.log('🚗 Iniciando busca de motoristas...');
-      setIsSearchingDrivers(true);
-      setDriverSearchTime(0);
-      setDriversFound(false);
+      // Show ride confirmation with details instead of immediately searching for drivers
+      const estimatedDistance = calculatedRoute?.distance || routeInfo?.distance || 5;
+      const estimatedTime = calculatedRoute?.duration || routeInfo?.duration || 15;
+      const estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime);
       
-      // Criar solicitação de corrida via API
-      if (passengerProfile?.apiPassengerId) {
-        try {
-          const estimatedDistance = routeInfo?.distance || 5;
-          const estimatedTime = routeInfo?.duration || 15;
-          const estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime);
-          
-          const rideData = {
-            passengerId: passengerProfile.apiPassengerId,
-            passengerName: passengerProfile.name,
-            passengerPhone: passengerProfile.phone,
-            pickup: {
-              address: 'Localização atual',
-              lat: location.coords.latitude,
-              lng: location.coords.longitude
-            },
-            destination: {
-              address: selectedLocation.name,
-              lat: selectedLocation.lat,
-              lng: selectedLocation.lng
-            },
-            estimatedFare: estimatedFare,
-            estimatedDistance: estimatedDistance,
-            estimatedTime: estimatedTime,
-            paymentMethod: passengerProfile.preferredPaymentMethod || 'cash',
-            vehicleType: selectedTaxiType === 'Premium' ? 'premium' : 'standard'
-          };
-          
-          const rideResponse = await apiService.createRideRequest(rideData);
-          setCurrentRide(rideResponse.data.ride);
-          
-          console.log('✅ Solicitação criada via API:', rideResponse);
-          
-        } catch (apiError) {
-          console.error('❌ Erro ao criar solicitação via API:', apiError);
-          // Continue with simulation if API fails
-        }
-      }
+      console.log('📊 Ride calculation:', {
+        calculatedRoute,
+        estimatedDistance: estimatedDistance / 1000, // Convert to km
+        estimatedTime: estimatedTime / 60, // Convert to minutes
+        estimatedFare
+      });
       
-      // Simular busca de motoristas por 30 segundos (tempo para motoristas responderem)
-      const driverSearchInterval = setInterval(() => {
-        setDriverSearchTime(prev => {
-          const newTime = prev + 1;
-          console.log('⏱️ Tempo de busca:', newTime, 'segundos');
-          
-          if (newTime >= 30) {
-            clearInterval(driverSearchInterval);
-            window.driverSearchInterval = null; // Limpar referência global
-            setIsSearchingDrivers(false);
-            setDriversFound(false);
-            console.log('❌ Nenhum motorista aceitou a corrida após 30 segundos');
-            
-            Toast.show({
-              type: "error",
-              text1: "Nenhum motorista encontrado",
-              text2: "Tente novamente em alguns minutos",
-            });
-            
-            return 30;
-          }
-          return newTime;
-        });
-      }, 1000);
+      const rideDetailsData = {
+        pickup: {
+          address: 'Localização atual',
+          lat: location.coords.latitude,
+          lng: location.coords.longitude
+        },
+        destination: {
+          address: selectedLocation.name,
+          lat: selectedLocation.lat,
+          lng: selectedLocation.lng
+        },
+        estimatedFare: estimatedFare,
+        estimatedDistance: estimatedDistance,
+        estimatedTime: estimatedTime,
+        paymentMethod: passengerProfile?.preferredPaymentMethod || 'cash',
+        vehicleType: selectedTaxiType === 'Premium' ? 'premium' : 'standard'
+      };
       
-      // Armazenar referência global para poder cancelar de outros lugares
-      window.driverSearchInterval = driverSearchInterval;
+      setRideDetails(rideDetailsData);
+      setShowRideConfirmation(true);
     }
   };
 
@@ -716,10 +759,214 @@ export default function HomeScreen({ navigation }) {
     setDriverSearchTime(0);
     setDriversFound(false);
     setRouteInfo(null);
+    setShowRideConfirmation(false);
+    setRideDetails(null);
+    setDriverAccepted(false);
+    setAssignedDriver(null);
+    setCurrentRide(null);
+    setDriverArrived(false);
+    setRideStarted(false);
     
     // Clear route on map
     const js = `window.__clearRoute(); true;`;
     webViewRef.current?.injectJavaScript(js);
+  };
+
+  const confirmRideRequest = async () => {
+    if (!rideDetails || !passengerProfile) return;
+    
+    console.log('🚗 Iniciando busca de motoristas...');
+    setShowRideConfirmation(false);
+    setIsSearchingDrivers(true);
+    setDriverSearchTime(0);
+    setDriversFound(false);
+    setDriverAccepted(false);
+    
+    // Criar solicitação de corrida via API
+    if (passengerProfile?.apiPassengerId) {
+      try {
+        const rideData = {
+          passengerId: passengerProfile.apiPassengerId,
+          passengerName: passengerProfile.name,
+          passengerPhone: passengerProfile.phone,
+          pickup: rideDetails.pickup,
+          destination: rideDetails.destination,
+          estimatedFare: rideDetails.estimatedFare,
+          estimatedDistance: rideDetails.estimatedDistance / 1000, // Convert to km
+          estimatedTime: rideDetails.estimatedTime / 60, // Convert to minutes
+          paymentMethod: rideDetails.paymentMethod,
+          vehicleType: rideDetails.vehicleType
+        };
+        
+        const rideResponse = await apiService.createRideRequest(rideData);
+        setCurrentRide(rideResponse.data.ride);
+        
+        console.log('✅ Solicitação criada via API:', rideResponse);
+        
+        // Setup WebSocket listener for ride acceptance
+        setupRideWebSocketListeners(rideResponse.data.ride.id);
+        
+      } catch (apiError) {
+        console.error('❌ Erro ao criar solicitação via API:', apiError);
+        // Continue with simulation if API fails
+      }
+    }
+    
+    // Simular busca de motoristas por 30 segundos (tempo para motoristas responderem)
+    const driverSearchInterval = setInterval(() => {
+      setDriverSearchTime(prev => {
+        const newTime = prev + 1;
+        console.log('⏱️ Tempo de busca:', newTime, 'segundos');
+        
+        // Check if driver accepted during search
+        if (driverAccepted) {
+          clearInterval(driverSearchInterval);
+          window.driverSearchInterval = null;
+          return prev; // Don't increment further
+        }
+        
+        if (newTime >= 30) {
+          clearInterval(driverSearchInterval);
+          window.driverSearchInterval = null;
+          setIsSearchingDrivers(false);
+          setDriversFound(false);
+          console.log('❌ Nenhum motorista aceitou a corrida após 30 segundos');
+          
+          Toast.show({
+            type: "error",
+            text1: "Nenhum motorista encontrado",
+            text2: "Tente novamente em alguns minutos",
+          });
+          
+          return 30;
+        }
+        return newTime;
+      });
+    }, 1000);
+    
+    // Armazenar referência global para poder cancelar de outros lugares
+    window.driverSearchInterval = driverSearchInterval;
+  };
+
+  const setupRideWebSocketListeners = (rideId) => {
+    if (!apiService.socket) {
+      console.log('⚠️ Socket not available for ride listeners');
+      return;
+    }
+
+    // Listen for ride acceptance
+    apiService.socket.on('rideAccepted', (data) => {
+      console.log('✅ Motorista aceitou a corrida:', data);
+      if (data.rideId === rideId) {
+        setDriverAccepted(true);
+        setAssignedDriver(data.driver);
+        setIsSearchingDrivers(false);
+        setDriversFound(true);
+        
+        // Clear the search interval
+        if (window.driverSearchInterval) {
+          clearInterval(window.driverSearchInterval);
+          window.driverSearchInterval = null;
+        }
+        
+        // Reset search time
+        setDriverSearchTime(0);
+        
+        // Update map to show route to driver
+        updateMapRouteToDriver(data.driver.location);
+        
+        Toast.show({
+          type: "success",
+          text1: "Motorista encontrado!",
+          text2: `${data.driver.name} está vindo buscar você`,
+        });
+      }
+    });
+
+    // Listen for driver location updates
+    apiService.socket.on('driverLocationUpdate', (data) => {
+      if (data.rideId === rideId && assignedDriver) {
+        updateDriverLocationOnMap(data.location);
+        
+        // Check if driver is close (within 100 meters)
+        const distance = calculateDistance(
+          location.coords.latitude,
+          location.coords.longitude,
+          data.location.lat,
+          data.location.lng
+        );
+        
+        if (distance < 0.1 && !driverArrived) { // Less than 100 meters
+          setDriverArrived(true);
+          Toast.show({
+            type: "success",
+            text1: "Motorista chegou!",
+            text2: "Seu motorista está próximo",
+          });
+          
+          // Auto-start ride after 10 seconds
+          setTimeout(() => {
+            startRide();
+          }, 10000);
+        }
+      }
+    });
+  };
+
+  const updateMapRouteToDriver = (driverLocation) => {
+    if (webViewRef.current && location && driverLocation) {
+      const js = `
+        window.__updateRouteToDriver(
+          ${driverLocation.lat}, 
+          ${driverLocation.lng}, 
+          'Motorista'
+        ); 
+        true;
+      `;
+      webViewRef.current.injectJavaScript(js);
+    }
+  };
+
+  const updateDriverLocationOnMap = (driverLocation) => {
+    if (webViewRef.current && driverLocation) {
+      const js = `
+        window.__updateDriverLocation(
+          ${driverLocation.lat}, 
+          ${driverLocation.lng}
+        ); 
+        true;
+      `;
+      webViewRef.current.injectJavaScript(js);
+    }
+  };
+
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Radius of the Earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c; // Distance in km
+  };
+
+  const startRide = () => {
+    console.log('🚀 Iniciando corrida...');
+    setRideStarted(true);
+    setDriverArrived(false);
+    
+    // Update map to show route to destination
+    if (webViewRef.current) {
+      const js = `window.__startRideToDestination(); true;`;
+      webViewRef.current.injectJavaScript(js);
+    }
+    
+    Toast.show({
+      type: "success",
+      text1: "Corrida iniciada!",
+      text2: "Você está a caminho do destino",
+    });
   };
 
   const getIconForCategory = (categories) => {
@@ -946,8 +1193,8 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       {/* Search and Taxi Controls OR Driver Search Animation */}
-      {console.log('🔍 Render condition - isSearchingDrivers:', isSearchingDrivers, 'driversFound:', driversFound)}
-      {!isSearchingDrivers ? (
+      {console.log('🔍 Render condition - isSearchingDrivers:', isSearchingDrivers, 'driversFound:', driversFound, 'showRideConfirmation:', showRideConfirmation)}
+      {!isSearchingDrivers && !showRideConfirmation && !driverAccepted ? (
         <View style={styles.bottomContainer}>
           {/* Search Input */}
           <TouchableOpacity
@@ -972,7 +1219,7 @@ export default function HomeScreen({ navigation }) {
       ) : null}
 
       {/* Route Info */}
-      {routeInfo && selectedDestination && !isSearchingDrivers && (
+      {routeInfo && selectedDestination && !isSearchingDrivers && !showRideConfirmation && (
         <View style={styles.routeInfoCard}>
           <View style={styles.routeInfoContent}>
             <View style={styles.routeInfoRow}>
@@ -984,6 +1231,83 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.routeDestination} numberOfLines={1}>
               Para: {selectedDestination.name}
             </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Ride Confirmation Modal */}
+      {showRideConfirmation && rideDetails && (
+        <View style={styles.confirmationOverlay}>
+          <View style={styles.confirmationCard}>
+            {/* Header */}
+            <View style={styles.confirmationHeader}>
+              <MaterialIcons name="local-taxi" size={32} color="#4285F4" />
+              <Text style={styles.confirmationTitle}>Confirmar Corrida</Text>
+            </View>
+
+            {/* Route Details */}
+            <View style={styles.routeDetails}>
+              <View style={styles.routePoint}>
+                <MaterialIcons name="my-location" size={20} color="#10B981" />
+                <Text style={styles.routePointText}>
+                  {rideDetails.pickup.address}
+                </Text>
+              </View>
+              <View style={styles.routeLine} />
+              <View style={styles.routePoint}>
+                <MaterialIcons name="place" size={20} color="#EF4444" />
+                <Text style={styles.routePointText}>
+                  {rideDetails.destination.address}
+                </Text>
+              </View>
+            </View>
+
+            {/* Ride Info */}
+            <View style={styles.rideInfo}>
+              <View style={styles.rideInfoRow}>
+                <MaterialIcons name="schedule" size={20} color="#6B7280" />
+                <Text style={styles.rideInfoText}>
+                  Tempo estimado: {Math.round(rideDetails.estimatedTime / 60)} min
+                </Text>
+              </View>
+              <View style={styles.rideInfoRow}>
+                <MaterialIcons name="straighten" size={20} color="#6B7280" />
+                <Text style={styles.rideInfoText}>
+                  Distância: {(rideDetails.estimatedDistance / 1000).toFixed(1)} km
+                </Text>
+              </View>
+              <View style={styles.rideInfoRow}>
+                <MaterialIcons name="payments" size={20} color="#6B7280" />
+                <Text style={styles.rideInfoText}>
+                  Preço estimado: {rideDetails.estimatedFare.toFixed(2)} €
+                </Text>
+              </View>
+              <View style={styles.rideInfoRow}>
+                <MaterialIcons name="payment" size={20} color="#6B7280" />
+                <Text style={styles.rideInfoText}>
+                  Pagamento: {rideDetails.paymentMethod === 'cash' ? 'Dinheiro' : 'Cartão'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.confirmationActions}>
+              <TouchableOpacity 
+                style={styles.confirmButton}
+                onPress={confirmRideRequest}
+              >
+                <Text style={styles.confirmButtonText}>
+                  Confirmar e Procurar Motorista
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.cancelConfirmButton}
+                onPress={() => setShowRideConfirmation(false)}
+              >
+                <Text style={styles.cancelConfirmButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       )}
@@ -1055,8 +1379,98 @@ export default function HomeScreen({ navigation }) {
         </View>
       )}
 
+      {/* Driver Status (Coming, Arrived, or In Ride) */}
+      {driverAccepted && assignedDriver && !isSearchingDrivers && (
+        <View style={styles.driverStatusOverlay}>
+          <View style={styles.driverStatusCard}>
+            {/* Driver Info Header */}
+            <View style={styles.driverHeader}>
+              <View style={styles.driverAvatar}>
+                <MaterialIcons name="person" size={24} color="#4285F4" />
+              </View>
+              <View style={styles.driverInfo}>
+                <Text style={styles.driverName}>{assignedDriver.name}</Text>
+                <Text style={styles.driverVehicle}>
+                  {assignedDriver.vehicleInfo?.make} {assignedDriver.vehicleInfo?.model}
+                </Text>
+                <Text style={styles.driverPlate}>
+                  {assignedDriver.vehicleInfo?.plate}
+                </Text>
+              </View>
+              <View style={styles.driverActions}>
+                <TouchableOpacity style={styles.callButton}>
+                  <MaterialIcons name="phone" size={20} color="#4285F4" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.messageButton}>
+                  <MaterialIcons name="message" size={20} color="#4285F4" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Status - Dynamic based on ride state */}
+            <View style={styles.statusContainer}>
+              <View style={[
+                styles.statusIcon,
+                rideStarted && styles.statusIconRide,
+                driverArrived && styles.statusIconArrived
+              ]}>
+                <MaterialIcons 
+                  name={rideStarted ? "navigation" : driverArrived ? "place" : "directions-car"} 
+                  size={20} 
+                  color={rideStarted ? "#8B5CF6" : driverArrived ? "#F59E0B" : "#10B981"} 
+                />
+              </View>
+              <Text style={[
+                styles.statusText,
+                rideStarted && styles.statusTextRide,
+                driverArrived && styles.statusTextArrived
+              ]}>
+                {rideStarted 
+                  ? "Em corrida para o destino" 
+                  : driverArrived 
+                    ? "Motorista chegou! Corrida iniciando..." 
+                    : "Motorista está vindo buscar você"
+                }
+              </Text>
+            </View>
+
+            {/* ETA or Progress */}
+            {!rideStarted && (
+              <View style={styles.etaContainer}>
+                <MaterialIcons name="schedule" size={16} color="#6B7280" />
+                <Text style={styles.etaText}>
+                  {driverArrived ? "Iniciando em instantes..." : "Chegada estimada: 5-8 min"}
+                </Text>
+              </View>
+            )}
+
+            {/* Action Buttons */}
+            {!rideStarted ? (
+              <TouchableOpacity 
+                style={styles.cancelRideButton}
+                onPress={handleNewSearch}
+              >
+                <Text style={styles.cancelRideButtonText}>Cancelar Corrida</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.rideProgressContainer}>
+                <Text style={styles.rideProgressText}>
+                  Destino: {rideDetails?.destination?.address}
+                </Text>
+                <TouchableOpacity 
+                  style={styles.endRideButton}
+                  onPress={handleNewSearch}
+                >
+                  <Text style={styles.endRideButtonText}>Finalizar Corrida</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
+
       {/* Drivers Not Found - Nova Interface */}
-      {!driversFound && !isSearchingDrivers && driverSearchTime >= 10 && (
+      {!driversFound && !isSearchingDrivers && driverSearchTime >= 10 && !driverAccepted && (
         <View style={styles.driverSearchOverlay}>
           <View style={styles.notFoundCard}>
             {/* Ícone animado */}
@@ -1810,5 +2224,246 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     maxWidth: '100%',
+  },
+  // Ride Confirmation Styles
+  confirmationOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2000,
+  },
+  confirmationCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    marginHorizontal: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
+    maxHeight: '80%',
+  },
+  confirmationHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  confirmationTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginTop: 8,
+  },
+  routeDetails: {
+    marginBottom: 20,
+  },
+  routePoint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  routePointText: {
+    fontSize: 14,
+    color: '#374151',
+    marginLeft: 12,
+    flex: 1,
+  },
+  routeLine: {
+    width: 2,
+    height: 20,
+    backgroundColor: '#D1D5DB',
+    marginLeft: 10,
+    marginVertical: 4,
+  },
+  rideInfo: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  rideInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  rideInfoText: {
+    fontSize: 14,
+    color: '#374151',
+    marginLeft: 12,
+    fontWeight: '500',
+  },
+  confirmationActions: {
+    gap: 12,
+  },
+  confirmButton: {
+    backgroundColor: '#4285F4',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  confirmButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cancelConfirmButton: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  cancelConfirmButtonText: {
+    color: '#6B7280',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  // Driver Status Styles
+  driverStatusOverlay: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    zIndex: 1500,
+  },
+  driverStatusCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  driverHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  driverAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#EBF4FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  driverInfo: {
+    flex: 1,
+  },
+  driverName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  driverVehicle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  driverPlate: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  driverActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  callButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#EBF4FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#EBF4FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  statusIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  statusText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  statusIconArrived: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusIconRide: {
+    backgroundColor: '#F3E8FF',
+  },
+  statusTextArrived: {
+    color: '#F59E0B',
+  },
+  statusTextRide: {
+    color: '#8B5CF6',
+  },
+  etaContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  etaText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginLeft: 8,
+  },
+  cancelRideButton: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cancelRideButtonText: {
+    color: '#EF4444',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  rideProgressContainer: {
+    alignItems: 'center',
+  },
+  rideProgressText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  endRideButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  endRideButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
