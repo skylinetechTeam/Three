@@ -11,6 +11,7 @@ import {
   Modal,
   Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import LocalDatabase from '../services/localDatabase';
 import Toast from 'react-native-toast-message';
@@ -23,6 +24,7 @@ export default function DriverRequestsScreen({ navigation }) {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [acceptingRequest, setAcceptingRequest] = useState(false);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     loadRideRequests();
@@ -266,16 +268,16 @@ export default function DriverRequestsScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
       
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         
         <View style={styles.headerCenter}>
@@ -291,7 +293,7 @@ export default function DriverRequestsScreen({ navigation }) {
           style={styles.refreshButton}
           onPress={loadRideRequests}
         >
-          <MaterialIcons name="refresh" size={24} color="#2563EB" />
+          <MaterialIcons name="refresh" size={24} color="#ffffff" />
         </TouchableOpacity>
       </View>
 
@@ -300,7 +302,7 @@ export default function DriverRequestsScreen({ navigation }) {
         data={rideRequests}
         renderItem={renderRideRequest}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
+        contentContainerStyle={[styles.listContainer, { paddingBottom: insets.bottom + 20 }]}
         ListEmptyComponent={renderEmptyState}
         showsVerticalScrollIndicator={false}
         refreshing={false}
@@ -437,7 +439,7 @@ export default function DriverRequestsScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -449,17 +451,24 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    paddingVertical: 16,
+    backgroundColor: '#1F2937',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -468,13 +477,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: '#ffffff',
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#9CA3AF',
     marginTop: 2,
   },
   onlineText: {
@@ -486,10 +495,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   refreshButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -499,23 +508,24 @@ const styles = StyleSheet.create({
   },
   requestCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
   },
   acceptedCard: {
     borderColor: '#10B981',
     borderWidth: 2,
+    backgroundColor: '#F0FDF4',
   },
   requestHeader: {
     flexDirection: 'row',

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Platform } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
@@ -33,15 +35,19 @@ const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 function HomeTabs() {
+  const insets = useSafeAreaInsets();
+  
   return (
     <Tab.Navigator
       screenOptions={{
         tabBarStyle: {
-          height: 70,
+          height: 70 + insets.bottom,
           backgroundColor: '#2563EB',
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
+          paddingBottom: insets.bottom,
+          paddingTop: 8,
         },
         tabBarIconStyle: {
           height: 30,
@@ -52,6 +58,7 @@ function HomeTabs() {
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '500',
+          marginBottom: Platform.OS === 'ios' ? 0 : 4,
         },
       }}
     >
@@ -100,15 +107,19 @@ function HomeTabs() {
 }
 
 function DriverTabs() {
+  const insets = useSafeAreaInsets();
+  
   return (
     <Tab.Navigator
       screenOptions={{
         tabBarStyle: {
-          height: 70,
+          height: 70 + insets.bottom,
           backgroundColor: '#1F2937',
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
+          paddingBottom: insets.bottom,
+          paddingTop: 8,
         },
         tabBarIconStyle: {
           height: 30,
@@ -119,6 +130,7 @@ function DriverTabs() {
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '500',
+          marginBottom: Platform.OS === 'ios' ? 0 : 4,
         },
       }}
     >
@@ -196,80 +208,82 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName={isLoggedIn ? "HomeTabs" : "Login"}>
-        <Stack.Screen
-          name="Login"
-          component={LoginScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="Register"
-          component={RegisterScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="SetPassword"
-          component={SetPasswordScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="HomeTabs"
-          component={HomeTabs}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="DriverLogin"
-          component={DriverLoginScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="DriverTabs"
-          component={DriverTabs}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="Payment"
-          component={PaymentScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="PaymentHistory"
-          component={PaymentHistoryScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="Help"
-          component={HelpScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="Privacy"
-          component={PrivacyScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="Terms"
-          component={TermsScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="About"
-          component={AboutScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="EditProfile"
-          component={EditProfileScreen}
-          options={{ headerShown: false }}
-        />
-      </Stack.Navigator>
-      <Toast />
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <Stack.Navigator initialRouteName={isLoggedIn ? "HomeTabs" : "Login"}>
+          <Stack.Screen
+            name="Login"
+            component={LoginScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Register"
+            component={RegisterScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="SetPassword"
+            component={SetPasswordScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="HomeTabs"
+            component={HomeTabs}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="DriverLogin"
+            component={DriverLoginScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="DriverTabs"
+            component={DriverTabs}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Payment"
+            component={PaymentScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="PaymentHistory"
+            component={PaymentHistoryScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Settings"
+            component={SettingsScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Help"
+            component={HelpScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Privacy"
+            component={PrivacyScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Terms"
+            component={TermsScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="About"
+            component={AboutScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="EditProfile"
+            component={EditProfileScreen}
+            options={{ headerShown: false }}
+          />
+        </Stack.Navigator>
+        <Toast />
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }

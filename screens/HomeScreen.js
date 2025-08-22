@@ -978,7 +978,7 @@ export default function HomeScreen({ navigation }) {
             {isSearching && (
               <View style={styles.searchingIndicator}>
                 <MaterialIcons name="search" size={20} color="#2563EB" />
-                <Text style={styles.searchingText}>Buscando com HERE Maps...</Text>
+                <Text style={styles.searchingText}>Buscando localizações...</Text>
               </View>
             )}
 
@@ -1008,8 +1008,8 @@ export default function HomeScreen({ navigation }) {
                         {result.distance && ` • ${Math.round(result.distance/1000)}km`}
                       </Text>
                     </View>
-                    <View style={styles.hereMapsBadge}>
-                      <Text style={styles.hereMapsBadgeText}>HERE</Text>
+                    <View style={styles.mapsBadge}>
+                      <Text style={styles.mapsBadgeText}>OSM</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
@@ -1566,13 +1566,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
   },
-  hereMapsBadge: {
-    backgroundColor: '#00D4AA',
+  mapsBadge: {
+    backgroundColor: '#2563EB',
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  hereMapsBadgeText: {
+  mapsBadgeText: {
     fontSize: 10,
     fontWeight: '700',
     color: '#ffffff',

@@ -1,15 +1,14 @@
 // Maps API Configuration
 export const MAPS_CONFIG = {
-  HERE: {
-    API_KEY: 'bMtOJnfPZwG3fyrgS24Jif6dt3MXbOoq6H4X4KqxZKY',
-    // Alternative API key if the first one doesn't work
-    ALTERNATIVE_API_KEY: 'YOUR_ALTERNATIVE_HERE_API_KEY',
-    BASE_URL: 'https://js.api.here.com/v3/3.1/',
-    SEARCH_URL: 'https://discover.search.hereapi.com/v1/discover',
+  OPENSTREETMAP: {
+    TILE_URL: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    ATTRIBUTION: '© OpenStreetMap contributors',
+    MAX_ZOOM: 19,
   },
-  GOOGLE: {
-    API_KEY: 'YOUR_GOOGLE_MAPS_API_KEY',
-    BASE_URL: 'https://maps.googleapis.com/maps/api/',
+  ROUTING: {
+    // Using OpenRouteService (free with registration) or OSRM (completely free)
+    OSRM_URL: 'https://router.project-osrm.org/route/v1/driving/',
+    OPENROUTE_URL: 'https://api.openrouteservice.org/v2/directions/driving-car',
   },
   // Fallback coordinates for Luanda, Angola
   DEFAULT_LOCATION: {
@@ -20,9 +19,9 @@ export const MAPS_CONFIG = {
   }
 };
 
-// Check if we should use alternative API key
-export const getHereApiKey = () => {
-  return MAPS_CONFIG.HERE.API_KEY;
+// Get OpenStreetMap tile configuration
+export const getMapTileConfig = () => {
+  return MAPS_CONFIG.OPENSTREETMAP;
 };
 
 // Get default location
