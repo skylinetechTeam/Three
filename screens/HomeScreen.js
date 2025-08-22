@@ -126,6 +126,13 @@ export default function HomeScreen({ navigation }) {
             console.log('🎉 Corrida aceita pelo motorista:', data);
             console.log('📱 HomeScreen recebeu evento ride_accepted via ApiService');
             
+            // Verificar se é um teste manual
+            if (data.test) {
+              console.log('🧪 TESTE MANUAL FUNCIONOU! Callback foi executado corretamente!');
+              console.log('✅ Isso prova que o sistema de callbacks está funcionando');
+              return; // Não processar como corrida real
+            }
+            
             // PARAR BUSCA IMEDIATAMENTE - PRIORIDADE MÁXIMA
             console.log('🛑 PARANDO BUSCA DE MOTORISTAS IMEDIATAMENTE');
             setIsSearchingDrivers(false);
@@ -785,6 +792,43 @@ export default function HomeScreen({ navigation }) {
         setDriverSearchTime(prev => {
           const newTime = prev + 1;
           console.log('⏱️ Tempo de busca:', newTime, 'segundos');
+          
+          // LOG DETALHADO DO ESTADO DO SOCKET E EVENTOS
+          console.log('🔍 DEBUG SOCKET - Estado atual:', {
+            socketConnected: apiService.isConnected,
+            socketExists: !!apiService.socket,
+            socketId: apiService.socket?.id,
+            requestStatus: requestStatus,
+            driversFound: driversFound,
+            isSearchingDrivers: isSearchingDrivers,
+            hasCurrentRide: !!currentRide,
+            hasDriverInfo: !!driverInfo,
+            hasRequestId: !!requestId,
+            callbacksRegistered: apiService.eventCallbacks?.has('ride_accepted'),
+            totalCallbacks: apiService.eventCallbacks?.get('ride_accepted')?.length || 0
+          });
+          
+          // TESTE MANUAL DO SOCKET A CADA 10 SEGUNDOS
+          if (newTime % 10 === 0 && apiService.socket && apiService.isConnected) {
+            console.log('🧪 TESTE MANUAL - Enviando ping para verificar socket...');
+            apiService.socket.emit('ping', { 
+              timestamp: Date.now(), 
+              from: 'HomeScreen',
+              searchTime: newTime 
+            });
+            
+            // Testar se conseguimos ouvir um evento de teste
+            console.log('🎯 TESTE MANUAL - Emitindo evento de teste para verificar callbacks...');
+            if (apiService.eventCallbacks?.has('ride_accepted')) {
+              console.log('📞 Chamando callbacks manualmente para teste...');
+              const testData = {
+                test: true,
+                message: 'Teste manual de callback',
+                timestamp: Date.now()
+              };
+              apiService.triggerCallbacks('ride_accepted', testData);
+            }
+          }
           
           // Verificar se a corrida já foi aceita durante o intervalo
           if (requestStatus === 'accepted' || driversFound) {
