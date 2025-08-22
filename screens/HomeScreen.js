@@ -16,6 +16,8 @@ import {
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import ApiService from '../services/apiService';
+import LocalDatabase from '../services/localDatabase';
 
 const { width, height } = Dimensions.get('window');
 
@@ -462,6 +464,58 @@ export default function HomeScreen({ navigation }) {
         selectedLocation.lat, 
         selectedLocation.lng
       );
+      
+      // Register passenger if not registered locally, then create ride request
+      try {
+        let passengerProfile = await LocalDatabase.getUserProfile();
+        if (!passengerProfile || !passengerProfile.id) {
+          const tempProfile = {
+            name: passengerProfile?.name || 'Passageiro',
+            phone: passengerProfile?.phone || `+244${Math.floor(900000000 + Math.random()*9999999)}`,
+            email: passengerProfile?.email,
+            preferredPaymentMethod: 'cash',
+          };
+          const registerRes = await ApiService.registerPassenger(tempProfile);
+          const newId = registerRes?.data?.passengerId;
+          if (newId) {
+            passengerProfile = { ...(passengerProfile || {}), id: newId, ...tempProfile };
+            await LocalDatabase.saveUserProfile(passengerProfile);
+          }
+        }
+
+        if (passengerProfile?.id) {
+          const estDistanceKm = (routeInfo?.distance || 0) / 1000;
+          const estTimeMin = Math.max(1, Math.round((routeInfo?.duration || 0) / 60));
+          const estimatedFare = ApiService.calculateEstimatedFare(estDistanceKm, estTimeMin, selectedTaxiType === 'Privado' ? 'premium' : 'standard');
+
+          await ApiService.createRideRequest({
+            passengerId: passengerProfile.id,
+            passengerName: passengerProfile.name || 'Passageiro',
+            passengerPhone: passengerProfile.phone,
+            pickup: {
+              address: 'Minha localização',
+              lat: location.coords.latitude,
+              lng: location.coords.longitude,
+            },
+            destination: {
+              address: selectedLocation.address || selectedLocation.name,
+              lat: selectedLocation.lat,
+              lng: selectedLocation.lng,
+            },
+            estimatedFare,
+            estimatedDistance: estDistanceKm,
+            estimatedTime: estTimeMin,
+            paymentMethod: 'cash',
+            vehicleType: selectedTaxiType === 'Privado' ? 'premium' : 'standard',
+          });
+          // Start searching animation
+          setIsSearchingDrivers(true);
+          setDriverSearchTime(0);
+          setDriversFound(false);
+        }
+      } catch (e) {
+        console.error('API ride request error:', e);
+      }
       
       // Iniciar busca de motoristas
       console.log('🚗 Iniciando busca de motoristas...');
