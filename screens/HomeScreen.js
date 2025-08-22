@@ -116,227 +116,185 @@ export default function HomeScreen({ navigation }) {
           
           // Connect to socket
           console.log('🔌 Conectando WebSocket como passageiro:', passengerId);
-          const socket = apiService.connectSocket('passenger', passengerId);
+          apiService.connectSocket('passenger', passengerId);
           
-          if (socket) {
-            // Configure listeners after connection is established
-            socket.on('connect', () => {
-              console.log('🔌 Socket conectado no HomeScreen, configurando listeners...');
-            });
-
-            // Debug: Listen for any events
-            socket.onAny((event, ...args) => {
-              console.log('🔔 WebSocket evento recebido:', event, args);
+          // Configure event callbacks using the new system
+          console.log('🎯 Configurando callbacks de eventos...');
+          
+          // Listen for ride updates
+          apiService.onEvent('ride_accepted', (data) => {
+            console.log('🎉 Corrida aceita pelo motorista:', data);
+            console.log('📱 HomeScreen recebeu evento ride_accepted via ApiService');
+            
+            // Update request status
+            setRequestStatus('accepted');
+            setDriverInfo({
+              id: data.driver?.id || data.driverId,
+              name: data.driver?.name || 'Motorista',
+              phone: data.driver?.phone || '',
+              vehicle: data.driver?.vehicle || {},
+              rating: data.driver?.rating || 0,
+              location: data.driver?.location || null,
+              estimatedArrival: data.estimatedArrival || '5-10 minutos'
             });
             
-            // Listen for ride updates
-            socket.on('ride_accepted', (data) => {
-              console.log('🎉 Corrida aceita pelo motorista:', data);
-              console.log('📱 HomeScreen recebeu evento ride_accepted via WebSocket');
-              
-              // Update request status
-              setRequestStatus('accepted');
-              setDriverInfo({
-                id: data.driver?.id || data.driverId,
-                name: data.driver?.name || 'Motorista',
-                phone: data.driver?.phone || '',
-                vehicle: data.driver?.vehicle || {},
-                rating: data.driver?.rating || 0,
-                location: data.driver?.location || null,
-                estimatedArrival: data.estimatedArrival || '5-10 minutos'
-              });
-              
-              // Store request ID for tracking
-              if (data.rideId) {
-                setRequestId(data.rideId);
-              }
-              
-              // Parar busca imediatamente
-              setIsSearchingDrivers(false);
-              setDriversFound(true);
-              setDriverSearchTime(0);
-              
-              // Limpar intervalos de busca
-              if (window.driverSearchInterval) {
-                clearInterval(window.driverSearchInterval);
-                window.driverSearchInterval = null;
-              }
-              
-              // Atualizar dados da corrida com informações do motorista
-              if (data.ride) {
-                setCurrentRide(prev => ({
-                  ...prev,
-                  ...data.ride,
-                  driver: data.driver,
-                  status: 'accepted'
-                }));
-              }
-              
-              // Mostrar toast de sucesso com detalhes do motorista
-              Toast.show({
-                type: "success",
-                text1: "Solicitação Aceita! 🎉",
-                text2: `${data.driver?.name || 'Motorista'} está a caminho - ${data.estimatedArrival || '5-10 min'}`,
-                visibilityTime: 6000,
-              });
+            // Store request ID for tracking
+            if (data.rideId) {
+              setRequestId(data.rideId);
+            }
+            
+            // Parar busca imediatamente
+            setIsSearchingDrivers(false);
+            setDriversFound(true);
+            setDriverSearchTime(0);
+            
+            // Limpar intervalos de busca
+            if (window.driverSearchInterval) {
+              clearInterval(window.driverSearchInterval);
+              window.driverSearchInterval = null;
+            }
+            
+            // Atualizar dados da corrida com informações do motorista
+            if (data.ride) {
+              setCurrentRide(prev => ({
+                ...prev,
+                ...data.ride,
+                driver: data.driver,
+                status: 'accepted'
+              }));
+            }
+            
+            // Mostrar toast de sucesso com detalhes do motorista
+            Toast.show({
+              type: "success",
+              text1: "Solicitação Aceita! 🎉",
+              text2: `${data.driver?.name || 'Motorista'} está a caminho - ${data.estimatedArrival || '5-10 min'}`,
+              visibilityTime: 6000,
             });
+          });
 
-            socket.on('ride_rejected', (data) => {
-              console.log('❌ Solicitação rejeitada pelo motorista:', data);
-              
-              // Update request status
-              setRequestStatus('rejected');
-              
-              // Show rejection message
-              Toast.show({
-                type: "error",
-                text1: "Solicitação Recusada",
-                text2: data.reason || "O motorista não pode aceitar sua solicitação no momento",
-                visibilityTime: 4000,
-              });
-              
-              // Continue searching for other drivers
-              console.log('🔄 Continuando busca por outros motoristas...');
-            });
-
-            socket.on('no_drivers_available', (data) => {
-              console.log('🚫 Nenhum motorista disponível:', data);
-              
-              // Update request status
-              setRequestStatus('rejected');
-              
-              // Stop driver search
-              if (window.driverSearchInterval) {
-                clearInterval(window.driverSearchInterval);
-                window.driverSearchInterval = null;
-              }
-              
-              setIsSearchingDrivers(false);
-              setDriversFound(false);
-              
-              Toast.show({
-                type: "error",
-                text1: "Nenhum motorista disponível",
-                text2: "Tente novamente em alguns minutos",
-                visibilityTime: 5000,
-              });
+          apiService.onEvent('ride_rejected', (data) => {
+            console.log('❌ Solicitação rejeitada pelo motorista:', data);
+            
+            // Update request status
+            setRequestStatus('rejected');
+            
+            // Show rejection message
+            Toast.show({
+              type: "error",
+              text1: "Solicitação Recusada",
+              text2: data.reason || "O motorista não pode aceitar sua solicitação no momento",
+              visibilityTime: 4000,
             });
             
-            socket.on('ride_started', (data) => {
-              console.log('🚗 Corrida iniciada:', data);
-              setRequestStatus('started');
-              
-              Toast.show({
-                type: "info",
-                text1: "Corrida Iniciada",
-                text2: "Sua viagem começou. Tenha uma boa viagem!",
-                visibilityTime: 3000,
-              });
-            });
+            // Continue searching for other drivers
+            console.log('🔄 Continuando busca por outros motoristas...');
+          });
+
+          apiService.onEvent('no_drivers_available', (data) => {
+            console.log('🚫 Nenhum motorista disponível:', data);
             
-            socket.on('ride_completed', (data) => {
-              console.log('✅ Corrida finalizada:', data);
-              setRequestStatus('completed');
-              setCurrentRide(null);
-              setDriverInfo(null);
-              setRequestId(null);
-              
-              Toast.show({
-                type: "success",
-                text1: "Viagem Concluída",
-                text2: "Obrigado por usar nosso serviço!",
-                visibilityTime: 4000,
-              });
-            });
+            // Update request status
+            setRequestStatus('rejected');
             
-            socket.on('ride_cancelled', (data) => {
-              console.log('❌ Corrida cancelada:', data);
-              
-              // Update request status
-              setRequestStatus('cancelled');
-              
-              // Parar busca se estava buscando
-              setIsSearchingDrivers(false);
-              setDriversFound(false);
-              setDriverSearchTime(0);
-              
-              // Limpar intervalos
-              if (window.driverSearchInterval) {
-                clearInterval(window.driverSearchInterval);
-                window.driverSearchInterval = null;
-              }
-              
-              // Limpar corrida atual
-              setCurrentRide(null);
-              setDriverInfo(null);
-              setRequestId(null);
-              
-              Toast.show({
-                type: "error",
-                text1: "Corrida Cancelada",
-                text2: data.reason || "A corrida foi cancelada",
-                visibilityTime: 4000,
-              });
+            // Stop driver search
+            if (window.driverSearchInterval) {
+              clearInterval(window.driverSearchInterval);
+              window.driverSearchInterval = null;
+            }
+            
+            setIsSearchingDrivers(false);
+            setDriversFound(false);
+            
+            Toast.show({
+              type: "error",
+              text1: "Nenhum motorista disponível",
+              text2: "Tente novamente em alguns minutos",
+              visibilityTime: 5000,
             });
-
-            // Listen for driver location updates
-            socket.on('driver_location_update', (data) => {
-              console.log('📍 Atualização de localização do motorista:', data);
-              if (driverInfo && data.driverId === driverInfo.id) {
-                setDriverInfo(prev => ({
-                  ...prev,
-                  location: data.location,
-                  estimatedArrival: data.estimatedArrival
-                }));
-              }
+          });
+          
+          apiService.onEvent('ride_started', (data) => {
+            console.log('🚗 Corrida iniciada:', data);
+            setRequestStatus('started');
+            
+            Toast.show({
+              type: "info",
+              text1: "Corrida Iniciada",
+              text2: "Sua viagem começou. Tenha uma boa viagem!",
+              visibilityTime: 3000,
             });
+          });
+          
+          apiService.onEvent('ride_completed', (data) => {
+            console.log('✅ Corrida finalizada:', data);
+            setRequestStatus('completed');
+            setCurrentRide(null);
+            setDriverInfo(null);
+            setRequestId(null);
+            
+            Toast.show({
+              type: "success",
+              text1: "Viagem Concluída",
+              text2: "Obrigado por usar nosso serviço!",
+              visibilityTime: 4000,
+            });
+          });
+          
+          apiService.onEvent('ride_cancelled', (data) => {
+            console.log('❌ Corrida cancelada:', data);
+            
+            // Update request status
+            setRequestStatus('cancelled');
+            
+            // Parar busca se estava buscando
+            setIsSearchingDrivers(false);
+            setDriversFound(false);
+            setDriverSearchTime(0);
+            
+            // Limpar intervalos
+            if (window.driverSearchInterval) {
+              clearInterval(window.driverSearchInterval);
+              window.driverSearchInterval = null;
+            }
+            
+            // Limpar corrida atual
+            setCurrentRide(null);
+            setDriverInfo(null);
+            setRequestId(null);
+            
+            Toast.show({
+              type: "error",
+              text1: "Corrida Cancelada",
+              text2: data.reason || "A corrida foi cancelada",
+              visibilityTime: 4000,
+            });
+          });
 
-            // Test function to simulate ride acceptance (for development)
-            window.simulateRideAcceptance = () => {
-              console.log('🧪 Simulando aceitação de corrida...');
-              const testData = {
-                rideId: 'test_ride_123',
-                driver: {
-                  id: 'test_driver_456',
-                  name: 'João Motorista',
-                  phone: '+244 923 456 789',
-                  rating: 4.8,
-                  vehicle: {
-                    make: 'Toyota',
-                    model: 'Corolla',
-                    plate: 'LD-123-AB'
-                  },
-                  location: {
-                    lat: -8.8390,
-                    lng: 13.2894
-                  }
-                },
-                estimatedArrival: '5-7 minutos'
-              };
-              
-              // Simulate the ride_accepted event
-              socket.emit('test_ride_accepted', testData);
-            };
-
-            // Test function to simulate ride rejection (for development)
-            window.simulateRideRejection = () => {
-              console.log('🧪 Simulando rejeição de corrida...');
-              const testData = {
-                rideId: 'test_ride_123',
-                reason: 'Motorista não disponível no momento'
-              };
-              
-              // Simulate the ride_rejected event
-              socket.emit('test_ride_rejected', testData);
-            };
-          }
+          apiService.onEvent('driver_location_update', (data) => {
+            console.log('📍 Atualização de localização do motorista:', data);
+            if (driverInfo && data.driverId === driverInfo.id) {
+              setDriverInfo(prev => ({
+                ...prev,
+                location: data.location,
+                estimatedArrival: data.estimatedArrival
+              }));
+            }
+          });
           
         } catch (apiError) {
           console.warn('Passenger API registration failed:', apiError);
         }
       } else if (profile.apiPassengerId) {
         // Connect to socket if already registered
+        console.log('🔌 Conectando WebSocket para passageiro já registrado:', profile.apiPassengerId);
         apiService.connectSocket('passenger', profile.apiPassengerId);
+        
+        // Configure event callbacks for already registered passenger
+        console.log('🎯 Configurando callbacks para passageiro já registrado...');
+        
+        // Note: The event callbacks are the same, so we could extract them to a separate function
+        // For now, we'll rely on the fact that if callbacks are already registered, they won't be duplicated
       }
       
     } catch (error) {

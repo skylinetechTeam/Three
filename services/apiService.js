@@ -9,6 +9,7 @@ class ApiService {
   constructor() {
     this.socket = null;
     this.isConnected = false;
+    this.eventCallbacks = new Map();
   }
 
   // Conectar ao WebSocket
@@ -56,6 +57,9 @@ class ApiService {
           userType: userType, // 'driver' ou 'passenger'
           userId: userId
         });
+
+        // Configurar listeners de eventos de corrida
+        this.setupRideEventListeners();
       });
 
       this.socket.on('disconnect', (reason) => {
@@ -117,6 +121,91 @@ class ApiService {
       console.error('💥 Erro fatal ao criar socket:', error);
       this.isConnected = false;
       return null;
+    }
+  }
+
+  // Registrar callback para eventos específicos
+  onEvent(eventName, callback) {
+    if (!this.eventCallbacks.has(eventName)) {
+      this.eventCallbacks.set(eventName, []);
+    }
+    this.eventCallbacks.get(eventName).push(callback);
+    
+    // Se o socket já existe, adicionar o listener imediatamente
+    if (this.socket) {
+      this.socket.on(eventName, callback);
+    }
+  }
+
+  // Remover callback de evento
+  offEvent(eventName, callback) {
+    const callbacks = this.eventCallbacks.get(eventName);
+    if (callbacks) {
+      const index = callbacks.indexOf(callback);
+      if (index > -1) {
+        callbacks.splice(index, 1);
+      }
+    }
+    
+    if (this.socket) {
+      this.socket.off(eventName, callback);
+    }
+  }
+
+  // Configurar listeners para eventos de corrida
+  setupRideEventListeners() {
+    if (!this.socket) return;
+
+    console.log('🎯 Configurando listeners de eventos de corrida...');
+
+    // Setup ride event listeners
+    this.socket.on('ride_accepted', (data) => {
+      console.log('🎉 [ApiService] ride_accepted recebido:', data);
+      this.triggerCallbacks('ride_accepted', data);
+    });
+
+    this.socket.on('ride_rejected', (data) => {
+      console.log('❌ [ApiService] ride_rejected recebido:', data);
+      this.triggerCallbacks('ride_rejected', data);
+    });
+
+    this.socket.on('ride_started', (data) => {
+      console.log('🚗 [ApiService] ride_started recebido:', data);
+      this.triggerCallbacks('ride_started', data);
+    });
+
+    this.socket.on('ride_completed', (data) => {
+      console.log('✅ [ApiService] ride_completed recebido:', data);
+      this.triggerCallbacks('ride_completed', data);
+    });
+
+    this.socket.on('ride_cancelled', (data) => {
+      console.log('❌ [ApiService] ride_cancelled recebido:', data);
+      this.triggerCallbacks('ride_cancelled', data);
+    });
+
+    this.socket.on('no_drivers_available', (data) => {
+      console.log('🚫 [ApiService] no_drivers_available recebido:', data);
+      this.triggerCallbacks('no_drivers_available', data);
+    });
+
+    this.socket.on('driver_location_update', (data) => {
+      console.log('📍 [ApiService] driver_location_update recebido:', data);
+      this.triggerCallbacks('driver_location_update', data);
+    });
+  }
+
+  // Trigger callbacks for a specific event
+  triggerCallbacks(eventName, data) {
+    const callbacks = this.eventCallbacks.get(eventName);
+    if (callbacks) {
+      callbacks.forEach(callback => {
+        try {
+          callback(data);
+        } catch (error) {
+          console.error(`❌ Erro ao executar callback para ${eventName}:`, error);
+        }
+      });
     }
   }
 
