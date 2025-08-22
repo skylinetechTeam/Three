@@ -1120,23 +1120,51 @@ export default function DriverMapScreen({ navigation, route }) {
                      map.addLayer(destinationMarker);
                      console.log('✅ Destination marker added');
                      
-                     // Step 3: Create route line - MULTIPLE ATTEMPTS TO GUARANTEE SUCCESS
-                     console.log('🛣️ Creating route line...');
-                     const routeColor = phase === 'pickup' ? '#2563EB' : '#10B981';
+                     // Step 3: Create route line using OSRM API (same as HomeScreen)
+                     console.log('🛣️ Creating route line with OSRM API...');
+                     const routeColor = '#4285F4'; // Using same blue color as HomeScreen
                      console.log('🎨 Using color:', routeColor);
                      
-                     const coordinates = [
+                     // Try to get actual route from OSRM API
+                     let coordinates = [
                          [driverPos.lat, driverPos.lng],
                          [destinationLat, destinationLng]
                      ];
-                     console.log('📐 Route coordinates:', coordinates);
+                     
+                     try {
+                         console.log('📡 Fetching route from OSRM...');
+                         const routeUrl = `https://router.project-osrm.org/route/v1/driving/${driverPos.lng},${driverPos.lat};${destinationLng},${destinationLat}?overview=full&geometries=geojson`;
+                         const response = await fetch(routeUrl);
+                         const data = await response.json();
+                         
+                         if (data.routes && data.routes.length > 0) {
+                             const route = data.routes[0];
+                             const routeCoordinates = route.geometry.coordinates;
+                             // Convert coordinates from [lng, lat] to [lat, lng] for Leaflet
+                             coordinates = routeCoordinates.map(coord => [coord[1], coord[0]]);
+                             console.log('✅ Got OSRM route with', coordinates.length, 'points');
+                             
+                             // Update route summary with actual data
+                             routeSummary = {
+                                 totalDistance: route.distance,
+                                 totalTime: route.duration
+                             };
+                         } else {
+                             console.log('⚠️ No OSRM route found, using straight line');
+                         }
+                     } catch (error) {
+                         console.log('⚠️ OSRM API failed, using straight line:', error.message);
+                     }
+                     
+                     console.log('📐 Final route coordinates:', coordinates.length, 'points');
                      
                      // Method 1: Standard polyline
                      try {
                          routeLine = L.polyline(coordinates, {
                              color: routeColor,
-                             weight: 8,
-                             opacity: 0.9,
+                             weight: 5,
+                             opacity: 0.8,
+                             smoothFactor: 1,
                              lineCap: 'round',
                              lineJoin: 'round'
                          });
@@ -1150,8 +1178,9 @@ export default function DriverMapScreen({ navigation, route }) {
                      try {
                          const backupLine = L.polyline(coordinates, {
                              color: routeColor,
-                             weight: 12,
-                             opacity: 0.7
+                             weight: 5,
+                             opacity: 0.8,
+                             smoothFactor: 1
                          }).addTo(map);
                          console.log('✅ Method 2: Backup line added');
                      } catch (e) {
@@ -1162,8 +1191,9 @@ export default function DriverMapScreen({ navigation, route }) {
                      try {
                          const simpleLine = new L.Polyline(coordinates, {
                              color: routeColor,
-                             weight: 6,
-                             opacity: 1.0
+                             weight: 5,
+                             opacity: 0.8,
+                             smoothFactor: 1
                          });
                          simpleLine.addTo(map);
                          console.log('✅ Method 3: Simple line added');
@@ -1173,14 +1203,16 @@ export default function DriverMapScreen({ navigation, route }) {
                      
                      console.log('🛣️ Route line creation attempts completed');
                      
-                     // Step 4: Calculate distance and time
-                     const distance = driverPos.distanceTo(L.latLng(destinationLat, destinationLng));
-                     const estimatedTime = Math.round(distance / 1000 * 2.5);
-                     
-                     routeSummary = {
-                         totalDistance: distance,
-                         totalTime: estimatedTime * 60
-                     };
+                     // Step 4: Calculate distance and time (fallback if OSRM didn't provide data)
+                     if (!routeSummary) {
+                         const distance = driverPos.distanceTo(L.latLng(destinationLat, destinationLng));
+                         const estimatedTime = Math.round(distance / 1000 * 2.5);
+                         
+                         routeSummary = {
+                             totalDistance: distance,
+                             totalTime: estimatedTime * 60
+                         };
+                     }
                      
                      console.log('📊 Route summary:', routeSummary);
                      
