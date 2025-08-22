@@ -963,6 +963,23 @@ export default function HomeScreen({ navigation }) {
     Keyboard.dismiss();
   };
 
+  // Load app settings on component mount
+  useEffect(() => {
+    const loadAppSettings = async () => {
+      try {
+        const settings = await LocalDatabase.getAppSettings();
+        if (settings && settings.defaultTaxiType) {
+          console.log('📱 Loading saved taxi type:', settings.defaultTaxiType);
+          setSelectedTaxiType(settings.defaultTaxiType);
+        }
+      } catch (error) {
+        console.error('Error loading app settings:', error);
+      }
+    };
+
+    loadAppSettings();
+  }, []);
+
   const handleSearchChange = async (text) => {
     console.log('📝 handleSearchChange called with:', text);
     setDestination(text);
@@ -1071,7 +1088,7 @@ export default function HomeScreen({ navigation }) {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.container}>
-      {console.log('🏠 HomeScreen render - States:', { isSearchingDrivers, selectedDestination: !!selectedDestination, driverSearchTime, driversFound })}
+      {console.log('🏠 HomeScreen render - States:', { isSearchingDrivers, selectedDestination: !!selectedDestination, driverSearchTime, driversFound, selectedTaxiType })}
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       
       {/* Status Indicator - WebSocket Connection & Request Status */}
@@ -1241,9 +1258,16 @@ export default function HomeScreen({ navigation }) {
                 styles.taxiDropdownOption,
                 selectedTaxiType === 'Coletivo' && styles.taxiDropdownOptionSelected
               ]}
-              onPress={() => {
+              onPress={async () => {
+                console.log('🚌 Changing taxi type to Coletivo');
                 setSelectedTaxiType('Coletivo');
                 setIsDropdownOpen(false);
+                // Save preference
+                try {
+                  await LocalDatabase.saveAppSettings({ defaultTaxiType: 'Coletivo' });
+                } catch (error) {
+                  console.error('Error saving taxi type preference:', error);
+                }
               }}
             >
               <MaterialIcons name="directions-bus" size={16} color={selectedTaxiType === 'Coletivo' ? '#4285F4' : '#6B7280'} />
@@ -1263,9 +1287,16 @@ export default function HomeScreen({ navigation }) {
                 styles.taxiDropdownOption,
                 selectedTaxiType === 'Privado' && styles.taxiDropdownOptionSelected
               ]}
-              onPress={() => {
+              onPress={async () => {
+                console.log('🚗 Changing taxi type to Privado');
                 setSelectedTaxiType('Privado');
                 setIsDropdownOpen(false);
+                // Save preference
+                try {
+                  await LocalDatabase.saveAppSettings({ defaultTaxiType: 'Privado' });
+                } catch (error) {
+                  console.error('Error saving taxi type preference:', error);
+                }
               }}
             >
               <MaterialIcons name="local-taxi" size={16} color={selectedTaxiType === 'Privado' ? '#4285F4' : '#6B7280'} />
@@ -1449,13 +1480,14 @@ export default function HomeScreen({ navigation }) {
 
             {/* Ações */}
             <View style={styles.acceptedActions}>
+              <TouchableOpacity style={styles.cancelRideButton} onPress={handleNewSearch}>
+                <MaterialIcons name="close" size={18} color="#6B7280" />
+                <Text style={styles.cancelRideText}>Cancelar</Text>
+              </TouchableOpacity>
+              
               <TouchableOpacity style={styles.callDriverButton} onPress={handleCallDriver}>
                 <MaterialIcons name="phone" size={20} color="#ffffff" />
                 <Text style={styles.callDriverText}>Ligar</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.cancelRideButton} onPress={handleNewSearch}>
-                <Text style={styles.cancelRideText}>Cancelar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2318,23 +2350,32 @@ const styles = StyleSheet.create({
   // Estilos para Solicitação Aceita
   acceptedCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
+    borderRadius: 20,
     marginHorizontal: 20,
-    paddingVertical: 24,
-    paddingHorizontal: 20,
+    paddingVertical: 30,
+    paddingHorizontal: 24,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowRadius: 15,
+    elevation: 10,
     maxWidth: width - 40,
+    maxHeight: height * 0.8,
   },
   acceptedHeader: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 30,
   },
   successIconContainer: {
     marginBottom: 12,
+  },
+  driverInfoCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   acceptedTitle: {
     fontSize: 20,
@@ -2356,7 +2397,7 @@ const styles = StyleSheet.create({
   driverInfoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   driverAvatar: {
     width: 50,
@@ -2385,6 +2426,20 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginLeft: 4,
   },
+  vehicleInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  vehicleText: {
+    fontSize: 14,
+    color: '#374151',
+    marginLeft: 8,
+    flex: 1,
+  },
   estimatedTimeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2399,22 +2454,26 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontWeight: '500',
   },
-  vehicleInfo: {
+  statusContainer: {
+    marginTop: 8,
+  },
+  statusIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
   },
-  vehicleText: {
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginRight: 8,
+  },
+  statusText: {
     fontSize: 14,
-    color: '#6B7280',
-    marginLeft: 8,
+    color: '#374151',
+    fontWeight: '500',
   },
-  statusContainer: {
-    marginTop: 4,
-  },
+
   statusIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2433,18 +2492,26 @@ const styles = StyleSheet.create({
   },
   acceptedActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 20,
   },
   callDriverButton: {
-    flex: 1,
+    flex: 2,
     flexDirection: 'row',
-    backgroundColor: '#4285F4',
-    paddingVertical: 12,
+    backgroundColor: '#10B981',
+    paddingVertical: 16,
     paddingHorizontal: 20,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    shadowColor: '#10B981',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   callDriverText: {
     color: '#ffffff',
@@ -2454,18 +2521,21 @@ const styles = StyleSheet.create({
   },
   cancelRideButton: {
     flex: 1,
+    flexDirection: 'row',
     backgroundColor: '#F3F4F6',
-    paddingVertical: 12,
+    paddingVertical: 16,
     paddingHorizontal: 20,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   cancelRideText: {
     color: '#6B7280',
     fontSize: 16,
     fontWeight: '600',
+    marginLeft: 8,
   },
   // Status Indicator Bar
   statusIndicatorBar: {
