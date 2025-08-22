@@ -978,11 +978,12 @@ export default function DriverMapScreen({ navigation, route }) {
              let routeLine = null;
              let isDriverOnline = false;
              let currentSpeed = 0;
-             let routeInstructions = [];
-             let currentInstructionIndex = 0;
-             let routeSummary = null;
-             let simulationInterval = null;
-             let currentPhase = 'pickup';
+                         let routeInstructions = [];
+            let currentInstructionIndex = 0;
+            let routeSummary = null;
+            let simulationInterval = null;
+            let currentPhase = 'pickup';
+            let calculatedRouteLine = null;
 
             // Custom driver icon
             const createDriverIcon = (online) => {
@@ -1048,6 +1049,59 @@ export default function DriverMapScreen({ navigation, route }) {
                     iconAnchor: [17.5, 40]
                 });
             };
+
+            // Calculate and draw route using OSRM (same as HomeScreen)
+            async function calculateRoute(startLat, startLng, endLat, endLng) {
+                try {
+                    console.log('🛣️ Calculating route from', startLat, startLng, 'to', endLat, endLng);
+                    
+                    // Clear existing calculated route
+                    if (calculatedRouteLine) {
+                        map.removeLayer(calculatedRouteLine);
+                        calculatedRouteLine = null;
+                    }
+                    
+                    // OSRM API call for driving route
+                    const routeUrl = \`https://router.project-osrm.org/route/v1/driving/\${startLng},\${startLat};\${endLng},\${endLat}?overview=full&geometries=geojson\`;
+                    
+                    const response = await fetch(routeUrl);
+                    const data = await response.json();
+                    
+                    if (data.routes && data.routes.length > 0) {
+                        const route = data.routes[0];
+                        const coordinates = route.geometry.coordinates;
+                        
+                        // Convert coordinates from [lng, lat] to [lat, lng] for Leaflet
+                        const leafletCoords = coordinates.map(coord => [coord[1], coord[0]]);
+                        
+                        // Create route polyline with blue color (same as HomeScreen)
+                        calculatedRouteLine = L.polyline(leafletCoords, {
+                            color: '#4285F4',
+                            weight: 5,
+                            opacity: 0.8,
+                            lineCap: 'round',
+                            lineJoin: 'round'
+                        }).addTo(map);
+                        
+                        console.log('✅ Calculated route added to map');
+                        
+                        // Fit map to show the entire route
+                        map.fitBounds(calculatedRouteLine.getBounds(), {
+                            padding: [20, 20]
+                        });
+                        
+                        return {
+                            distance: route.distance,
+                            duration: route.duration,
+                            distanceText: \`\${(route.distance / 1000).toFixed(1)} km\`,
+                            durationText: \`\${Math.round(route.duration / 60)} min\`
+                        };
+                    }
+                } catch (error) {
+                    console.error('❌ Error calculating route:', error);
+                }
+                return null;
+            }
 
             // Update driver location
             function updateDriverLocation(lat, lng, speed = 0) {
@@ -1120,19 +1174,25 @@ export default function DriverMapScreen({ navigation, route }) {
                      map.addLayer(destinationMarker);
                      console.log('✅ Destination marker added');
                      
-                     // Step 3: Create route line - MULTIPLE ATTEMPTS TO GUARANTEE SUCCESS
-                     console.log('🛣️ Creating route line...');
-                     const routeColor = phase === 'pickup' ? '#2563EB' : '#10B981';
-                     console.log('🎨 Using color:', routeColor);
+                     // Step 3: Calculate and draw proper route using OSRM
+                     console.log('🛣️ Calculating proper route...');
+                     const routeData = await calculateRoute(driverPos.lat, driverPos.lng, destinationLat, destinationLng);
                      
-                     const coordinates = [
-                         [driverPos.lat, driverPos.lng],
-                         [destinationLat, destinationLng]
-                     ];
-                     console.log('📐 Route coordinates:', coordinates);
-                     
-                     // Method 1: Standard polyline
-                     try {
+                     if (routeData) {
+                         console.log('✅ Route calculated successfully:', routeData);
+                         routeSummary = {
+                             totalDistance: routeData.distance,
+                             totalTime: routeData.duration
+                         };
+                     } else {
+                         console.log('⚠️ Route calculation failed, using fallback straight line');
+                         // Fallback to straight line if OSRM fails
+                         const routeColor = phase === 'pickup' ? '#2563EB' : '#10B981';
+                         const coordinates = [
+                             [driverPos.lat, driverPos.lng],
+                             [destinationLat, destinationLng]
+                         ];
+                         
                          routeLine = L.polyline(coordinates, {
                              color: routeColor,
                              weight: 8,
@@ -1141,46 +1201,16 @@ export default function DriverMapScreen({ navigation, route }) {
                              lineJoin: 'round'
                          });
                          map.addLayer(routeLine);
-                         console.log('✅ Method 1: Standard polyline added');
-                     } catch (e) {
-                         console.error('❌ Method 1 failed:', e);
+                         
+                         // Calculate straight line distance
+                         const distance = driverPos.distanceTo(L.latLng(destinationLat, destinationLng));
+                         const estimatedTime = Math.round(distance / 1000 * 2.5);
+                         
+                         routeSummary = {
+                             totalDistance: distance,
+                             totalTime: estimatedTime * 60
+                         };
                      }
-                     
-                     // Method 2: Backup thick line
-                     try {
-                         const backupLine = L.polyline(coordinates, {
-                             color: routeColor,
-                             weight: 12,
-                             opacity: 0.7
-                         }).addTo(map);
-                         console.log('✅ Method 2: Backup line added');
-                     } catch (e) {
-                         console.error('❌ Method 2 failed:', e);
-                     }
-                     
-                     // Method 3: Simple line with different approach
-                     try {
-                         const simpleLine = new L.Polyline(coordinates, {
-                             color: routeColor,
-                             weight: 6,
-                             opacity: 1.0
-                         });
-                         simpleLine.addTo(map);
-                         console.log('✅ Method 3: Simple line added');
-                     } catch (e) {
-                         console.error('❌ Method 3 failed:', e);
-                     }
-                     
-                     console.log('🛣️ Route line creation attempts completed');
-                     
-                     // Step 4: Calculate distance and time
-                     const distance = driverPos.distanceTo(L.latLng(destinationLat, destinationLng));
-                     const estimatedTime = Math.round(distance / 1000 * 2.5);
-                     
-                     routeSummary = {
-                         totalDistance: distance,
-                         totalTime: estimatedTime * 60
-                     };
                      
                      console.log('📊 Route summary:', routeSummary);
                      
@@ -1240,6 +1270,11 @@ export default function DriverMapScreen({ navigation, route }) {
                  if (routeLine) {
                      map.removeLayer(routeLine);
                      routeLine = null;
+                 }
+                 if (calculatedRouteLine) {
+                     map.removeLayer(calculatedRouteLine);
+                     calculatedRouteLine = null;
+                     console.log('✅ Calculated route line cleared');
                  }
              }
 
@@ -1440,6 +1475,18 @@ export default function DriverMapScreen({ navigation, route }) {
                      console.error('Error executing message:', e);
                  }
              });
+            // Expose functions for React Native to call
+            window.__calculateRoute = async function(startLat, startLng, endLat, endLng) {
+                return await calculateRoute(startLat, startLng, endLat, endLng);
+            };
+
+            window.__clearRoute = function() {
+                if (calculatedRouteLine) {
+                    map.removeLayer(calculatedRouteLine);
+                    calculatedRouteLine = null;
+                }
+            };
+
         </script>
     </body>
     </html>
