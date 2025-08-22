@@ -304,6 +304,30 @@ class ApiService {
     }
   }
 
+  // Atualizar localização do motorista (fora de uma corrida)
+  async updateDriverLocation(driverId, location) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/drivers/${driverId}/location`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ location }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Erro ao atualizar localização do motorista');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('❌ Erro ao atualizar localização do motorista:', error);
+      throw error;
+    }
+  }
+
   // Buscar motoristas próximos
   async getNearbyDrivers(lat, lng, radius = 10) {
     try {
@@ -406,10 +430,7 @@ class ApiService {
   }
 }
 
-// Singleton instance
-const apiService = new ApiService();
-
-export default apiService;
+export default new ApiService();
 
 // Exemplo de uso no React Native:
 /*

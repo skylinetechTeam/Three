@@ -17,6 +17,7 @@ import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import LocalDatabase from '../services/localDatabase';
 import Toast from 'react-native-toast-message';
+import ApiService from '../services/apiService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -57,6 +58,16 @@ export default function DriverMapScreen({ navigation, route }) {
     if (activeRide && location && webViewRef.current && navigationMode) {
       startNavigationToDestination();
     }
+    // Update backend with background driver location when online
+    if (driverProfile?.id && location && isOnline) {
+      const coords = location.coords;
+      ApiService.updateDriverLocation(driverProfile.id, {
+        lat: coords.latitude,
+        lng: coords.longitude,
+        speed: coords.speed || 0,
+        heading: coords.heading || 0,
+      }).catch(() => {});
+    }
   }, [activeRide, location, navigationMode]);
 
   const initializeDriver = async () => {
@@ -67,6 +78,10 @@ export default function DriverMapScreen({ navigation, route }) {
       if (profile) {
         setDriverProfile(profile);
         setIsOnline(onlineStatus);
+        // Ensure backend is aware of status on boot
+        if (profile.id) {
+          ApiService.updateDriverStatus(profile.id, onlineStatus, profile.location).catch(() => {});
+        }
       }
     } catch (error) {
       console.error('Error initializing driver:', error);
@@ -98,6 +113,16 @@ export default function DriverMapScreen({ navigation, route }) {
         (newLocation) => {
           setLocation(newLocation);
           updateMapLocation(newLocation);
+          // Push location to API if online
+          if (driverProfile?.id && isOnline) {
+            const coords = newLocation.coords;
+            ApiService.updateDriverLocation(driverProfile.id, {
+              lat: coords.latitude,
+              lng: coords.longitude,
+              speed: coords.speed || 0,
+              heading: coords.heading || 0,
+            }).catch(() => {});
+          }
         }
       );
     } catch (error) {
@@ -137,6 +162,15 @@ export default function DriverMapScreen({ navigation, route }) {
           }
         `;
         webViewRef.current.postMessage(script);
+      }
+
+      // Inform backend of status change if driver registered
+      if (driverProfile?.id) {
+        const coords = location?.coords;
+        ApiService.updateDriverStatus(driverProfile.id, newStatus, coords ? {
+          lat: coords.latitude,
+          lng: coords.longitude,
+        } : undefined).catch(() => {});
       }
     } catch (error) {
       console.error('Error toggling online status:', error);
