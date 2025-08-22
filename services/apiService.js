@@ -14,35 +14,108 @@ class ApiService {
   // Conectar ao WebSocket
   connectSocket(userType, userId) {
     try {
-      this.socket = io(SOCKET_URL, {
-        transports: ['websocket', 'polling'],
-        timeout: 10000,
-      });
+      console.log(`🔌 Tentando conectar WebSocket: ${SOCKET_URL}`);
+      console.log(`👤 Usuário: ${userType} - ID: ${userId}`);
 
+      // Desconectar socket existente
+      if (this.socket) {
+        console.log('🔄 Desconectando socket anterior...');
+        this.socket.disconnect();
+        this.socket = null;
+      }
+
+      // Configurações do Socket.IO com fallback
+      const socketOptions = {
+        transports: ['websocket', 'polling'], // Tentar WebSocket primeiro, depois polling
+        timeout: 10000,
+        reconnection: true,
+        reconnectionDelay: 2000,
+        reconnectionDelayMax: 5000,
+        maxReconnectionAttempts: 5,
+        forceNew: true,
+        autoConnect: true,
+        // Headers para ngrok
+        extraHeaders: {
+          'ngrok-skip-browser-warning': 'true'
+        }
+      };
+
+      console.log('🔧 Configurações do Socket:', socketOptions);
+
+      this.socket = io(SOCKET_URL, socketOptions);
+
+      // Event listeners
       this.socket.on('connect', () => {
-        console.log('🔌 Conectado ao servidor');
+        console.log('✅ Socket conectado com sucesso!');
+        console.log('🆔 Socket ID:', this.socket.id);
         this.isConnected = true;
         
         // Registrar usuário
+        console.log('📝 Registrando usuário...', { userType, userId });
         this.socket.emit('register', {
           userType: userType, // 'driver' ou 'passenger'
           userId: userId
         });
       });
 
-      this.socket.on('disconnect', () => {
-        console.log('🔌 Desconectado do servidor');
+      this.socket.on('disconnect', (reason) => {
+        console.log('❌ Socket desconectado. Motivo:', reason);
         this.isConnected = false;
       });
 
       this.socket.on('connect_error', (error) => {
-        console.error('❌ Erro de conexão:', error);
+        console.error('❌ Erro de conexão Socket:', error.message);
+        console.error('📍 URL tentada:', SOCKET_URL);
+        console.error('🔧 Tipo do erro:', error.type);
+        this.isConnected = false;
+        
+        // Log detalhado do erro
+        if (error.description) {
+          console.error('📝 Descrição:', error.description);
+        }
+        if (error.context) {
+          console.error('🔍 Contexto:', error.context);
+        }
+      });
+
+      this.socket.on('reconnect', (attemptNumber) => {
+        console.log(`🔄 Reconectado após ${attemptNumber} tentativas`);
+        this.isConnected = true;
+      });
+
+      this.socket.on('reconnect_attempt', (attemptNumber) => {
+        console.log(`🔄 Tentativa de reconexão #${attemptNumber}`);
+      });
+
+      this.socket.on('reconnect_error', (error) => {
+        console.error('❌ Erro na reconexão:', error.message);
+      });
+
+      this.socket.on('reconnect_failed', () => {
+        console.error('💀 Falha total na reconexão. Máximo de tentativas atingido.');
         this.isConnected = false;
       });
 
+      // Testar conexão básica
+      setTimeout(() => {
+        if (this.socket && this.socket.connected) {
+          console.log('✅ Socket está conectado e funcionando');
+          // Enviar ping de teste
+          this.socket.emit('ping', { timestamp: Date.now() });
+        } else {
+          console.warn('⚠️ Socket não conectou dentro do tempo esperado');
+          console.log('🔍 Estado atual do socket:', {
+            connected: this.socket?.connected,
+            id: this.socket?.id,
+            transport: this.socket?.io?.engine?.transport?.name
+          });
+        }
+      }, 3000);
+
       return this.socket;
     } catch (error) {
-      console.error('❌ Erro ao conectar socket:', error);
+      console.error('💥 Erro fatal ao criar socket:', error);
+      this.isConnected = false;
       return null;
     }
   }
@@ -397,6 +470,67 @@ class ApiService {
   }
 
   // === UTILITÁRIOS ===
+
+  // Testar conectividade da API
+  async testApiConnection() {
+    try {
+      console.log('🔍 Testando conectividade da API...');
+      console.log('📍 URL base:', API_BASE_URL);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos de timeout
+      
+      const response = await fetch(`${API_BASE_URL.replace('/api', '')}/health`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ API está funcionando:', data);
+        return { success: true, data };
+      } else {
+        console.error('❌ API retornou erro:', response.status, response.statusText);
+        return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
+      }
+    } catch (error) {
+      console.error('💥 Erro ao testar API:', error.message);
+      
+      if (error.name === 'AbortError') {
+        return { success: false, error: 'Timeout - API não respondeu em 5 segundos' };
+      }
+      
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Conectar ao WebSocket com verificação prévia
+  async connectSocketWithCheck(userType, userId) {
+    try {
+      // Primeiro, testar se a API está funcionando
+      console.log('🔍 Verificando API antes de conectar WebSocket...');
+      const apiTest = await this.testApiConnection();
+      
+      if (!apiTest.success) {
+        console.error('❌ API não está funcionando. Não é possível conectar WebSocket.');
+        console.error('💡 Erro:', apiTest.error);
+        return null;
+      }
+      
+      console.log('✅ API está funcionando. Conectando WebSocket...');
+      return this.connectSocket(userType, userId);
+      
+    } catch (error) {
+      console.error('💥 Erro na verificação prévia:', error);
+      return null;
+    }
+  }
 
   // Calcular preço estimado da corrida
   calculateEstimatedFare(distance, time, vehicleType = 'standard') {

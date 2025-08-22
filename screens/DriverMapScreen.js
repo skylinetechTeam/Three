@@ -94,14 +94,16 @@ export default function DriverMapScreen({ navigation, route }) {
   };
 
   // Conectar ao WebSocket
-  const connectWebSocket = () => {
+  const connectWebSocket = async () => {
     try {
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
 
       console.log('🔌 Conectando ao WebSocket...');
-      const socket = apiService.connectSocket('driver', driverProfile.apiDriverId);
+      
+      // Usar o novo método com verificação prévia
+      const socket = await apiService.connectSocketWithCheck('driver', driverProfile.apiDriverId);
       
       if (socket) {
         socketRef.current = socket;
@@ -201,10 +203,29 @@ export default function DriverMapScreen({ navigation, route }) {
             // Atualizar localização no mapa se necessário
           }
         });
+      } else {
+        // WebSocket não pôde ser criado (provavelmente API offline)
+        console.error('❌ Não foi possível conectar ao WebSocket');
+        setSocketConnected(false);
+        
+        Toast.show({
+          type: "error",
+          text1: "Servidor offline",
+          text2: "Usando modo local como backup",
+        });
+        
+        // Usar apenas polling como backup
+        console.log('🔄 Usando apenas polling como backup...');
       }
     } catch (error) {
       console.error('❌ Erro ao conectar WebSocket:', error);
       setSocketConnected(false);
+      
+      Toast.show({
+        type: "error",
+        text1: "Erro de conexão",
+        text2: "Problema na conexão. Tentando novamente...",
+      });
     }
   };
 
@@ -247,22 +268,42 @@ export default function DriverMapScreen({ navigation, route }) {
   const fetchPendingRequests = async () => {
     try {
       if (!location?.coords || !driverProfile?.apiDriverId) {
+        console.log('⚠️ Não é possível buscar solicitações: falta localização ou ID do motorista');
         return;
       }
+
+      console.log('🔍 Buscando solicitações pendentes...');
+      console.log('📍 Localização:', location.coords);
+      console.log('👤 Driver ID:', driverProfile.apiDriverId);
 
       const response = await apiService.getPendingRides(location.coords, 10);
       
       if (response.data && Array.isArray(response.data)) {
+        console.log(`✅ Encontradas ${response.data.length} solicitações pendentes`);
         setPendingRequests(response.data);
         
         // Se não há solicitação sendo exibida e há solicitações disponíveis
         if (!currentRequest && !showRequestModal && response.data.length > 0) {
+          console.log('📱 Mostrando primeira solicitação:', response.data[0]);
           setCurrentRequest(response.data[0]);
           setShowRequestModal(true);
         }
+      } else {
+        console.log('ℹ️ Nenhuma solicitação pendente encontrada');
+        setPendingRequests([]);
       }
     } catch (error) {
       console.error('❌ Erro ao buscar solicitações pendentes:', error);
+      
+      // Se for erro de rede, mostrar toast apenas se for a primeira vez
+      if (error.message.includes('fetch') || error.message.includes('network')) {
+        console.log('🌐 Erro de rede detectado. API pode estar offline.');
+      } else {
+        console.error('💥 Erro inesperado:', error);
+      }
+      
+      // Não limpar as solicitações existentes em caso de erro
+      // setPendingRequests([]);
     }
   };
 
@@ -275,6 +316,63 @@ export default function DriverMapScreen({ navigation, route }) {
       clearInterval(locationUpdateInterval.current);
       locationUpdateInterval.current = null;
     }
+  };
+
+  // Função de debug para testar conexão
+  const testConnection = async () => {
+    console.log('🔍 === TESTE DE CONEXÃO INICIADO ===');
+    
+    try {
+      // Testar API
+      console.log('🌐 Testando API...');
+      const apiTest = await apiService.testApiConnection();
+      
+      if (apiTest.success) {
+        console.log('✅ API funcionando:', apiTest.data);
+        
+        Toast.show({
+          type: "success",
+          text1: "API OK",
+          text2: "Servidor está respondendo",
+        });
+        
+        // Testar WebSocket
+        if (driverProfile?.apiDriverId) {
+          console.log('🔌 Testando WebSocket...');
+          disconnectWebSocket();
+          await connectWebSocket();
+        }
+        
+      } else {
+        console.error('❌ API com problema:', apiTest.error);
+        
+        Toast.show({
+          type: "error",
+          text1: "API com problema",
+          text2: apiTest.error,
+        });
+      }
+      
+      // Mostrar status atual
+      console.log('📊 Status atual:', {
+        isOnline,
+        socketConnected,
+        location: location ? 'OK' : 'Sem localização',
+        driverProfile: driverProfile?.apiDriverId ? 'OK' : 'Sem ID',
+        pendingRequests: pendingRequests.length
+      });
+      
+    } catch (error) {
+      console.error('💥 Erro no teste:', error);
+      
+      Toast.show({
+        type: "error",
+        text1: "Erro no teste",
+        text2: error.message,
+      });
+    }
+    
+    console.log('🔍 === TESTE DE CONEXÃO FINALIZADO ===');
   };
 
   const requestLocationPermission = async () => {
@@ -1343,6 +1441,16 @@ export default function DriverMapScreen({ navigation, route }) {
             </View>
           )}
           
+          {/* Botão de debug - apenas em desenvolvimento */}
+          {__DEV__ && (
+            <TouchableOpacity 
+              style={styles.debugButton}
+              onPress={testConnection}
+            >
+              <MaterialIcons name="bug-report" size={16} color="#ffffff" />
+            </TouchableOpacity>
+          )}
+          
           <TouchableOpacity 
             style={[styles.statusButton, isOnline ? styles.onlineButton : styles.offlineButton]}
             onPress={toggleOnlineStatus}
@@ -1721,6 +1829,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#2563EB',
     fontWeight: 'bold',
+  },
+  debugButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginRight: 8,
   },
   statusButton: {
     flexDirection: 'row',
