@@ -50,6 +50,10 @@ export default function HomeScreen({ navigation }) {
   const [requestId, setRequestId] = useState(null);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [rideEstimate, setRideEstimate] = useState(null);
+  const [isDropdownMinimized, setIsDropdownMinimized] = useState(false);
+  const [driverLocation, setDriverLocation] = useState(null);
+  const [showRouteToDriver, setShowRouteToDriver] = useState(false);
+  const [driverArrived, setDriverArrived] = useState(false);
   const webViewRef = useRef(null);
   const slideAnim = useRef(new Animated.Value(height)).current;
   const searchTimeoutRef = useRef(null);
@@ -562,6 +566,88 @@ export default function HomeScreen({ navigation }) {
                 destinationMarker.addTo(map);
             }
 
+            // Add driver marker with car icon
+            let driverMarker = null;
+            function addDriverMarker(lat, lng, driverName) {
+                if (driverMarker) {
+                    map.removeLayer(driverMarker);
+                }
+                
+                // Criar ícone de carro para o motorista
+                const carIcon = L.divIcon({
+                    html: \`<div style="
+                        background-color: #10B981; 
+                        width: 40px; 
+                        height: 40px; 
+                        border-radius: 50%; 
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: center; 
+                        border: 3px solid white; 
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                        font-size: 20px;
+                        color: white;
+                    ">🚗</div>\`,
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20],
+                    className: 'driver-marker'
+                });
+                
+                driverMarker = L.marker([lat, lng], { icon: carIcon });
+                if (driverName) {
+                    driverMarker.bindPopup(\`Motorista: \${driverName}\`);
+                }
+                driverMarker.addTo(map);
+            }
+
+            // Calculate route to driver first, then to destination
+            let routeToDriver = null;
+            async function calculateRouteToDriver(userLat, userLng, driverLat, driverLng) {
+                try {
+                    console.log('🚗 Calculating route to driver');
+                    
+                    // Clear existing route to driver
+                    if (routeToDriver) {
+                        map.removeLayer(routeToDriver);
+                        routeToDriver = null;
+                    }
+                    
+                    const routeUrl = \`https://router.project-osrm.org/route/v1/driving/\${userLng},\${userLat};\${driverLng},\${driverLat}?overview=full&geometries=geojson\`;
+                    
+                    const response = await fetch(routeUrl);
+                    const data = await response.json();
+                    
+                    if (data.routes && data.routes.length > 0) {
+                        const route = data.routes[0];
+                        const coordinates = route.geometry.coordinates;
+                        const leafletCoords = coordinates.map(coord => [coord[1], coord[0]]);
+                        
+                        // Create route polyline to driver (green color)
+                        routeToDriver = L.polyline(leafletCoords, {
+                            color: '#10B981',
+                            weight: 4,
+                            opacity: 0.8,
+                            dashArray: '10, 5' // Linha tracejada
+                        }).addTo(map);
+                        
+                        // Fit map to show user and driver
+                        const group = new L.featureGroup([
+                            L.marker([userLat, userLng]),
+                            L.marker([driverLat, driverLng])
+                        ]);
+                        map.fitBounds(group.getBounds().pad(0.1));
+                        
+                        return {
+                            distance: route.distance,
+                            duration: route.duration
+                        };
+                    }
+                } catch (error) {
+                    console.error('❌ Error calculating route to driver:', error);
+                }
+                return null;
+            }
+
             // Center map on location
             function centerOnLocation(lat, lng, zoom = 15) {
                 map.setView([lat, lng], zoom);
@@ -672,6 +758,55 @@ export default function HomeScreen({ navigation }) {
             window.__calculateRoute = async function(startLat, startLng, endLat, endLng) {
               return await calculateRoute(startLat, startLng, endLat, endLng);
             };
+
+            // Expose driver functions
+            window.__addDriverMarker = function(lat, lng, driverName) {
+              addDriverMarker(lat, lng, driverName);
+            };
+            
+            window.__calculateRouteToDriver = async function(userLat, userLng, driverLat, driverLng) {
+              return await calculateRouteToDriver(userLat, userLng, driverLat, driverLng);
+            };
+            
+            window.__clearDriverMarker = function() {
+              if (driverMarker) {
+                map.removeLayer(driverMarker);
+                driverMarker = null;
+              }
+              if (routeToDriver) {
+                map.removeLayer(routeToDriver);
+                routeToDriver = null;
+              }
+            };
+
+            // Handle messages from React Native
+            window.addEventListener('message', function(event) {
+              try {
+                const message = JSON.parse(event.data);
+                console.log('📱 Received message:', message);
+                
+                switch(message.action) {
+                  case 'addDriverMarker':
+                    addDriverMarker(message.lat, message.lng, message.driverName);
+                    break;
+                  case 'calculateRouteToDriver':
+                    calculateRouteToDriver(message.userLat, message.userLng, message.driverLat, message.driverLng);
+                    break;
+                  case 'clearDriverMarker':
+                    if (driverMarker) {
+                      map.removeLayer(driverMarker);
+                      driverMarker = null;
+                    }
+                    if (routeToDriver) {
+                      map.removeLayer(routeToDriver);
+                      routeToDriver = null;
+                    }
+                    break;
+                }
+              } catch (error) {
+                console.error('❌ Error processing message:', error);
+              }
+            });
 
             // Initialize with user location if available
             ${location ? `
@@ -981,23 +1116,80 @@ export default function HomeScreen({ navigation }) {
     loadAppSettings();
   }, []);
 
-  // Animate dropdown when request is accepted
+  // Animate dropdown when request is accepted or minimized
   useEffect(() => {
     if (requestStatus === 'accepted') {
+      const targetValue = isDropdownMinimized ? height * 0.65 : 0; // 65% hidden when minimized
       Animated.spring(slideAnim, {
-        toValue: 0,
+        toValue: targetValue,
         useNativeDriver: true,
         tension: 100,
         friction: 8,
       }).start();
+      
+      // Simular localização do motorista quando aceito
+      if (location) {
+        const driverLat = location.latitude + (Math.random() - 0.5) * 0.01; // ~500m de distância
+        const driverLng = location.longitude + (Math.random() - 0.5) * 0.01;
+        setDriverLocation({ latitude: driverLat, longitude: driverLng });
+        setShowRouteToDriver(true);
+        setDriverArrived(false);
+        
+        // Simular chegada do motorista após 30 segundos
+        setTimeout(() => {
+          console.log('🚗 Driver arrived! Switching to destination route');
+          setDriverArrived(true);
+        }, 30000); // 30 segundos
+      }
     } else {
       Animated.timing(slideAnim, {
         toValue: height,
         duration: 300,
         useNativeDriver: true,
       }).start();
+      setShowRouteToDriver(false);
+      setDriverLocation(null);
     }
-  }, [requestStatus]);
+  }, [requestStatus, isDropdownMinimized]);
+
+  // Handle driver location and route display
+  useEffect(() => {
+    if (driverLocation && location && webViewRef.current && !driverArrived) {
+      // Show route to driver when driver hasn't arrived yet
+      webViewRef.current.postMessage(JSON.stringify({
+        action: 'addDriverMarker',
+        lat: driverLocation.latitude,
+        lng: driverLocation.longitude,
+        driverName: driverInfo?.name || 'Motorista'
+      }));
+
+      webViewRef.current.postMessage(JSON.stringify({
+        action: 'calculateRouteToDriver',
+        userLat: location.latitude,
+        userLng: location.longitude,
+        driverLat: driverLocation.latitude,
+        driverLng: driverLocation.longitude
+      }));
+    } else if (driverArrived && selectedDestination && location && webViewRef.current) {
+      // Switch to destination route when driver arrives
+      console.log('🎯 Driver arrived, showing route to destination');
+      webViewRef.current.postMessage(JSON.stringify({
+        action: 'clearDriverMarker'
+      }));
+      
+      // Show route to final destination
+      if (webViewRef.current.injectJavaScript) {
+        webViewRef.current.injectJavaScript(`
+          calculateRoute(${location.latitude}, ${location.longitude}, ${selectedDestination.lat}, ${selectedDestination.lng});
+        `);
+      }
+    } else if (!driverLocation && webViewRef.current) {
+      // Clear driver marker when no driver
+      webViewRef.current.postMessage(JSON.stringify({
+        action: 'clearDriverMarker'
+      }));
+    }
+  }, [driverLocation, location, driverInfo, driverArrived, selectedDestination]);
 
   const handleSearchChange = async (text) => {
     console.log('📝 handleSearchChange called with:', text);
@@ -1452,77 +1644,108 @@ export default function HomeScreen({ navigation }) {
           transform: [{ translateY: slideAnim }]
         }]}>
           {/* Handle Bar */}
-          <View style={styles.dropdownHandle} />
+          <TouchableOpacity 
+            style={styles.dropdownHandleContainer}
+            onPress={() => setIsDropdownMinimized(!isDropdownMinimized)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.dropdownHandle} />
+          </TouchableOpacity>
           
-          {/* Header com status */}
-          <View style={styles.dropdownHeader}>
-            <View style={styles.statusIconContainer}>
-              <MaterialIcons name="check-circle" size={24} color="#10B981" />
-            </View>
-            <View style={styles.headerTextContainer}>
-              <Text style={styles.dropdownTitle}>Motorista Encontrado!</Text>
-              <Text style={styles.dropdownSubtitle}>Chegará em {driverInfo.estimatedArrival}</Text>
-            </View>
-          </View>
-
-          {/* Informações do Motorista */}
-          <View style={styles.driverSection}>
-            <View style={styles.driverRow}>
-              <View style={styles.driverAvatarLarge}>
-                <MaterialIcons name="person" size={32} color="#4285F4" />
+          {isDropdownMinimized ? (
+            /* Versão Minimizada */
+            <View style={styles.minimizedContent}>
+              <View style={styles.minimizedRow}>
+                <View style={styles.driverAvatarSmall}>
+                  <MaterialIcons name="person" size={20} color="#4285F4" />
+                </View>
+                                 <View style={styles.minimizedInfo}>
+                   <Text style={styles.minimizedDriverName}>{driverInfo.name}</Text>
+                   <Text style={styles.minimizedStatus}>
+                     {driverArrived ? 'Chegou • Indo ao destino' : `A caminho • ${driverInfo.estimatedArrival}`}
+                   </Text>
+                 </View>
+                <TouchableOpacity style={styles.callButtonSmall} onPress={handleCallDriver}>
+                  <MaterialIcons name="phone" size={20} color="#ffffff" />
+                </TouchableOpacity>
               </View>
-              <View style={styles.driverInfo}>
-                <Text style={styles.driverNameLarge}>{driverInfo.name}</Text>
-                <View style={styles.ratingRow}>
-                  <MaterialIcons name="star" size={18} color="#FFC107" />
-                  <Text style={styles.driverRatingText}>{driverInfo.rating || 4.8}</Text>
-                  <Text style={styles.ratingCount}>(127 avaliações)</Text>
+            </View>
+          ) : (
+            /* Versão Expandida */
+            <>
+              {/* Header com status */}
+              <View style={styles.dropdownHeader}>
+                <View style={styles.statusIconContainer}>
+                  <MaterialIcons name="check-circle" size={24} color="#10B981" />
+                </View>
+                <View style={styles.headerTextContainer}>
+                  <Text style={styles.dropdownTitle}>Motorista Encontrado!</Text>
+                  <Text style={styles.dropdownSubtitle}>Chegará em {driverInfo.estimatedArrival}</Text>
                 </View>
               </View>
-              <TouchableOpacity style={styles.callButton} onPress={handleCallDriver}>
-                <MaterialIcons name="phone" size={24} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
-          </View>
 
-          {/* Informações do Veículo */}
-          <View style={styles.vehicleSection}>
-            <View style={styles.vehicleHeader}>
-              <MaterialIcons name="directions-car" size={24} color="#4285F4" />
-              <Text style={styles.vehicleSectionTitle}>Veículo</Text>
-            </View>
-            <View style={styles.vehicleDetails}>
-              <View style={styles.vehicleRow}>
-                <Text style={styles.vehicleLabel}>Modelo:</Text>
-                <Text style={styles.vehicleValue}>
-                  {driverInfo.vehicle ? `${driverInfo.vehicle.make} ${driverInfo.vehicle.model}` : 'Toyota Corolla'}
-                </Text>
+              {/* Informações do Motorista */}
+              <View style={styles.driverSection}>
+                <View style={styles.driverRow}>
+                  <View style={styles.driverAvatarLarge}>
+                    <MaterialIcons name="person" size={32} color="#4285F4" />
+                  </View>
+                  <View style={styles.driverInfo}>
+                    <Text style={styles.driverNameLarge}>{driverInfo.name}</Text>
+                    <View style={styles.ratingRow}>
+                      <MaterialIcons name="star" size={18} color="#FFC107" />
+                      <Text style={styles.driverRatingText}>{driverInfo.rating || 4.8}</Text>
+                      <Text style={styles.ratingCount}>(127 avaliações)</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity style={styles.callButton} onPress={handleCallDriver}>
+                    <MaterialIcons name="phone" size={24} color="#ffffff" />
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={styles.vehicleRow}>
-                <Text style={styles.vehicleLabel}>Placa:</Text>
-                <Text style={styles.vehiclePlate}>
-                  {driverInfo.vehicle ? driverInfo.vehicle.plate : 'ABC-1234'}
-                </Text>
-              </View>
-              <View style={styles.vehicleRow}>
-                <Text style={styles.vehicleLabel}>Cor:</Text>
-                <Text style={styles.vehicleValue}>
-                  {driverInfo.vehicle ? driverInfo.vehicle.color : 'Branco'}
-                </Text>
-              </View>
-            </View>
-          </View>
 
-          {/* Status e Ações */}
-          <View style={styles.dropdownFooter}>
-            <View style={styles.statusRow}>
-              <View style={styles.statusDotLarge} />
-              <Text style={styles.statusTextLarge}>Motorista a caminho</Text>
-            </View>
-            <TouchableOpacity style={styles.cancelButton} onPress={handleNewSearch}>
-              <Text style={styles.cancelButtonText}>Cancelar Corrida</Text>
-            </TouchableOpacity>
-          </View>
+              {/* Informações do Veículo */}
+              <View style={styles.vehicleSection}>
+                <View style={styles.vehicleHeader}>
+                  <MaterialIcons name="directions-car" size={24} color="#4285F4" />
+                  <Text style={styles.vehicleSectionTitle}>Veículo</Text>
+                </View>
+                <View style={styles.vehicleDetails}>
+                  <View style={styles.vehicleRow}>
+                    <Text style={styles.vehicleLabel}>Modelo:</Text>
+                    <Text style={styles.vehicleValue}>
+                      {driverInfo.vehicle ? `${driverInfo.vehicle.make} ${driverInfo.vehicle.model}` : 'Toyota Corolla'}
+                    </Text>
+                  </View>
+                  <View style={styles.vehicleRow}>
+                    <Text style={styles.vehicleLabel}>Placa:</Text>
+                    <Text style={styles.vehiclePlate}>
+                      {driverInfo.vehicle ? driverInfo.vehicle.plate : 'ABC-1234'}
+                    </Text>
+                  </View>
+                  <View style={styles.vehicleRow}>
+                    <Text style={styles.vehicleLabel}>Cor:</Text>
+                    <Text style={styles.vehicleValue}>
+                      {driverInfo.vehicle ? driverInfo.vehicle.color : 'Branco'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+                             {/* Status e Ações */}
+               <View style={styles.dropdownFooter}>
+                 <View style={styles.statusRow}>
+                   <View style={styles.statusDotLarge} />
+                   <Text style={styles.statusTextLarge}>
+                     {driverArrived ? 'Motorista chegou - Indo ao destino' : 'Motorista a caminho'}
+                   </Text>
+                 </View>
+                <TouchableOpacity style={styles.cancelButton} onPress={handleNewSearch}>
+                  <Text style={styles.cancelButtonText}>Cancelar Corrida</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </Animated.View>
       )}
 
@@ -2398,13 +2621,15 @@ const styles = StyleSheet.create({
     elevation: 20,
     maxHeight: height * 0.75,
   },
+  dropdownHandleContainer: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
   dropdownHandle: {
     width: 40,
     height: 4,
     backgroundColor: '#E5E7EB',
     borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 20,
   },
   dropdownHeader: {
     flexDirection: 'row',
@@ -2652,6 +2877,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#DC2626',
     fontWeight: '600',
+  },
+  // Estilos para versão minimizada
+  minimizedContent: {
+    paddingVertical: 12,
+  },
+  minimizedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  driverAvatarSmall: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  minimizedInfo: {
+    flex: 1,
+  },
+  minimizedDriverName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  minimizedStatus: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  callButtonSmall: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   statusIndicator: {
