@@ -51,6 +51,7 @@ export default function HomeScreen({ navigation }) {
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [rideEstimate, setRideEstimate] = useState(null);
   const webViewRef = useRef(null);
+  const slideAnim = useRef(new Animated.Value(height)).current;
   const searchTimeoutRef = useRef(null);
   
   // Animações
@@ -980,6 +981,24 @@ export default function HomeScreen({ navigation }) {
     loadAppSettings();
   }, []);
 
+  // Animate dropdown when request is accepted
+  useEffect(() => {
+    if (requestStatus === 'accepted') {
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 100,
+        friction: 8,
+      }).start();
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: height,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [requestStatus]);
+
   const handleSearchChange = async (text) => {
     console.log('📝 handleSearchChange called with:', text);
     setDestination(text);
@@ -1427,71 +1446,84 @@ export default function HomeScreen({ navigation }) {
         </View>
       )}
 
-      {/* Request Status - Solicitação Aceita */}
+      {/* Request Status - Solicitação Aceita - Dropdown Bottom */}
       {requestStatus === 'accepted' && driverInfo && (
-        <View style={styles.driverSearchOverlay}>
-          <View style={styles.acceptedCard}>
-            {/* Cabeçalho de sucesso */}
-            <View style={styles.acceptedHeader}>
-              <View style={styles.successIconContainer}>
-                <MaterialIcons name="check-circle" size={50} color="#10B981" />
-              </View>
-              <Text style={styles.acceptedTitle}>Solicitação Aceita!</Text>
-              <Text style={styles.acceptedSubtitle}>Motorista encontrado e confirmado</Text>
+        <Animated.View style={[styles.driverAcceptedDropdown, {
+          transform: [{ translateY: slideAnim }]
+        }]}>
+          {/* Handle Bar */}
+          <View style={styles.dropdownHandle} />
+          
+          {/* Header com status */}
+          <View style={styles.dropdownHeader}>
+            <View style={styles.statusIconContainer}>
+              <MaterialIcons name="check-circle" size={24} color="#10B981" />
             </View>
-
-            {/* Informações do motorista */}
-            <View style={styles.driverInfoCard}>
-              <View style={styles.driverInfoHeader}>
-                <View style={styles.driverAvatar}>
-                  <MaterialIcons name="person" size={30} color="#4285F4" />
-                </View>
-                <View style={styles.driverDetails}>
-                  <Text style={styles.driverName}>{driverInfo.name}</Text>
-                  <View style={styles.ratingContainer}>
-                    <MaterialIcons name="star" size={16} color="#FFC107" />
-                    <Text style={styles.driverRating}>{driverInfo.rating || 4.8}</Text>
-                  </View>
-                </View>
-                <View style={styles.estimatedTimeContainer}>
-                  <MaterialIcons name="access-time" size={16} color="#6B7280" />
-                  <Text style={styles.estimatedTime}>{driverInfo.estimatedArrival}</Text>
-                </View>
-              </View>
-
-              {/* Informações do veículo */}
-              {driverInfo.vehicle && (
-                <View style={styles.vehicleInfo}>
-                  <MaterialIcons name="directions-car" size={16} color="#6B7280" />
-                  <Text style={styles.vehicleText}>
-                    {driverInfo.vehicle.make} {driverInfo.vehicle.model} - {driverInfo.vehicle.plate}
-                  </Text>
-                </View>
-              )}
-
-              {/* Status em tempo real */}
-              <View style={styles.statusContainer}>
-                <View style={styles.statusIndicator}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.statusText}>Motorista a caminho</Text>
-                </View>
-              </View>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.dropdownTitle}>Motorista Encontrado!</Text>
+              <Text style={styles.dropdownSubtitle}>Chegará em {driverInfo.estimatedArrival}</Text>
             </View>
+          </View>
 
-            {/* Ações */}
-            <View style={styles.acceptedActions}>
-              <TouchableOpacity style={styles.cancelRideButton} onPress={handleNewSearch}>
-                <MaterialIcons name="close" size={18} color="#6B7280" />
-                <Text style={styles.cancelRideText}>Cancelar</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.callDriverButton} onPress={handleCallDriver}>
-                <MaterialIcons name="phone" size={20} color="#ffffff" />
-                <Text style={styles.callDriverText}>Ligar</Text>
+          {/* Informações do Motorista */}
+          <View style={styles.driverSection}>
+            <View style={styles.driverRow}>
+              <View style={styles.driverAvatarLarge}>
+                <MaterialIcons name="person" size={32} color="#4285F4" />
+              </View>
+              <View style={styles.driverInfo}>
+                <Text style={styles.driverNameLarge}>{driverInfo.name}</Text>
+                <View style={styles.ratingRow}>
+                  <MaterialIcons name="star" size={18} color="#FFC107" />
+                  <Text style={styles.driverRatingText}>{driverInfo.rating || 4.8}</Text>
+                  <Text style={styles.ratingCount}>(127 avaliações)</Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.callButton} onPress={handleCallDriver}>
+                <MaterialIcons name="phone" size={24} color="#ffffff" />
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+
+          {/* Informações do Veículo */}
+          <View style={styles.vehicleSection}>
+            <View style={styles.vehicleHeader}>
+              <MaterialIcons name="directions-car" size={24} color="#4285F4" />
+              <Text style={styles.vehicleSectionTitle}>Veículo</Text>
+            </View>
+            <View style={styles.vehicleDetails}>
+              <View style={styles.vehicleRow}>
+                <Text style={styles.vehicleLabel}>Modelo:</Text>
+                <Text style={styles.vehicleValue}>
+                  {driverInfo.vehicle ? `${driverInfo.vehicle.make} ${driverInfo.vehicle.model}` : 'Toyota Corolla'}
+                </Text>
+              </View>
+              <View style={styles.vehicleRow}>
+                <Text style={styles.vehicleLabel}>Placa:</Text>
+                <Text style={styles.vehiclePlate}>
+                  {driverInfo.vehicle ? driverInfo.vehicle.plate : 'ABC-1234'}
+                </Text>
+              </View>
+              <View style={styles.vehicleRow}>
+                <Text style={styles.vehicleLabel}>Cor:</Text>
+                <Text style={styles.vehicleValue}>
+                  {driverInfo.vehicle ? driverInfo.vehicle.color : 'Branco'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Status e Ações */}
+          <View style={styles.dropdownFooter}>
+            <View style={styles.statusRow}>
+              <View style={styles.statusDotLarge} />
+              <Text style={styles.statusTextLarge}>Motorista a caminho</Text>
+            </View>
+            <TouchableOpacity style={styles.cancelButton} onPress={handleNewSearch}>
+              <Text style={styles.cancelButtonText}>Cancelar Corrida</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
       )}
 
       {/* Drivers Not Found - Nova Interface */}
@@ -2347,52 +2379,164 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     maxWidth: '100%',
   },
-  // Estilos para Solicitação Aceita
-  acceptedCard: {
+  // Estilos para Dropdown de Solicitação Aceita
+  driverAcceptedDropdown: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: '#ffffff',
-    borderRadius: 20,
-    marginHorizontal: 20,
-    paddingVertical: 30,
-    paddingHorizontal: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 8,
+    paddingBottom: 34, // Safe area
+    paddingHorizontal: 20,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
-    shadowRadius: 15,
-    elevation: 10,
-    maxWidth: width - 40,
-    maxHeight: height * 0.8,
+    shadowRadius: 20,
+    elevation: 20,
+    maxHeight: height * 0.75,
   },
-  acceptedHeader: {
+  dropdownHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  successIconContainer: {
-    marginBottom: 12,
+  statusIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  driverInfoCard: {
+  headerTextContainer: {
+    flex: 1,
+  },
+  dropdownTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  dropdownSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  driverSection: {
+    marginBottom: 20,
+  },
+  driverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  driverAvatarLarge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  driverInfo: {
+    flex: 1,
+  },
+  driverNameLarge: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  driverRatingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginLeft: 4,
+    marginRight: 8,
+  },
+  ratingCount: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  callButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  vehicleSection: {
     backgroundColor: '#F8FAFC',
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  acceptedTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#10B981',
-    marginBottom: 4,
+  vehicleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  acceptedSubtitle: {
+  vehicleSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginLeft: 8,
+  },
+  vehicleDetails: {
+    gap: 8,
+  },
+  vehicleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  vehicleLabel: {
     fontSize: 14,
     color: '#6B7280',
-    textAlign: 'center',
+    fontWeight: '500',
   },
-  driverInfoCard: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
+  vehicleValue: {
+    fontSize: 14,
+    color: '#1F2937',
+    fontWeight: '600',
+  },
+  vehiclePlate: {
+    fontSize: 14,
+    color: '#1F2937',
+    fontWeight: '700',
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   driverInfoHeader: {
     flexDirection: 'row',
@@ -2473,6 +2617,42 @@ const styles = StyleSheet.create({
     color: '#374151',
     fontWeight: '500',
   },
+  dropdownFooter: {
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  statusDotLarge: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+    marginRight: 12,
+  },
+  statusTextLarge: {
+    fontSize: 16,
+    color: '#1F2937',
+    fontWeight: '600',
+  },
+  cancelButton: {
+    backgroundColor: '#FEF2F2',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: '#DC2626',
+    fontWeight: '600',
+  },
 
   statusIndicator: {
     flexDirection: 'row',
@@ -2490,53 +2670,14 @@ const styles = StyleSheet.create({
     color: '#10B981',
     fontWeight: '500',
   },
-  acceptedActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-  },
-  callDriverButton: {
-    flex: 2,
-    flexDirection: 'row',
-    backgroundColor: '#10B981',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#10B981',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
+
   callDriverText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
   },
-  cancelRideButton: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  cancelRideText: {
-    color: '#6B7280',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
+
   // Status Indicator Bar
   statusIndicatorBar: {
     backgroundColor: '#F3F4F6',
