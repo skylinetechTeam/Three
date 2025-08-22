@@ -114,12 +114,8 @@ export default function HomeScreen({ navigation }) {
             apiRegistered: true
           }));
           
-          // Connect to socket
-          console.log('🔌 Conectando WebSocket como passageiro:', passengerId);
-          apiService.connectSocket('passenger', passengerId);
-          
-          // Configure event callbacks using the new system
-          console.log('🎯 Configurando callbacks de eventos...');
+          // Configure event callbacks ANTES de conectar o socket
+          console.log('🎯 Configurando callbacks de eventos ANTES da conexão...');
           
           // Listen for ride updates
           apiService.onEvent('ride_accepted', (data) => {
@@ -308,19 +304,70 @@ export default function HomeScreen({ navigation }) {
             }
           });
           
+          // AGORA conectar o socket APÓS configurar todos os callbacks
+          console.log('🔌 Conectando WebSocket como passageiro APÓS configurar callbacks:', passengerId);
+          console.log('📊 Total de callbacks registrados antes da conexão:', apiService.eventCallbacks?.size || 0);
+          apiService.connectSocket('passenger', passengerId);
+          
         } catch (apiError) {
           console.warn('Passenger API registration failed:', apiError);
         }
       } else if (profile.apiPassengerId) {
-        // Connect to socket if already registered
-        console.log('🔌 Conectando WebSocket para passageiro já registrado:', profile.apiPassengerId);
-        apiService.connectSocket('passenger', profile.apiPassengerId);
-        
-        // Configure event callbacks for already registered passenger
+        // Configure callbacks FIRST for already registered passenger
         console.log('🎯 Configurando callbacks para passageiro já registrado...');
         
-        // Note: The event callbacks are the same, so we could extract them to a separate function
-        // For now, we'll rely on the fact that if callbacks are already registered, they won't be duplicated
+        // Configurar os mesmos callbacks (simplificado)
+        apiService.onEvent('ride_accepted', (data) => {
+          console.log('🎉 [PASSAGEIRO JÁ REGISTRADO] Corrida aceita pelo motorista:', data);
+          if (data.test) {
+            console.log('🧪 TESTE MANUAL FUNCIONOU! Callback foi executado corretamente!');
+            return;
+          }
+          console.log('🛑 PARANDO BUSCA DE MOTORISTAS IMEDIATAMENTE');
+          setIsSearchingDrivers(false);
+          setDriversFound(true);
+          setDriverSearchTime(0);
+          if (window.driverSearchInterval) {
+            clearInterval(window.driverSearchInterval);
+            window.driverSearchInterval = null;
+          }
+          if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+            searchTimeoutRef.current = null;
+          }
+          setRequestStatus('accepted');
+          setDriverInfo({
+            id: data.driver?.id || data.driverId,
+            name: data.driver?.name || 'Motorista',
+            phone: data.driver?.phone || '',
+            vehicle: data.driver?.vehicle || {},
+            rating: data.driver?.rating || 0,
+            location: data.driver?.location || null,
+            estimatedArrival: data.estimatedArrival || '5-10 minutos'
+          });
+          if (data.rideId) {
+            setRequestId(data.rideId);
+          }
+          if (data.ride) {
+            setCurrentRide(prev => ({
+              ...prev,
+              ...data.ride,
+              driver: data.driver,
+              status: 'accepted'
+            }));
+          }
+          Toast.show({
+            type: "success",
+            text1: "Solicitação Aceita! 🎉",
+            text2: `${data.driver?.name || 'Motorista'} está a caminho - ${data.estimatedArrival || '5-10 min'}`,
+            visibilityTime: 6000,
+          });
+        });
+        
+        // Connect to socket AFTER configuring callbacks
+        console.log('🔌 Conectando WebSocket para passageiro já registrado APÓS callbacks:', profile.apiPassengerId);
+        console.log('📊 Total de callbacks registrados antes da conexão:', apiService.eventCallbacks?.size || 0);
+        apiService.connectSocket('passenger', profile.apiPassengerId);
       }
       
     } catch (error) {
@@ -805,7 +852,8 @@ export default function HomeScreen({ navigation }) {
             hasDriverInfo: !!driverInfo,
             hasRequestId: !!requestId,
             callbacksRegistered: apiService.eventCallbacks?.has('ride_accepted'),
-            totalCallbacks: apiService.eventCallbacks?.get('ride_accepted')?.length || 0
+            totalCallbacks: apiService.eventCallbacks?.get('ride_accepted')?.length || 0,
+            allRegisteredEvents: Array.from(apiService.eventCallbacks?.keys() || [])
           });
           
           // TESTE MANUAL DO SOCKET A CADA 10 SEGUNDOS
