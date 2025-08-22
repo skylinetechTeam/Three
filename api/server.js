@@ -153,11 +153,11 @@ app.use('*', (req, res) => {
 });
 
 // Start server
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log(`📡 Socket.IO habilitado para atualizações em tempo real`);
-  console.log(`🌐 API disponível em: http://localhost:${PORT}/api`);
-  console.log(`❤️ Health check: http://localhost:${PORT}/health`);
+  console.log(`🌐 API disponível em: http://172.30.0.2:${PORT}/api`);
+  console.log(`❤️ Health check: http://172.30.0.2:${PORT}/health`);
 });
 
 // Graceful shutdown

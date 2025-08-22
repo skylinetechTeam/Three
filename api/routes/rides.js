@@ -131,6 +131,40 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/rides/pending - Obter corridas pendentes para motoristas
+router.get('/pending', async (req, res) => {
+  try {
+    const { driverLocation, radius = 10 } = req.query; // radius in km
+    
+    let location = null;
+    if (driverLocation) {
+      try {
+        location = JSON.parse(driverLocation);
+      } catch (e) {
+        return res.status(400).json({
+          error: 'Invalid location format',
+          message: 'Formato de localização inválido'
+        });
+      }
+    }
+
+    const pendingRides = await RideService.getPendingRides(location, parseFloat(radius));
+    
+    res.json({
+      success: true,
+      data: pendingRides,
+      count: pendingRides.length
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar corridas pendentes:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Erro ao buscar corridas pendentes'
+    });
+  }
+});
+
 // GET /api/rides/:id - Obter detalhes de uma corrida específica
 router.get('/:id', async (req, res) => {
   try {
@@ -447,40 +481,6 @@ router.put('/:id/location', async (req, res) => {
     res.status(500).json({
       error: 'Internal server error',
       message: 'Erro ao atualizar localização'
-    });
-  }
-});
-
-// GET /api/rides/pending - Obter corridas pendentes para motoristas
-router.get('/pending', async (req, res) => {
-  try {
-    const { driverLocation, radius = 10 } = req.query; // radius in km
-    
-    let location = null;
-    if (driverLocation) {
-      try {
-        location = JSON.parse(driverLocation);
-      } catch (e) {
-        return res.status(400).json({
-          error: 'Invalid location format',
-          message: 'Formato de localização inválido'
-        });
-      }
-    }
-
-    const pendingRides = await RideService.getPendingRides(location, parseFloat(radius));
-    
-    res.json({
-      success: true,
-      data: pendingRides,
-      count: pendingRides.length
-    });
-
-  } catch (error) {
-    console.error('❌ Erro ao buscar corridas pendentes:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Erro ao buscar corridas pendentes'
     });
   }
 });
