@@ -12,6 +12,9 @@ import {
   Alert,
   Platform,
   Animated,
+  Modal,
+  Keyboard,
+  KeyboardAvoidingView,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -47,7 +50,12 @@ export default function HomeScreen({ navigation }) {
   const [requestId, setRequestId] = useState(null);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [rideEstimate, setRideEstimate] = useState(null);
+  const [isDropdownMinimized, setIsDropdownMinimized] = useState(false);
+  const [driverLocation, setDriverLocation] = useState(null);
+  const [showRouteToDriver, setShowRouteToDriver] = useState(false);
+  const [driverArrived, setDriverArrived] = useState(false);
   const webViewRef = useRef(null);
+  const slideAnim = useRef(new Animated.Value(height)).current;
   const searchTimeoutRef = useRef(null);
   
   // Animações
@@ -558,6 +566,88 @@ export default function HomeScreen({ navigation }) {
                 destinationMarker.addTo(map);
             }
 
+            // Add driver marker with car icon
+            let driverMarker = null;
+            function addDriverMarker(lat, lng, driverName) {
+                if (driverMarker) {
+                    map.removeLayer(driverMarker);
+                }
+                
+                // Criar ícone de carro para o motorista
+                const carIcon = L.divIcon({
+                    html: \`<div style="
+                        background-color: #10B981; 
+                        width: 40px; 
+                        height: 40px; 
+                        border-radius: 50%; 
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: center; 
+                        border: 3px solid white; 
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                        font-size: 20px;
+                        color: white;
+                    ">🚗</div>\`,
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20],
+                    className: 'driver-marker'
+                });
+                
+                driverMarker = L.marker([lat, lng], { icon: carIcon });
+                if (driverName) {
+                    driverMarker.bindPopup(\`Motorista: \${driverName}\`);
+                }
+                driverMarker.addTo(map);
+            }
+
+            // Calculate route to driver first, then to destination
+            let routeToDriver = null;
+            async function calculateRouteToDriver(userLat, userLng, driverLat, driverLng) {
+                try {
+                    console.log('🚗 Calculating route to driver');
+                    
+                    // Clear existing route to driver
+                    if (routeToDriver) {
+                        map.removeLayer(routeToDriver);
+                        routeToDriver = null;
+                    }
+                    
+                    const routeUrl = \`https://router.project-osrm.org/route/v1/driving/\${userLng},\${userLat};\${driverLng},\${driverLat}?overview=full&geometries=geojson\`;
+                    
+                    const response = await fetch(routeUrl);
+                    const data = await response.json();
+                    
+                    if (data.routes && data.routes.length > 0) {
+                        const route = data.routes[0];
+                        const coordinates = route.geometry.coordinates;
+                        const leafletCoords = coordinates.map(coord => [coord[1], coord[0]]);
+                        
+                        // Create route polyline to driver (green color)
+                        routeToDriver = L.polyline(leafletCoords, {
+                            color: '#10B981',
+                            weight: 4,
+                            opacity: 0.8,
+                            dashArray: '10, 5' // Linha tracejada
+                        }).addTo(map);
+                        
+                        // Fit map to show user and driver
+                        const group = new L.featureGroup([
+                            L.marker([userLat, userLng]),
+                            L.marker([driverLat, driverLng])
+                        ]);
+                        map.fitBounds(group.getBounds().pad(0.1));
+                        
+                        return {
+                            distance: route.distance,
+                            duration: route.duration
+                        };
+                    }
+                } catch (error) {
+                    console.error('❌ Error calculating route to driver:', error);
+                }
+                return null;
+            }
+
             // Center map on location
             function centerOnLocation(lat, lng, zoom = 15) {
                 map.setView([lat, lng], zoom);
@@ -668,6 +758,55 @@ export default function HomeScreen({ navigation }) {
             window.__calculateRoute = async function(startLat, startLng, endLat, endLng) {
               return await calculateRoute(startLat, startLng, endLat, endLng);
             };
+
+            // Expose driver functions
+            window.__addDriverMarker = function(lat, lng, driverName) {
+              addDriverMarker(lat, lng, driverName);
+            };
+            
+            window.__calculateRouteToDriver = async function(userLat, userLng, driverLat, driverLng) {
+              return await calculateRouteToDriver(userLat, userLng, driverLat, driverLng);
+            };
+            
+            window.__clearDriverMarker = function() {
+              if (driverMarker) {
+                map.removeLayer(driverMarker);
+                driverMarker = null;
+              }
+              if (routeToDriver) {
+                map.removeLayer(routeToDriver);
+                routeToDriver = null;
+              }
+            };
+
+            // Handle messages from React Native
+            window.addEventListener('message', function(event) {
+              try {
+                const message = JSON.parse(event.data);
+                console.log('📱 Received message:', message);
+                
+                switch(message.action) {
+                  case 'addDriverMarker':
+                    addDriverMarker(message.lat, message.lng, message.driverName);
+                    break;
+                  case 'calculateRouteToDriver':
+                    calculateRouteToDriver(message.userLat, message.userLng, message.driverLat, message.driverLng);
+                    break;
+                  case 'clearDriverMarker':
+                    if (driverMarker) {
+                      map.removeLayer(driverMarker);
+                      driverMarker = null;
+                    }
+                    if (routeToDriver) {
+                      map.removeLayer(routeToDriver);
+                      routeToDriver = null;
+                    }
+                    break;
+                }
+              } catch (error) {
+                console.error('❌ Error processing message:', error);
+              }
+            });
 
             // Initialize with user location if available
             ${location ? `
@@ -954,6 +1093,100 @@ export default function HomeScreen({ navigation }) {
     setFilteredResults([]);
   };
 
+ 
+
+  // Load app settings on component mount
+  useEffect(() => {
+    const loadAppSettings = async () => {
+      try {
+        const settings = await LocalDatabase.getAppSettings();
+        if (settings && settings.defaultTaxiType) {
+          console.log('📱 Loading saved taxi type:', settings.defaultTaxiType);
+          setSelectedTaxiType(settings.defaultTaxiType);
+        }
+      } catch (error) {
+        console.error('Error loading app settings:', error);
+      }
+    };
+
+    loadAppSettings();
+  }, []);
+
+  // Animate dropdown when request is accepted or minimized
+  useEffect(() => {
+    if (requestStatus === 'accepted') {
+      const targetValue = isDropdownMinimized ? height * 0.65 : 0; // 65% hidden when minimized
+      Animated.spring(slideAnim, {
+        toValue: targetValue,
+        useNativeDriver: true,
+        tension: 100,
+        friction: 8,
+      }).start();
+      
+      // Simular localização do motorista quando aceito
+      if (location) {
+        const driverLat = location.latitude + (Math.random() - 0.5) * 0.01; // ~500m de distância
+        const driverLng = location.longitude + (Math.random() - 0.5) * 0.01;
+        setDriverLocation({ latitude: driverLat, longitude: driverLng });
+        setShowRouteToDriver(true);
+        setDriverArrived(false);
+        
+        // Simular chegada do motorista após 30 segundos
+        setTimeout(() => {
+          console.log('🚗 Driver arrived! Switching to destination route');
+          setDriverArrived(true);
+        }, 30000); // 30 segundos
+      }
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: height,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+      setShowRouteToDriver(false);
+      setDriverLocation(null);
+    }
+  }, [requestStatus, isDropdownMinimized]);
+
+  // Handle driver location and route display
+  useEffect(() => {
+    if (driverLocation && location && webViewRef.current && !driverArrived) {
+      // Show route to driver when driver hasn't arrived yet
+      webViewRef.current.postMessage(JSON.stringify({
+        action: 'addDriverMarker',
+        lat: driverLocation.latitude,
+        lng: driverLocation.longitude,
+        driverName: driverInfo?.name || 'Motorista'
+      }));
+
+      webViewRef.current.postMessage(JSON.stringify({
+        action: 'calculateRouteToDriver',
+        userLat: location.latitude,
+        userLng: location.longitude,
+        driverLat: driverLocation.latitude,
+        driverLng: driverLocation.longitude
+      }));
+    } else if (driverArrived && selectedDestination && location && webViewRef.current) {
+      // Switch to destination route when driver arrives
+      console.log('🎯 Driver arrived, showing route to destination');
+      webViewRef.current.postMessage(JSON.stringify({
+        action: 'clearDriverMarker'
+      }));
+      
+      // Show route to final destination
+      if (webViewRef.current.injectJavaScript) {
+        webViewRef.current.injectJavaScript(`
+          calculateRoute(${location.latitude}, ${location.longitude}, ${selectedDestination.lat}, ${selectedDestination.lng});
+        `);
+      }
+    } else if (!driverLocation && webViewRef.current) {
+      // Clear driver marker when no driver
+      webViewRef.current.postMessage(JSON.stringify({
+        action: 'clearDriverMarker'
+      }));
+    }
+  }, [driverLocation, location, driverInfo, driverArrived, selectedDestination]);
+
   const handleSearchChange = async (text) => {
     console.log('📝 handleSearchChange called with:', text);
     setDestination(text);
@@ -1057,8 +1290,12 @@ export default function HomeScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      {console.log('🏠 HomeScreen render - States:', { isSearchingDrivers, selectedDestination: !!selectedDestination, driverSearchTime, driversFound })}
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View style={styles.container}>
+      {console.log('🏠 HomeScreen render - States:', { isSearchingDrivers, selectedDestination: !!selectedDestination, driverSearchTime, driversFound, selectedTaxiType })}
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       
       {/* Status Indicator - WebSocket Connection & Request Status */}
@@ -1228,9 +1465,16 @@ export default function HomeScreen({ navigation }) {
                 styles.taxiDropdownOption,
                 selectedTaxiType === 'Coletivo' && styles.taxiDropdownOptionSelected
               ]}
-              onPress={() => {
+              onPress={async () => {
+                console.log('🚌 Changing taxi type to Coletivo');
                 setSelectedTaxiType('Coletivo');
                 setIsDropdownOpen(false);
+                // Save preference
+                try {
+                  await LocalDatabase.saveAppSettings({ defaultTaxiType: 'Coletivo' });
+                } catch (error) {
+                  console.error('Error saving taxi type preference:', error);
+                }
               }}
             >
               <MaterialIcons name="directions-bus" size={16} color={selectedTaxiType === 'Coletivo' ? '#4285F4' : '#6B7280'} />
@@ -1250,9 +1494,16 @@ export default function HomeScreen({ navigation }) {
                 styles.taxiDropdownOption,
                 selectedTaxiType === 'Privado' && styles.taxiDropdownOptionSelected
               ]}
-              onPress={() => {
+              onPress={async () => {
+                console.log('🚗 Changing taxi type to Privado');
                 setSelectedTaxiType('Privado');
                 setIsDropdownOpen(false);
+                // Save preference
+                try {
+                  await LocalDatabase.saveAppSettings({ defaultTaxiType: 'Privado' });
+                } catch (error) {
+                  console.error('Error saving taxi type preference:', error);
+                }
               }}
             >
               <MaterialIcons name="local-taxi" size={16} color={selectedTaxiType === 'Privado' ? '#4285F4' : '#6B7280'} />
@@ -1288,7 +1539,10 @@ export default function HomeScreen({ navigation }) {
               value={destination}
               onChangeText={setDestination}
               onFocus={handleSearchFocus}
-              editable={!isSearchExpanded}
+              editable={true}
+              returnKeyType="search"
+              blurOnSubmit={false}
+              enablesReturnKeyAutomatically={true}
             />
           </TouchableOpacity>
 
@@ -1380,70 +1634,115 @@ export default function HomeScreen({ navigation }) {
         </View>
       )}
 
-      {/* Request Status - Solicitação Aceita */}
+      {/* Request Status - Solicitação Aceita - Dropdown Bottom */}
       {requestStatus === 'accepted' && driverInfo && (
-        <View style={styles.driverSearchOverlay}>
-          <View style={styles.acceptedCard}>
-            {/* Cabeçalho de sucesso */}
-            <View style={styles.acceptedHeader}>
-              <View style={styles.successIconContainer}>
-                <MaterialIcons name="check-circle" size={50} color="#10B981" />
-              </View>
-              <Text style={styles.acceptedTitle}>Solicitação Aceita!</Text>
-              <Text style={styles.acceptedSubtitle}>Motorista encontrado e confirmado</Text>
-            </View>
-
-            {/* Informações do motorista */}
-            <View style={styles.driverInfoCard}>
-              <View style={styles.driverInfoHeader}>
-                <View style={styles.driverAvatar}>
-                  <MaterialIcons name="person" size={30} color="#4285F4" />
+        <Animated.View style={[styles.driverAcceptedDropdown, {
+          transform: [{ translateY: slideAnim }]
+        }]}>
+          {/* Handle Bar */}
+          <TouchableOpacity 
+            style={styles.dropdownHandleContainer}
+            onPress={() => setIsDropdownMinimized(!isDropdownMinimized)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.dropdownHandle} />
+          </TouchableOpacity>
+          
+          {isDropdownMinimized ? (
+            /* Versão Minimizada */
+            <View style={styles.minimizedContent}>
+              <View style={styles.minimizedRow}>
+                <View style={styles.driverAvatarSmall}>
+                  <MaterialIcons name="person" size={20} color="#4285F4" />
                 </View>
-                <View style={styles.driverDetails}>
-                  <Text style={styles.driverName}>{driverInfo.name}</Text>
-                  <View style={styles.ratingContainer}>
-                    <MaterialIcons name="star" size={16} color="#FFC107" />
-                    <Text style={styles.driverRating}>{driverInfo.rating || 4.8}</Text>
+                                 <View style={styles.minimizedInfo}>
+                   <Text style={styles.minimizedDriverName}>{driverInfo.name}</Text>
+                   <Text style={styles.minimizedStatus}>
+                     {driverArrived ? 'Chegou • Indo ao destino' : `A caminho • ${driverInfo.estimatedArrival}`}
+                   </Text>
+                 </View>
+                <TouchableOpacity style={styles.callButtonSmall} onPress={handleCallDriver}>
+                  <MaterialIcons name="phone" size={20} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            /* Versão Expandida */
+            <>
+              {/* Header com status */}
+              <View style={styles.dropdownHeader}>
+                <View style={styles.statusIconContainer}>
+                  <MaterialIcons name="check-circle" size={24} color="#10B981" />
+                </View>
+                <View style={styles.headerTextContainer}>
+                  <Text style={styles.dropdownTitle}>Motorista Encontrado!</Text>
+                  <Text style={styles.dropdownSubtitle}>Chegará em {driverInfo.estimatedArrival}</Text>
+                </View>
+              </View>
+
+              {/* Informações do Motorista */}
+              <View style={styles.driverSection}>
+                <View style={styles.driverRow}>
+                  <View style={styles.driverAvatarLarge}>
+                    <MaterialIcons name="person" size={32} color="#4285F4" />
+                  </View>
+                  <View style={styles.driverInfo}>
+                    <Text style={styles.driverNameLarge}>{driverInfo.name}</Text>
+                    <View style={styles.ratingRow}>
+                      <MaterialIcons name="star" size={18} color="#FFC107" />
+                      <Text style={styles.driverRatingText}>{driverInfo.rating || 4.8}</Text>
+                      <Text style={styles.ratingCount}>(127 avaliações)</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity style={styles.callButton} onPress={handleCallDriver}>
+                    <MaterialIcons name="phone" size={24} color="#ffffff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Informações do Veículo */}
+              <View style={styles.vehicleSection}>
+                <View style={styles.vehicleHeader}>
+                  <MaterialIcons name="directions-car" size={24} color="#4285F4" />
+                  <Text style={styles.vehicleSectionTitle}>Veículo</Text>
+                </View>
+                <View style={styles.vehicleDetails}>
+                  <View style={styles.vehicleRow}>
+                    <Text style={styles.vehicleLabel}>Modelo:</Text>
+                    <Text style={styles.vehicleValue}>
+                      {driverInfo.vehicle ? `${driverInfo.vehicle.make} ${driverInfo.vehicle.model}` : 'Toyota Corolla'}
+                    </Text>
+                  </View>
+                  <View style={styles.vehicleRow}>
+                    <Text style={styles.vehicleLabel}>Placa:</Text>
+                    <Text style={styles.vehiclePlate}>
+                      {driverInfo.vehicle ? driverInfo.vehicle.plate : 'ABC-1234'}
+                    </Text>
+                  </View>
+                  <View style={styles.vehicleRow}>
+                    <Text style={styles.vehicleLabel}>Cor:</Text>
+                    <Text style={styles.vehicleValue}>
+                      {driverInfo.vehicle ? driverInfo.vehicle.color : 'Branco'}
+                    </Text>
                   </View>
                 </View>
-                <View style={styles.estimatedTimeContainer}>
-                  <MaterialIcons name="access-time" size={16} color="#6B7280" />
-                  <Text style={styles.estimatedTime}>{driverInfo.estimatedArrival}</Text>
-                </View>
               </View>
 
-              {/* Informações do veículo */}
-              {driverInfo.vehicle && (
-                <View style={styles.vehicleInfo}>
-                  <MaterialIcons name="directions-car" size={16} color="#6B7280" />
-                  <Text style={styles.vehicleText}>
-                    {driverInfo.vehicle.make} {driverInfo.vehicle.model} - {driverInfo.vehicle.plate}
-                  </Text>
-                </View>
-              )}
-
-              {/* Status em tempo real */}
-              <View style={styles.statusContainer}>
-                <View style={styles.statusIndicator}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.statusText}>Motorista a caminho</Text>
-                </View>
+                             {/* Status e Ações */}
+               <View style={styles.dropdownFooter}>
+                 <View style={styles.statusRow}>
+                   <View style={styles.statusDotLarge} />
+                   <Text style={styles.statusTextLarge}>
+                     {driverArrived ? 'Motorista chegou - Indo ao destino' : 'Motorista a caminho'}
+                   </Text>
+                 </View>
+                <TouchableOpacity style={styles.cancelButton} onPress={handleNewSearch}>
+                  <Text style={styles.cancelButtonText}>Cancelar Corrida</Text>
+                </TouchableOpacity>
               </View>
-            </View>
-
-            {/* Ações */}
-            <View style={styles.acceptedActions}>
-              <TouchableOpacity style={styles.callDriverButton} onPress={handleCallDriver}>
-                <MaterialIcons name="phone" size={20} color="#ffffff" />
-                <Text style={styles.callDriverText}>Ligar</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.cancelRideButton} onPress={handleNewSearch}>
-                <Text style={styles.cancelRideText}>Cancelar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+            </>
+          )}
+        </Animated.View>
       )}
 
       {/* Drivers Not Found - Nova Interface */}
@@ -1513,6 +1812,9 @@ export default function HomeScreen({ navigation }) {
                 value={destination}
                 onChangeText={handleSearchChange}
                 autoFocus={true}
+                returnKeyType="search"
+                blurOnSubmit={false}
+                enablesReturnKeyAutomatically={true}
               />
               {destination.length > 0 && (
                 <TouchableOpacity onPress={() => setDestination('')}>
@@ -1687,7 +1989,8 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -1695,6 +1998,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
+  },
+  dropdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
   },
   map: {
     flex: 1,
@@ -2287,48 +2598,171 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     maxWidth: '100%',
   },
-  // Estilos para Solicitação Aceita
-  acceptedCard: {
+  // Estilos para Dropdown de Solicitação Aceita
+  driverAcceptedDropdown: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    marginHorizontal: 20,
-    paddingVertical: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 8,
+    paddingBottom: 34, // Safe area
     paddingHorizontal: 20,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    maxWidth: width - 40,
+    shadowRadius: 20,
+    elevation: 20,
+    maxHeight: height * 0.75,
   },
-  acceptedHeader: {
+  dropdownHandleContainer: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  dropdownHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 2,
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  successIconContainer: {
-    marginBottom: 12,
+  statusIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  acceptedTitle: {
-    fontSize: 20,
+  headerTextContainer: {
+    flex: 1,
+  },
+  dropdownTitle: {
+    fontSize: 18,
     fontWeight: '700',
-    color: '#10B981',
-    marginBottom: 4,
+    color: '#1F2937',
+    marginBottom: 2,
   },
-  acceptedSubtitle: {
+  dropdownSubtitle: {
     fontSize: 14,
     color: '#6B7280',
-    textAlign: 'center',
   },
-  driverInfoCard: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
+  driverSection: {
+    marginBottom: 20,
+  },
+  driverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  driverAvatarLarge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  driverInfo: {
+    flex: 1,
+  },
+  driverNameLarge: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  driverRatingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginLeft: 4,
+    marginRight: 8,
+  },
+  ratingCount: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  callButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  vehicleSection: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
     padding: 16,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  vehicleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  vehicleSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginLeft: 8,
+  },
+  vehicleDetails: {
+    gap: 8,
+  },
+  vehicleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  vehicleLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  vehicleValue: {
+    fontSize: 14,
+    color: '#1F2937',
+    fontWeight: '600',
+  },
+  vehiclePlate: {
+    fontSize: 14,
+    color: '#1F2937',
+    fontWeight: '700',
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   driverInfoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   driverAvatar: {
     width: 50,
@@ -2357,6 +2791,20 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginLeft: 4,
   },
+  vehicleInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  vehicleText: {
+    fontSize: 14,
+    color: '#374151',
+    marginLeft: 8,
+    flex: 1,
+  },
   estimatedTimeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2371,22 +2819,100 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontWeight: '500',
   },
-  vehicleInfo: {
+  statusContainer: {
+    marginTop: 8,
+  },
+  statusIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
   },
-  vehicleText: {
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginRight: 8,
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  dropdownFooter: {
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  statusDotLarge: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+    marginRight: 12,
+  },
+  statusTextLarge: {
+    fontSize: 16,
+    color: '#1F2937',
+    fontWeight: '600',
+  },
+  cancelButton: {
+    backgroundColor: '#FEF2F2',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: '#DC2626',
+    fontWeight: '600',
+  },
+  // Estilos para versão minimizada
+  minimizedContent: {
+    paddingVertical: 12,
+  },
+  minimizedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  driverAvatarSmall: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  minimizedInfo: {
+    flex: 1,
+  },
+  minimizedDriverName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  minimizedStatus: {
     fontSize: 14,
     color: '#6B7280',
-    marginLeft: 8,
   },
-  statusContainer: {
-    marginTop: 4,
+  callButtonSmall: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+
   statusIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2403,42 +2929,14 @@ const styles = StyleSheet.create({
     color: '#10B981',
     fontWeight: '500',
   },
-  acceptedActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  callDriverButton: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: '#4285F4',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
+
   callDriverText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
   },
-  cancelRideButton: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-  },
-  cancelRideText: {
-    color: '#6B7280',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+
   // Status Indicator Bar
   statusIndicatorBar: {
     backgroundColor: '#F3F4F6',
@@ -2472,6 +2970,13 @@ const styles = StyleSheet.create({
   },
 
   // Estilos do Modal de Confirmação
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
   confirmationModal: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
@@ -2499,6 +3004,10 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#1F2937',
+  },
+  closeButton: {
+    padding: 8,
+    borderRadius: 8,
   },
   confirmationBody: {
     padding: 20,
