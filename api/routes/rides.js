@@ -188,18 +188,49 @@ router.put('/:id/accept', async (req, res) => {
 
     // Get Socket.IO instance
     const io = req.app.get('io');
+    const activeConnections = req.app.get('activeConnections');
     
     // Notify passenger that ride was accepted
-    io.emit('ride_accepted', {
-      rideId: ride.id,
-      driver: {
-        id: driverId,
-        name: driverName,
-        phone: driverPhone,
-        vehicleInfo
-      },
-      estimatedArrival: '5-10 minutos'
-    });
+    console.log(`📤 Notificando passageiro ${ride.passengerId} sobre corrida aceita`);
+    
+    // Primeiro, tentar notificar o passageiro específico via WebSocket
+    let passengerNotified = false;
+    if (activeConnections) {
+      for (const [socketId, connection] of activeConnections.entries()) {
+        if (connection.userType === 'passenger' && connection.userId === ride.passengerId) {
+          console.log(`✅ Encontrado passageiro conectado: ${socketId}`);
+          io.to(socketId).emit('ride_accepted', {
+            rideId: ride.id,
+            ride: ride,
+            driver: {
+              id: driverId,
+              name: driverName,
+              phone: driverPhone,
+              vehicleInfo
+            },
+            estimatedArrival: '5-10 minutos'
+          });
+          passengerNotified = true;
+          break;
+        }
+      }
+    }
+    
+    // Se não encontrou conexão específica, enviar para todos os passageiros
+    if (!passengerNotified) {
+      console.log(`⚠️ Passageiro ${ride.passengerId} não encontrado nas conexões ativas. Enviando broadcast.`);
+      io.to('passenger').emit('ride_accepted', {
+        rideId: ride.id,
+        ride: ride,
+        driver: {
+          id: driverId,
+          name: driverName,
+          phone: driverPhone,
+          vehicleInfo
+        },
+        estimatedArrival: '5-10 minutos'
+      });
+    }
 
     // Notify other drivers that ride is no longer available
     io.to('driver').emit('ride_unavailable', {

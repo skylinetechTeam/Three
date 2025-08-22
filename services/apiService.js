@@ -510,27 +510,63 @@ class ApiService {
     }
   }
 
-  // Conectar ao WebSocket com verificação prévia
-  async connectSocketWithCheck(userType, userId) {
-    try {
-      // Primeiro, testar se a API está funcionando
-      console.log('🔍 Verificando API antes de conectar WebSocket...');
-      const apiTest = await this.testApiConnection();
-      
-      if (!apiTest.success) {
-        console.error('❌ API não está funcionando. Não é possível conectar WebSocket.');
-        console.error('💡 Erro:', apiTest.error);
-        return null;
-      }
-      
-      console.log('✅ API está funcionando. Conectando WebSocket...');
-      return this.connectSocket(userType, userId);
-      
-    } catch (error) {
-      console.error('💥 Erro na verificação prévia:', error);
-      return null;
-    }
-  }
+     // Conectar ao WebSocket com verificação prévia
+   async connectSocketWithCheck(userType, userId) {
+     try {
+       // Primeiro, testar se a API está funcionando
+       console.log('🔍 Verificando API antes de conectar WebSocket...');
+       const apiTest = await this.testApiConnection();
+       
+       if (!apiTest.success) {
+         console.error('❌ API não está funcionando. Não é possível conectar WebSocket.');
+         console.error('💡 Erro:', apiTest.error);
+         return null;
+       }
+       
+       console.log('✅ API está funcionando. Conectando WebSocket...');
+       return this.connectSocket(userType, userId);
+       
+     } catch (error) {
+       console.error('💥 Erro na verificação prévia:', error);
+       return null;
+     }
+   }
+
+   // Método de debug para testar notificações
+   testRideAcceptedNotification(rideId, passengerId) {
+     if (this.socket && this.socket.connected) {
+       console.log('🧪 Testando notificação ride_accepted...');
+       
+       const testData = {
+         rideId: rideId,
+         ride: {
+           id: rideId,
+           passengerId: passengerId,
+           status: 'accepted'
+         },
+         driver: {
+           id: 'test-driver-123',
+           name: 'Motorista Teste',
+           phone: '+244 900 000 000',
+           vehicleInfo: {
+             make: 'Toyota',
+             model: 'Corolla',
+             color: 'Branco',
+             plate: 'LD-12-34-AB'
+           }
+         },
+         estimatedArrival: '3-5 minutos'
+       };
+       
+       this.socket.emit('test_ride_accepted', testData);
+       console.log('📤 Evento de teste enviado:', testData);
+       
+       return testData;
+     } else {
+       console.error('❌ Socket não está conectado para teste');
+       return null;
+     }
+   }
 
   // Calcular preço estimado da corrida
   calculateEstimatedFare(distance, time, vehicleType = 'standard') {

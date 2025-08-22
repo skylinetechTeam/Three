@@ -16,6 +16,7 @@ import {
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import Toast from 'react-native-toast-message';
 import apiService from '../services/apiService';
 import LocalDatabase from '../services/localDatabase';
 
@@ -116,10 +117,35 @@ export default function HomeScreen({ navigation }) {
           if (socket) {
             // Listen for ride updates
             socket.on('ride_accepted', (data) => {
-              console.log('Corrida aceita:', data);
+              console.log('🎉 Corrida aceita pelo motorista:', data);
+              
+              // Parar busca imediatamente
               setIsSearchingDrivers(false);
               setDriversFound(true);
-              // You can add more UI updates here
+              setDriverSearchTime(0);
+              
+              // Limpar intervalos de busca
+              if (window.driverSearchInterval) {
+                clearInterval(window.driverSearchInterval);
+                window.driverSearchInterval = null;
+              }
+              
+              // Atualizar dados da corrida com informações do motorista
+              if (data.ride) {
+                setCurrentRide(prev => ({
+                  ...prev,
+                  ...data.ride,
+                  driver: data.driver,
+                  status: 'accepted'
+                }));
+              }
+              
+              // Mostrar toast de sucesso
+              Toast.show({
+                type: "success",
+                text1: "Motorista encontrado!",
+                text2: `${data.driver.name} está a caminho`,
+              });
             });
             
             socket.on('ride_started', (data) => {
@@ -130,6 +156,30 @@ export default function HomeScreen({ navigation }) {
             socket.on('ride_completed', (data) => {
               console.log('Corrida finalizada:', data);
               // Show completion UI and rating
+            });
+            
+            socket.on('ride_cancelled', (data) => {
+              console.log('❌ Corrida cancelada:', data);
+              
+              // Parar busca se estava buscando
+              setIsSearchingDrivers(false);
+              setDriversFound(false);
+              setDriverSearchTime(0);
+              
+              // Limpar intervalos
+              if (window.driverSearchInterval) {
+                clearInterval(window.driverSearchInterval);
+                window.driverSearchInterval = null;
+              }
+              
+              // Limpar corrida atual
+              setCurrentRide(null);
+              
+              Toast.show({
+                type: "error",
+                text1: "Corrida cancelada",
+                text2: data.reason || "A corrida foi cancelada",
+              });
             });
           }
           
@@ -603,14 +653,25 @@ export default function HomeScreen({ navigation }) {
           
           if (newTime >= 30) {
             clearInterval(driverSearchInterval);
+            window.driverSearchInterval = null; // Limpar referência global
             setIsSearchingDrivers(false);
             setDriversFound(false);
             console.log('❌ Nenhum motorista aceitou a corrida após 30 segundos');
+            
+            Toast.show({
+              type: "error",
+              text1: "Nenhum motorista encontrado",
+              text2: "Tente novamente em alguns minutos",
+            });
+            
             return 30;
           }
           return newTime;
         });
       }, 1000);
+      
+      // Armazenar referência global para poder cancelar de outros lugares
+      window.driverSearchInterval = driverSearchInterval;
     }
   };
 
