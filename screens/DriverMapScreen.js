@@ -60,7 +60,10 @@ export default function DriverMapScreen({ navigation, route }) {
   useEffect(() => {
     if (isOnline && driverProfile?.apiDriverId && location) {
       connectWebSocket();
-      startRequestPolling();
+      // Só iniciar polling se não tiver corrida ativa
+      if (!activeRide) {
+        startRequestPolling();
+      }
     } else {
       disconnectWebSocket();
       stopRequestPolling();
@@ -69,7 +72,7 @@ export default function DriverMapScreen({ navigation, route }) {
     return () => {
       cleanupConnections();
     };
-  }, [isOnline, driverProfile, location]);
+  }, [isOnline, driverProfile, location, activeRide]);
 
   useEffect(() => {
     if (activeRide && location && webViewRef.current && navigationMode) {
@@ -250,7 +253,7 @@ export default function DriverMapScreen({ navigation, route }) {
 
     // Continuar buscando a cada 15 segundos como backup
     requestPollingInterval.current = setInterval(() => {
-      if (isOnline && location && driverProfile?.apiDriverId) {
+      if (isOnline && location && driverProfile?.apiDriverId && !activeRide) {
         fetchPendingRequests();
       }
     }, 15000);
@@ -269,6 +272,12 @@ export default function DriverMapScreen({ navigation, route }) {
     try {
       if (!location?.coords || !driverProfile?.apiDriverId) {
         console.log('⚠️ Não é possível buscar solicitações: falta localização ou ID do motorista');
+        return;
+      }
+
+      // Se o motorista já tem uma corrida ativa, não buscar novas solicitações
+      if (activeRide) {
+        console.log('🚗 Motorista já tem corrida ativa, parando busca de novas solicitações');
         return;
       }
 
@@ -522,6 +531,9 @@ export default function DriverMapScreen({ navigation, route }) {
       setNavigationMode(true);
       setRidePhase('pickup');
       
+      // Parar polling de novas solicitações já que temos uma corrida ativa
+      stopRequestPolling();
+      
       Toast.show({
         type: "success",
         text1: "Corrida aceita!",
@@ -709,6 +721,11 @@ export default function DriverMapScreen({ navigation, route }) {
                 setNavigationMode(false);
                 setRidePhase('pickup');
                 
+                // Reiniciar polling para novas solicitações
+                if (isOnline && driverProfile?.apiDriverId && location) {
+                  startRequestPolling();
+                }
+                
                 if (webViewRef.current) {
                   const script = `
                     if (typeof clearNavigation === 'function') {
@@ -736,6 +753,11 @@ export default function DriverMapScreen({ navigation, route }) {
                 setActiveRide(null);
                 setNavigationMode(false);
                 setRidePhase('pickup');
+                
+                // Reiniciar polling para novas solicitações
+                if (isOnline && driverProfile?.apiDriverId && location) {
+                  startRequestPolling();
+                }
               }
             }
           }
@@ -757,6 +779,11 @@ export default function DriverMapScreen({ navigation, route }) {
             setActiveRide(null);
             setNavigationMode(false);
             setRidePhase('pickup');
+            
+            // Reiniciar polling para novas solicitações
+            if (isOnline && driverProfile?.apiDriverId && location) {
+              startRequestPolling();
+            }
             
             if (webViewRef.current) {
               const script = `

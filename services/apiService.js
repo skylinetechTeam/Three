@@ -179,6 +179,8 @@ class ApiService {
     // Setup ride event listeners
     this.socket.on('ride_accepted', (data) => {
       console.log('🎉 [ApiService] ride_accepted recebido:', data);
+      console.log('🔍 [ApiService] Socket ID que recebeu:', this.socket.id);
+      console.log('🎯 [ApiService] Dados do evento:', JSON.stringify(data, null, 2));
       this.triggerCallbacks('ride_accepted', data);
     });
 
@@ -210,6 +212,14 @@ class ApiService {
     this.socket.on('driver_location_update', (data) => {
       console.log('📍 [ApiService] driver_location_update recebido:', data);
       this.triggerCallbacks('driver_location_update', data);
+    });
+    
+    // DEBUG: Listener global para capturar TODOS os eventos
+    const originalEmit = this.socket.emit;
+    const originalOn = this.socket.on;
+    
+    this.socket.onAny((eventName, ...args) => {
+      console.log(`🌐 [DEBUG] Evento recebido: ${eventName}`, args);
     });
   }
 
