@@ -1205,7 +1205,8 @@ export default function DriverMapScreen({ navigation, route }) {
                      
                      // Step 4: Calculate distance and time (fallback if OSRM didn't provide data)
                      if (!routeSummary) {
-                         const distance = driverPos.distanceTo(L.latLng(destinationLat, destinationLng));
+                         const currentDriverPos = driverMarker.getLatLng();
+                         const distance = currentDriverPos.distanceTo(L.latLng(destinationLat, destinationLng));
                          const estimatedTime = Math.round(distance / 1000 * 2.5);
                          
                          routeSummary = {
