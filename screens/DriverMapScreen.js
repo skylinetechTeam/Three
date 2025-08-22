@@ -31,7 +31,12 @@ export default function DriverMapScreen({ navigation, route }) {
   const [navigationMode, setNavigationMode] = useState(false);
   const [ridePhase, setRidePhase] = useState('pickup'); // 'pickup' or 'dropoff'
   const [acceptingRequest, setAcceptingRequest] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [socketConnected, setSocketConnected] = useState(false);
   const webViewRef = useRef(null);
+  const socketRef = useRef(null);
+  const locationUpdateInterval = useRef(null);
+  const requestPollingInterval = useRef(null);
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
@@ -46,8 +51,25 @@ export default function DriverMapScreen({ navigation, route }) {
     }
     
     // Cleanup function
-    return () => {};
-  }, [isOnline, showRequestModal, navigationMode]);
+    return () => {
+      cleanupConnections();
+    };
+  }, []);
+
+  // Effect para gerenciar conexão WebSocket quando status online muda
+  useEffect(() => {
+    if (isOnline && driverProfile?.apiDriverId && location) {
+      connectWebSocket();
+      startRequestPolling();
+    } else {
+      disconnectWebSocket();
+      stopRequestPolling();
+    }
+    
+    return () => {
+      cleanupConnections();
+    };
+  }, [isOnline, driverProfile, location]);
 
   useEffect(() => {
     if (activeRide && location && webViewRef.current && navigationMode) {
@@ -64,42 +86,194 @@ export default function DriverMapScreen({ navigation, route }) {
         setDriverProfile(profile);
         setIsOnline(onlineStatus);
         
-        // Conectar ao socket se temos ID da API
-        if (profile.apiDriverId) {
-          const socket = apiService.connectSocket('driver', profile.apiDriverId);
-          
-          if (socket) {
-            // Escutar novas solicitações de corrida
-            socket.on('new_ride_request', (data) => {
-              console.log('Nova solicitação recebida:', data);
-              setCurrentRequest(data.ride);
-              setShowRequestModal(true);
-              
-              Toast.show({
-                type: "info",
-                text1: "Nova solicitação!",
-                text2: `Corrida para ${data.ride.destination.address}`,
-              });
-            });
-            
-            // Escutar quando uma corrida não está mais disponível
-            socket.on('ride_unavailable', (data) => {
-              console.log('Corrida não disponível:', data);
-              if (currentRequest?.id === data.rideId) {
-                setShowRequestModal(false);
-                setCurrentRequest(null);
-                Toast.show({
-                  type: "info",
-                  text1: "Corrida indisponível",
-                  text2: data.message,
-                });
-              }
-            });
-          }
-        }
+        // WebSocket será conectado quando motorista ficar online
       }
     } catch (error) {
       console.error('Error initializing driver:', error);
+    }
+  };
+
+  // Conectar ao WebSocket
+  const connectWebSocket = () => {
+    try {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+
+      console.log('🔌 Conectando ao WebSocket...');
+      const socket = apiService.connectSocket('driver', driverProfile.apiDriverId);
+      
+      if (socket) {
+        socketRef.current = socket;
+        
+        socket.on('connect', () => {
+          console.log('✅ WebSocket conectado');
+          setSocketConnected(true);
+          
+          Toast.show({
+            type: "success",
+            text1: "Online",
+            text2: "Conectado ao sistema de solicitações",
+          });
+        });
+
+        socket.on('disconnect', () => {
+          console.log('❌ WebSocket desconectado');
+          setSocketConnected(false);
+          
+          // Tentar reconectar após 3 segundos
+          setTimeout(() => {
+            if (isOnline && driverProfile?.apiDriverId) {
+              console.log('🔄 Tentando reconectar...');
+              connectWebSocket();
+            }
+          }, 3000);
+        });
+
+        socket.on('connect_error', (error) => {
+          console.error('❌ Erro de conexão WebSocket:', error);
+          setSocketConnected(false);
+        });
+
+        // Escutar novas solicitações de corrida
+        socket.on('new_ride_request', (data) => {
+          console.log('🚖 Nova solicitação recebida:', data);
+          
+          if (data.ride) {
+            // Adicionar à lista de solicitações pendentes
+            setPendingRequests(prev => {
+              const exists = prev.find(req => req.id === data.ride.id);
+              if (!exists) {
+                return [data.ride, ...prev];
+              }
+              return prev;
+            });
+
+            // Mostrar a primeira solicitação se não há nenhuma sendo exibida
+            if (!currentRequest && !showRequestModal) {
+              setCurrentRequest(data.ride);
+              setShowRequestModal(true);
+            }
+            
+            Toast.show({
+              type: "info",
+              text1: "Nova solicitação!",
+              text2: `Corrida para ${data.ride.destination.address}`,
+            });
+          }
+        });
+        
+        // Escutar quando uma corrida não está mais disponível
+        socket.on('ride_unavailable', (data) => {
+          console.log('❌ Corrida não disponível:', data);
+          
+          // Remover da lista de pendentes
+          setPendingRequests(prev => prev.filter(req => req.id !== data.rideId));
+          
+          // Se era a corrida atual sendo exibida, fechar modal
+          if (currentRequest?.id === data.rideId) {
+            setShowRequestModal(false);
+            setCurrentRequest(null);
+            
+            Toast.show({
+              type: "info",
+              text1: "Corrida indisponível",
+              text2: data.message || "A solicitação não está mais disponível",
+            });
+            
+            // Mostrar próxima solicitação se houver
+            setTimeout(() => {
+              setPendingRequests(prev => {
+                if (prev.length > 0) {
+                  setCurrentRequest(prev[0]);
+                  setShowRequestModal(true);
+                }
+                return prev;
+              });
+            }, 1000);
+          }
+        });
+
+        // Escutar atualizações de localização de passageiros
+        socket.on('passenger_location', (data) => {
+          if (activeRide && data.passengerId === activeRide.passengerId) {
+            console.log('📍 Localização do passageiro atualizada:', data);
+            // Atualizar localização no mapa se necessário
+          }
+        });
+      }
+    } catch (error) {
+      console.error('❌ Erro ao conectar WebSocket:', error);
+      setSocketConnected(false);
+    }
+  };
+
+  // Desconectar WebSocket
+  const disconnectWebSocket = () => {
+    if (socketRef.current) {
+      console.log('🔌 Desconectando WebSocket...');
+      socketRef.current.disconnect();
+      socketRef.current = null;
+      setSocketConnected(false);
+    }
+  };
+
+  // Iniciar polling de solicitações como backup
+  const startRequestPolling = () => {
+    if (requestPollingInterval.current) {
+      clearInterval(requestPollingInterval.current);
+    }
+
+    // Buscar imediatamente
+    fetchPendingRequests();
+
+    // Continuar buscando a cada 15 segundos como backup
+    requestPollingInterval.current = setInterval(() => {
+      if (isOnline && location && driverProfile?.apiDriverId) {
+        fetchPendingRequests();
+      }
+    }, 15000);
+  };
+
+  // Parar polling
+  const stopRequestPolling = () => {
+    if (requestPollingInterval.current) {
+      clearInterval(requestPollingInterval.current);
+      requestPollingInterval.current = null;
+    }
+  };
+
+  // Buscar solicitações pendentes
+  const fetchPendingRequests = async () => {
+    try {
+      if (!location?.coords || !driverProfile?.apiDriverId) {
+        return;
+      }
+
+      const response = await apiService.getPendingRides(location.coords, 10);
+      
+      if (response.data && Array.isArray(response.data)) {
+        setPendingRequests(response.data);
+        
+        // Se não há solicitação sendo exibida e há solicitações disponíveis
+        if (!currentRequest && !showRequestModal && response.data.length > 0) {
+          setCurrentRequest(response.data[0]);
+          setShowRequestModal(true);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erro ao buscar solicitações pendentes:', error);
+    }
+  };
+
+  // Limpar todas as conexões
+  const cleanupConnections = () => {
+    disconnectWebSocket();
+    stopRequestPolling();
+    
+    if (locationUpdateInterval.current) {
+      clearInterval(locationUpdateInterval.current);
+      locationUpdateInterval.current = null;
     }
   };
 
@@ -242,6 +416,9 @@ export default function DriverMapScreen({ navigation, route }) {
         text2: `Navegando até ${currentRequest.passengerName}`,
       });
       
+      // Remover da lista de solicitações pendentes
+      setPendingRequests(prev => prev.filter(req => req.id !== currentRequest.id));
+      
       setShowRequestModal(false);
       
       // Start navigation immediately after accepting
@@ -259,6 +436,17 @@ export default function DriverMapScreen({ navigation, route }) {
       }, 1000);
       
       setCurrentRequest(null);
+      
+      // Mostrar próxima solicitação se houver
+      setTimeout(() => {
+        setPendingRequests(prev => {
+          if (prev.length > 0 && !activeRide) {
+            setCurrentRequest(prev[0]);
+            setShowRequestModal(true);
+          }
+          return prev;
+        });
+      }, 2000);
       
     } catch (error) {
       console.error('Error accepting ride:', error);
@@ -281,6 +469,9 @@ export default function DriverMapScreen({ navigation, route }) {
         await apiService.rejectRide(currentRequest.id, driverProfile.apiDriverId, 'Driver declined');
       }
       
+      // Remover da lista de solicitações pendentes
+      setPendingRequests(prev => prev.filter(req => req.id !== currentRequest.id));
+      
       Toast.show({
         type: "info",
         text1: "Corrida recusada",
@@ -288,6 +479,17 @@ export default function DriverMapScreen({ navigation, route }) {
       });
       setShowRequestModal(false);
       setCurrentRequest(null);
+      
+      // Mostrar próxima solicitação se houver
+      setTimeout(() => {
+        setPendingRequests(prev => {
+          if (prev.length > 0) {
+            setCurrentRequest(prev[0]);
+            setShowRequestModal(true);
+          }
+          return prev;
+        });
+      }, 1000);
       
     } catch (error) {
       console.error('Error rejecting ride:', error);
@@ -1127,20 +1329,35 @@ export default function DriverMapScreen({ navigation, route }) {
           </View>
         </View>
 
-        <TouchableOpacity 
-          style={[styles.statusButton, isOnline ? styles.onlineButton : styles.offlineButton]}
-          onPress={toggleOnlineStatus}
-          disabled={navigationMode}
-        >
-          <MaterialIcons 
-            name={isOnline ? "radio-button-checked" : "radio-button-unchecked"} 
-            size={18} 
-            color="#ffffff" 
-          />
-          <Text style={styles.statusButtonText}>
-            {isOnline ? 'Online' : 'Offline'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          {/* Indicador de conexão WebSocket */}
+          {isOnline && (
+            <View style={styles.connectionIndicator}>
+              <View style={[
+                styles.connectionDot, 
+                socketConnected ? styles.connectedDot : styles.disconnectedDot
+              ]} />
+              <Text style={styles.connectionText}>
+                {socketConnected ? 'Conectado' : 'Reconectando...'}
+              </Text>
+            </View>
+          )}
+          
+          <TouchableOpacity 
+            style={[styles.statusButton, isOnline ? styles.onlineButton : styles.offlineButton]}
+            onPress={toggleOnlineStatus}
+            disabled={navigationMode}
+          >
+            <MaterialIcons 
+              name={isOnline ? "radio-button-checked" : "radio-button-unchecked"} 
+              size={18} 
+              color="#ffffff" 
+            />
+            <Text style={styles.statusButtonText}>
+              {isOnline ? 'Online' : 'Offline'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Active Ride Info */}
@@ -1352,7 +1569,12 @@ export default function DriverMapScreen({ navigation, route }) {
                     <MaterialIcons name="local-taxi" size={32} color="#2563EB" />
                   </View>
                   <Text style={styles.modalTitle}>Nova Solicitação!</Text>
-                  <Text style={styles.modalSubtitle}>Passageiro aguardando</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Passageiro aguardando
+                    {pendingRequests.length > 1 && (
+                      <Text style={styles.pendingCount}> • +{pendingRequests.length - 1} pendentes</Text>
+                    )}
+                  </Text>
                 </View>
 
                 <View style={styles.passengerSection}>
@@ -1465,6 +1687,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     marginTop: 2,
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+  },
+  connectionIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+  },
+  connectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  connectedDot: {
+    backgroundColor: '#10B981',
+  },
+  disconnectedDot: {
+    backgroundColor: '#EF4444',
+  },
+  connectionText: {
+    fontSize: 12,
+    color: '#ffffff',
+    fontWeight: '500',
+  },
+  pendingCount: {
+    fontSize: 12,
+    color: '#2563EB',
+    fontWeight: 'bold',
   },
   statusButton: {
     flexDirection: 'row',
