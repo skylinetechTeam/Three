@@ -92,11 +92,49 @@ window.simulateRideAcceptance();
 window.simulateRideRejection();
 ```
 
-#### Teste de Integração com Servidor
-1. Configure o servidor Node.js com Socket.IO
-2. Registre motoristas na plataforma
-3. Crie solicitações e teste as respostas dos motoristas
-4. Verifique se os eventos são recebidos corretamente
+#### Teste de Integração Completo
+
+**1. Iniciar o Servidor**
+```bash
+cd api
+npm install
+npm start
+```
+
+**2. Iniciar o Simulador de Motorista**
+```bash
+cd api
+node test-driver-simulator.js
+```
+
+**3. Testar Fluxo Completo**
+1. Abra o app React Native
+2. Faça uma solicitação de corrida
+3. O simulador de motorista receberá a solicitação via WebSocket
+4. O motorista aceitará ou rejeitará automaticamente
+5. O app receberá o sinal WebSocket e atualizará a UI
+6. Se aceito, o fluxo continua: start → complete
+
+#### Endpoints da API que Emitem WebSocket
+
+**POST /api/rides/request**
+- Emite: `new_ride_request` para motoristas
+- Configura timeout de 30s para `no_drivers_available`
+
+**PUT /api/rides/:id/accept**
+- Emite: `ride_accepted` para o passageiro específico
+
+**PUT /api/rides/:id/reject**
+- Emite: `ride_rejected` para o passageiro específico
+
+**PUT /api/rides/:id/start**
+- Emite: `ride_started` para o passageiro específico
+
+**PUT /api/rides/:id/complete**
+- Emite: `ride_completed` para o passageiro específico
+
+**PUT /api/rides/:id/cancel**
+- Emite: `ride_cancelled` para o usuário relevante
 
 ### 5. Logs de Debug
 

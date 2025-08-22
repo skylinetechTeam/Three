@@ -168,6 +168,34 @@ class RideService {
     }
   }
 
+  // Atualizar status da corrida
+  static async updateRideStatus(rideId, newStatus, additionalData = {}) {
+    try {
+      const rideIndex = rides.findIndex(r => r.id === rideId);
+      
+      if (rideIndex === -1) {
+        return null;
+      }
+
+      const ride = rides[rideIndex];
+      
+      // Update ride with new status
+      rides[rideIndex] = {
+        ...ride,
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+        ...additionalData
+      };
+
+      console.log(`🔄 Status da corrida ${rideId} atualizado para: ${newStatus}`);
+      
+      return rides[rideIndex];
+    } catch (error) {
+      console.error('❌ Erro ao atualizar status da corrida:', error);
+      throw error;
+    }
+  }
+
   // Iniciar corrida
   static async startRide(rideId, driverId, startData) {
     try {

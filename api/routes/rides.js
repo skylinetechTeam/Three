@@ -70,6 +70,50 @@ router.post('/request', async (req, res) => {
     
     console.log(`✅ Corrida ${ride.id} criada e notificada aos motoristas`);
 
+    // Set timeout for ride request - if no driver accepts within 30 seconds
+    setTimeout(async () => {
+      try {
+        // Check if ride is still pending
+        const currentRide = await RideService.getRideById(ride.id);
+        if (currentRide && currentRide.status === 'pending') {
+          console.log(`⏰ Timeout para corrida ${ride.id} - nenhum motorista aceitou`);
+          
+          // Update ride status to expired
+          await RideService.updateRideStatus(ride.id, 'expired');
+          
+          // Notify passenger that no drivers are available
+          const activeConnections = req.app.get('activeConnections');
+          let passengerNotified = false;
+          
+          if (activeConnections) {
+            for (const [socketId, connection] of activeConnections.entries()) {
+              if (connection.userType === 'passenger' && connection.userId === ride.passengerId) {
+                console.log(`📤 Notificando passageiro ${ride.passengerId} - nenhum motorista disponível`);
+                io.to(socketId).emit('no_drivers_available', {
+                  rideId: ride.id,
+                  message: 'Nenhum motorista disponível no momento',
+                  timestamp: new Date().toISOString()
+                });
+                passengerNotified = true;
+                break;
+              }
+            }
+          }
+          
+          // Broadcast if specific passenger not found
+          if (!passengerNotified) {
+            io.to('passenger').emit('no_drivers_available', {
+              rideId: ride.id,
+              message: 'Nenhum motorista disponível no momento',
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
+      } catch (error) {
+        console.error(`❌ Erro no timeout da corrida ${ride.id}:`, error);
+      }
+    }, 30000); // 30 seconds timeout
+
     res.status(201).json({
       success: true,
       message: 'Solicitação de corrida criada com sucesso',
@@ -306,10 +350,48 @@ router.put('/:id/reject', async (req, res) => {
 
     console.log(`❌ Corrida ${id} rejeitada pelo motorista ${driverId}`);
 
+    // Get Socket.IO instance
+    const io = req.app.get('io');
+    const activeConnections = req.app.get('activeConnections');
+    
+    // Notify passenger that ride was rejected
+    console.log(`📤 Notificando passageiro ${ride.passengerId} sobre corrida rejeitada`);
+    
+    // Try to notify the specific passenger via WebSocket
+    let passengerNotified = false;
+    if (activeConnections) {
+      for (const [socketId, connection] of activeConnections.entries()) {
+        if (connection.userType === 'passenger' && connection.userId === ride.passengerId) {
+          console.log(`✅ Encontrado passageiro conectado para rejeição: ${socketId}`);
+          io.to(socketId).emit('ride_rejected', {
+            rideId: ride.id,
+            ride: ride,
+            driverId: driverId,
+            reason: reason || 'Motorista não pode aceitar a solicitação no momento',
+            timestamp: new Date().toISOString()
+          });
+          passengerNotified = true;
+          break;
+        }
+      }
+    }
+    
+    // If specific passenger not found, broadcast to all passengers
+    if (!passengerNotified) {
+      console.log(`⚠️ Passageiro ${ride.passengerId} não encontrado nas conexões ativas. Enviando broadcast de rejeição.`);
+      io.to('passenger').emit('ride_rejected', {
+        rideId: ride.id,
+        ride: ride,
+        driverId: driverId,
+        reason: reason || 'Motorista não pode aceitar a solicitação no momento',
+        timestamp: new Date().toISOString()
+      });
+    }
+
     res.json({
       success: true,
       message: 'Corrida rejeitada',
-      data: { rideId: id, status: 'rejected' }
+      data: { rideId: id, status: 'rejected', reason: reason }
     });
 
   } catch (error) {
@@ -341,13 +423,40 @@ router.put('/:id/start', async (req, res) => {
 
     // Get Socket.IO instance
     const io = req.app.get('io');
+    const activeConnections = req.app.get('activeConnections');
     
     // Notify passenger that ride has started
-    io.emit('ride_started', {
-      rideId: ride.id,
-      message: 'Sua corrida foi iniciada!',
-      estimatedArrival: ride.estimatedTime + ' minutos'
-    });
+    console.log(`🚗 Notificando passageiro ${ride.passengerId} sobre início da corrida`);
+    
+    let passengerNotified = false;
+    if (activeConnections) {
+      for (const [socketId, connection] of activeConnections.entries()) {
+        if (connection.userType === 'passenger' && connection.userId === ride.passengerId) {
+          console.log(`✅ Encontrado passageiro conectado para início: ${socketId}`);
+          io.to(socketId).emit('ride_started', {
+            rideId: ride.id,
+            ride: ride,
+            message: 'Sua corrida foi iniciada!',
+            estimatedArrival: ride.estimatedTime + ' minutos',
+            timestamp: new Date().toISOString()
+          });
+          passengerNotified = true;
+          break;
+        }
+      }
+    }
+    
+    // Fallback broadcast if specific passenger not found
+    if (!passengerNotified) {
+      console.log(`⚠️ Passageiro ${ride.passengerId} não encontrado. Enviando broadcast de início.`);
+      io.to('passenger').emit('ride_started', {
+        rideId: ride.id,
+        ride: ride,
+        message: 'Sua corrida foi iniciada!',
+        estimatedArrival: ride.estimatedTime + ' minutos',
+        timestamp: new Date().toISOString()
+      });
+    }
 
     console.log(`🚀 Corrida ${id} iniciada`);
 
@@ -388,14 +497,42 @@ router.put('/:id/complete', async (req, res) => {
 
     // Get Socket.IO instance
     const io = req.app.get('io');
+    const activeConnections = req.app.get('activeConnections');
     
     // Notify passenger that ride is complete
-    io.emit('ride_completed', {
-      rideId: ride.id,
-      message: 'Corrida finalizada com sucesso!',
-      fare: ride.actualFare || ride.estimatedFare,
-      rating: true // Request rating
-    });
+    console.log(`✅ Notificando passageiro ${ride.passengerId} sobre conclusão da corrida`);
+    
+    let passengerNotified = false;
+    if (activeConnections) {
+      for (const [socketId, connection] of activeConnections.entries()) {
+        if (connection.userType === 'passenger' && connection.userId === ride.passengerId) {
+          console.log(`✅ Encontrado passageiro conectado para conclusão: ${socketId}`);
+          io.to(socketId).emit('ride_completed', {
+            rideId: ride.id,
+            ride: ride,
+            message: 'Corrida finalizada com sucesso!',
+            fare: ride.actualFare || ride.estimatedFare,
+            rating: true, // Request rating
+            timestamp: new Date().toISOString()
+          });
+          passengerNotified = true;
+          break;
+        }
+      }
+    }
+    
+    // Fallback broadcast if specific passenger not found
+    if (!passengerNotified) {
+      console.log(`⚠️ Passageiro ${ride.passengerId} não encontrado. Enviando broadcast de conclusão.`);
+      io.to('passenger').emit('ride_completed', {
+        rideId: ride.id,
+        ride: ride,
+        message: 'Corrida finalizada com sucesso!',
+        fare: ride.actualFare || ride.estimatedFare,
+        rating: true, // Request rating
+        timestamp: new Date().toISOString()
+      });
+    }
 
     console.log(`🏁 Corrida ${id} finalizada`);
 
@@ -431,14 +568,46 @@ router.put('/:id/cancel', async (req, res) => {
 
     // Get Socket.IO instance
     const io = req.app.get('io');
+    const activeConnections = req.app.get('activeConnections');
     
-    // Notify all relevant users about cancellation
-    io.emit('ride_cancelled', {
-      rideId: ride.id,
-      cancelledBy: userType,
-      reason: reason,
-      message: `Corrida cancelada pelo ${userType === 'driver' ? 'motorista' : 'passageiro'}`
-    });
+    // Notify relevant users about cancellation
+    console.log(`❌ Notificando sobre cancelamento da corrida ${ride.id} por ${userType}`);
+    
+    // Determine who to notify based on who cancelled
+    const targetUserType = userType === 'driver' ? 'passenger' : 'driver';
+    const targetUserId = userType === 'driver' ? ride.passengerId : ride.driverId;
+    
+    let userNotified = false;
+    if (activeConnections && targetUserId) {
+      for (const [socketId, connection] of activeConnections.entries()) {
+        if (connection.userType === targetUserType && connection.userId === targetUserId) {
+          console.log(`✅ Encontrado ${targetUserType} conectado para cancelamento: ${socketId}`);
+          io.to(socketId).emit('ride_cancelled', {
+            rideId: ride.id,
+            ride: ride,
+            cancelledBy: userType,
+            reason: reason,
+            message: `Corrida cancelada pelo ${userType === 'driver' ? 'motorista' : 'passageiro'}`,
+            timestamp: new Date().toISOString()
+          });
+          userNotified = true;
+          break;
+        }
+      }
+    }
+    
+    // Fallback broadcast if specific user not found
+    if (!userNotified) {
+      console.log(`⚠️ ${targetUserType} não encontrado. Enviando broadcast de cancelamento.`);
+      io.to(targetUserType).emit('ride_cancelled', {
+        rideId: ride.id,
+        ride: ride,
+        cancelledBy: userType,
+        reason: reason,
+        message: `Corrida cancelada pelo ${userType === 'driver' ? 'motorista' : 'passageiro'}`,
+        timestamp: new Date().toISOString()
+      });
+    }
 
     console.log(`❌ Corrida ${id} cancelada por ${userType}`);
 
