@@ -358,7 +358,7 @@ export default function DriverLoginScreen({ navigation }) {
 
             <TouchableOpacity style={[styles.photoButton, styles.galleryButton]} onPress={selectPhoto}>
               <Ionicons name="images" size={24} color={COLORS.primary} />
-              <Text style={styles.photoButtonText}>Galeria</Text>
+              <Text style={[styles.photoButtonText, { color: COLORS.primary }]}>Galeria</Text>
             </TouchableOpacity>
           </View>
 
@@ -562,10 +562,18 @@ const styles = StyleSheet.create({
   },
   mainContainer: {
     backgroundColor: COLORS.white,
-    borderRadius: SIZES.radiusLarge,
+    borderRadius: 24,
     padding: SIZES.padding.xlarge,
     marginBottom: SIZES.padding.xlarge,
-    ...SHADOWS.medium,
+    marginHorizontal: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 12,
   },
   titleContainer: {
     alignItems: 'center',
@@ -600,11 +608,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: COLORS.border,
-    borderRadius: SIZES.radiusMedium,
+    borderRadius: 16,
     paddingHorizontal: SIZES.padding.large,
     height: SIZES.inputHeight,
     backgroundColor: COLORS.input.background,
-    ...SHADOWS.light,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   input: {
     flex: 1,
@@ -614,13 +629,20 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     backgroundColor: COLORS.primary,
-    borderRadius: SIZES.radiusMedium,
+    borderRadius: 16,
     paddingVertical: SIZES.padding.large,
     alignItems: 'center',
     marginTop: SIZES.padding.large,
     flexDirection: 'row',
     justifyContent: 'center',
-    ...SHADOWS.medium,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
   loginButtonText: {
     ...FONTS.h3,
@@ -709,6 +731,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: SIZES.padding.large,
+    gap: 12,
   },
   photoButton: {
     flex: 1,
@@ -717,9 +740,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
     paddingVertical: SIZES.padding.large,
-    borderRadius: SIZES.radiusMedium,
-    marginHorizontal: SIZES.padding.small,
-    ...SHADOWS.medium,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
   galleryButton: {
     backgroundColor: 'transparent',
@@ -731,8 +760,5 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '600',
     marginLeft: SIZES.padding.small,
-  },
-  galleryButtonText: {
-    color: COLORS.primary,
   },
 });

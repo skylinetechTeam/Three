@@ -10,6 +10,7 @@ import {
   Switch,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import LocalDatabase from '../services/localDatabase';
 import Toast from 'react-native-toast-message';
@@ -23,6 +24,7 @@ export default function DriverSettingsScreen({ navigation }) {
     nightMode: false,
     language: 'pt',
   });
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     loadSettings();
@@ -132,11 +134,11 @@ export default function DriverSettingsScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
       
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -144,12 +146,18 @@ export default function DriverSettingsScreen({ navigation }) {
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         
-        <Text style={styles.headerTitle}>Configurações</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Configurações</Text>
+        </View>
         
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Notifications Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notificações</Text>
@@ -346,9 +354,8 @@ export default function DriverSettingsScreen({ navigation }) {
           </View>
         </View>
 
-        <View style={styles.bottomSpacer} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -360,59 +367,72 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: '#2563EB',
+    paddingVertical: 16,
+    backgroundColor: '#1F2937',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
+  headerCenter: {
     flex: 1,
-    fontSize: 18,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#ffffff',
     textAlign: 'center',
   },
   placeholder: {
-    width: 40,
+    width: 44,
   },
   content: {
     flex: 1,
   },
   section: {
     marginHorizontal: 20,
-    marginBottom: 24,
+    marginBottom: 28,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 12,
+    marginBottom: 16,
+    marginLeft: 4,
   },
   settingCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 4,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 2.22,
-    elevation: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 6,
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
   },
   settingContent: {
     flexDirection: 'row',
@@ -436,7 +456,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: '#F3F4F6',
-    marginHorizontal: 16,
+    marginHorizontal: 20,
   },
   appInfo: {
     alignItems: 'center',
