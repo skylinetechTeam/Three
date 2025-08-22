@@ -354,6 +354,7 @@ class ApiService {
   // Registrar passageiro
   async registerPassenger(passengerData) {
     try {
+      console.log(API_CONFIG.API_BASE_URL)
       const response = await fetch(`${API_BASE_URL}/passengers/register`, {
         method: 'POST',
         headers: {
@@ -370,7 +371,7 @@ class ApiService {
 
       return data;
     } catch (error) {
-      console.error('❌ Erro ao registrar passageiro:', error);
+      console.error('❌ Erro ao registrar passageiro:', error, );
       throw error;
     }
   }
