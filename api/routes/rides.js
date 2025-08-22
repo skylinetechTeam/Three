@@ -270,10 +270,17 @@ router.put('/:id/accept', async (req, res) => {
     
     // Notify passenger that ride was accepted
     console.log(`📤 Notificando passageiro ${ride.passengerId} sobre corrida aceita`);
+    console.log(`🔍 Dados da corrida para notificação:`, JSON.stringify(ride, null, 2));
     
     // Primeiro, tentar notificar o passageiro específico via WebSocket
     let passengerNotified = false;
+    console.log(`🔍 Conexões ativas totais: ${activeConnections?.size || 0}`);
     if (activeConnections) {
+      // Log all active connections for debugging
+      for (const [socketId, connection] of activeConnections.entries()) {
+        console.log(`📋 Conexão ativa: ${socketId} - Tipo: ${connection.userType} - ID: ${connection.userId}`);
+      }
+      
       for (const [socketId, connection] of activeConnections.entries()) {
         if (connection.userType === 'passenger' && connection.userId === ride.passengerId) {
           console.log(`✅ Encontrado passageiro conectado: ${socketId}`);

@@ -115,12 +115,24 @@ export default function HomeScreen({ navigation }) {
           }));
           
           // Connect to socket
+          console.log('🔌 Conectando WebSocket como passageiro:', passengerId);
           const socket = apiService.connectSocket('passenger', passengerId);
           
           if (socket) {
+            // Configure listeners after connection is established
+            socket.on('connect', () => {
+              console.log('🔌 Socket conectado no HomeScreen, configurando listeners...');
+            });
+
+            // Debug: Listen for any events
+            socket.onAny((event, ...args) => {
+              console.log('🔔 WebSocket evento recebido:', event, args);
+            });
+            
             // Listen for ride updates
             socket.on('ride_accepted', (data) => {
               console.log('🎉 Corrida aceita pelo motorista:', data);
+              console.log('📱 HomeScreen recebeu evento ride_accepted via WebSocket');
               
               // Update request status
               setRequestStatus('accepted');
@@ -752,6 +764,7 @@ export default function HomeScreen({ navigation }) {
           const estimatedTime = routeInfo?.duration || 15;
           const estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime);
           
+          console.log('🚗 Criando corrida para passageiro:', passengerProfile.apiPassengerId);
           const rideData = {
             passengerId: passengerProfile.apiPassengerId,
             passengerName: passengerProfile.name,
