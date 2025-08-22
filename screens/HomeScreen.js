@@ -13,6 +13,8 @@ import {
   Platform,
   Animated,
   Modal,
+  Keyboard,
+  KeyboardAvoidingView,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -955,6 +957,12 @@ export default function HomeScreen({ navigation }) {
     setFilteredResults([]);
   };
 
+  const closeDropdowns = () => {
+    setIsDropdownOpen(false);
+    setIsNavDropdownOpen(false);
+    Keyboard.dismiss();
+  };
+
   const handleSearchChange = async (text) => {
     console.log('📝 handleSearchChange called with:', text);
     setDestination(text);
@@ -1058,7 +1066,11 @@ export default function HomeScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View style={styles.container}>
       {console.log('🏠 HomeScreen render - States:', { isSearchingDrivers, selectedDestination: !!selectedDestination, driverSearchTime, driversFound })}
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       
@@ -1289,7 +1301,10 @@ export default function HomeScreen({ navigation }) {
               value={destination}
               onChangeText={setDestination}
               onFocus={handleSearchFocus}
-              editable={!isSearchExpanded}
+              editable={true}
+              returnKeyType="search"
+              blurOnSubmit={false}
+              enablesReturnKeyAutomatically={true}
             />
           </TouchableOpacity>
 
@@ -1514,6 +1529,9 @@ export default function HomeScreen({ navigation }) {
                 value={destination}
                 onChangeText={handleSearchChange}
                 autoFocus={true}
+                returnKeyType="search"
+                blurOnSubmit={false}
+                enablesReturnKeyAutomatically={true}
               />
               {destination.length > 0 && (
                 <TouchableOpacity onPress={() => setDestination('')}>
@@ -1688,7 +1706,8 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -1696,6 +1715,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
+  },
+  dropdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
   },
   map: {
     flex: 1,
