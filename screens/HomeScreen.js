@@ -12,6 +12,7 @@ import {
   Alert,
   Platform,
   Animated,
+  Modal,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -2472,6 +2473,13 @@ const styles = StyleSheet.create({
   },
 
   // Estilos do Modal de Confirmação
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
   confirmationModal: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
@@ -2499,6 +2507,10 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#1F2937',
+  },
+  closeButton: {
+    padding: 8,
+    borderRadius: 8,
   },
   confirmationBody: {
     padding: 20,
