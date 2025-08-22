@@ -11,6 +11,7 @@ import {
   Modal,
   Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import LocalDatabase from '../services/localDatabase';
 import Toast from 'react-native-toast-message';
@@ -23,6 +24,7 @@ export default function DriverRequestsScreen({ navigation }) {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [acceptingRequest, setAcceptingRequest] = useState(false);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     loadRideRequests();
@@ -266,11 +268,11 @@ export default function DriverRequestsScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
       
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -300,7 +302,7 @@ export default function DriverRequestsScreen({ navigation }) {
         data={rideRequests}
         renderItem={renderRideRequest}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
+        contentContainerStyle={[styles.listContainer, { paddingBottom: insets.bottom + 20 }]}
         ListEmptyComponent={renderEmptyState}
         showsVerticalScrollIndicator={false}
         refreshing={false}
@@ -437,7 +439,7 @@ export default function DriverRequestsScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 

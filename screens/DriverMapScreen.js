@@ -9,7 +9,9 @@ import {
   Dimensions,
   Alert,
   Platform,
+  Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
@@ -23,12 +25,24 @@ export default function DriverMapScreen({ navigation }) {
   const [isOnline, setIsOnline] = useState(false);
   const [activeRide, setActiveRide] = useState(null);
   const [driverProfile, setDriverProfile] = useState(null);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [currentRequest, setCurrentRequest] = useState(null);
   const webViewRef = useRef(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     initializeDriver();
     requestLocationPermission();
-  }, []);
+    
+    // Simular solicitações quando estiver online
+    const requestInterval = setInterval(() => {
+      if (isOnline && !showRequestModal && Math.random() > 0.7) {
+        simulateNewRequest();
+      }
+    }, 15000); // A cada 15 segundos
+
+    return () => clearInterval(requestInterval);
+  }, [isOnline, showRequestModal]);
 
   const initializeDriver = async () => {
     try {
@@ -116,6 +130,56 @@ export default function DriverMapScreen({ navigation }) {
         text2: "Não foi possível alterar o status",
       });
     }
+  };
+
+  const simulateNewRequest = () => {
+    const mockRequest = {
+      id: `req_${Date.now()}`,
+      passengerName: `${['Ana', 'João', 'Maria', 'Carlos', 'Sofia', 'Pedro'][Math.floor(Math.random() * 6)]} ${['Silva', 'Santos', 'Costa', 'Ferreira', 'Oliveira'][Math.floor(Math.random() * 5)]}`,
+      pickup: {
+        address: ['Rua da Liberdade, 123', 'Avenida Marginal, 456', 'Rua do Comércio, 789', 'Largo do Ambiente, 321'][Math.floor(Math.random() * 4)],
+        lat: location?.coords.latitude + (Math.random() - 0.5) * 0.01 || -8.8390,
+        lng: location?.coords.longitude + (Math.random() - 0.5) * 0.01 || 13.2894,
+      },
+      destination: {
+        address: ['Shopping Belas, Talatona', 'Aeroporto Internacional, Luanda', 'Universidade Agostinho Neto', 'Hospital Américo Boavida'][Math.floor(Math.random() * 4)],
+        lat: location?.coords.latitude + (Math.random() - 0.5) * 0.02 || -8.8390,
+        lng: location?.coords.longitude + (Math.random() - 0.5) * 0.02 || 13.2894,
+      },
+      fare: Math.floor(Math.random() * 800 + 300), // 300-1100 AOA
+      distance: (Math.random() * 15 + 2).toFixed(1), // 2-17 km
+      estimatedTime: Math.floor(Math.random() * 35 + 8), // 8-43 min
+      paymentMethod: Math.random() > 0.6 ? 'Dinheiro' : 'Cartão',
+      requestTime: new Date().toISOString(),
+      status: 'pending'
+    };
+
+    setCurrentRequest(mockRequest);
+    setShowRequestModal(true);
+  };
+
+  const acceptRequest = () => {
+    if (currentRequest) {
+      Toast.show({
+        type: "success",
+        text1: "Corrida aceita!",
+        text2: `Navegando até ${currentRequest.passengerName}`,
+      });
+      
+      // Aqui você pode implementar a navegação para o passageiro
+      setShowRequestModal(false);
+      setCurrentRequest(null);
+    }
+  };
+
+  const rejectRequest = () => {
+    Toast.show({
+      type: "info",
+      text1: "Corrida recusada",
+      text2: "Aguardando nova solicitação...",
+    });
+    setShowRequestModal(false);
+    setCurrentRequest(null);
   };
 
   // OpenStreetMap with Leaflet (Free)
@@ -410,11 +474,11 @@ export default function DriverMapScreen({ navigation }) {
   `;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
       
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerLeft}>
           <View style={styles.driverInfo}>
             <Text style={styles.headerTitle}>Motorista</Text>
@@ -457,7 +521,7 @@ export default function DriverMapScreen({ navigation }) {
 
       {/* Floating Action Button for Centering */}
       <TouchableOpacity 
-        style={styles.centerLocationButton}
+        style={[styles.centerLocationButton, { bottom: insets.bottom + 100 }]}
         onPress={() => {
           if (webViewRef.current && location) {
             const script = `
@@ -471,7 +535,97 @@ export default function DriverMapScreen({ navigation }) {
       >
         <MaterialIcons name="my-location" size={24} color="#ffffff" />
       </TouchableOpacity>
-    </SafeAreaView>
+
+      {/* Request Modal */}
+      <Modal
+        visible={showRequestModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowRequestModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
+            {currentRequest && (
+              <>
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalHeaderIcon}>
+                    <MaterialIcons name="local-taxi" size={32} color="#2563EB" />
+                  </View>
+                  <Text style={styles.modalTitle}>Nova Solicitação!</Text>
+                  <Text style={styles.modalSubtitle}>Passageiro aguardando</Text>
+                </View>
+
+                <View style={styles.passengerSection}>
+                  <MaterialIcons name="person" size={24} color="#1F2937" />
+                  <View style={styles.passengerInfo}>
+                    <Text style={styles.passengerName}>{currentRequest.passengerName}</Text>
+                    <Text style={styles.requestTime}>
+                      Solicitado agora • {currentRequest.paymentMethod}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.routeSection}>
+                  <View style={styles.locationRow}>
+                    <MaterialIcons name="radio-button-checked" size={20} color="#10B981" />
+                    <View style={styles.locationInfo}>
+                      <Text style={styles.locationLabel}>ORIGEM</Text>
+                      <Text style={styles.locationAddress}>{currentRequest.pickup.address}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.routeLine} />
+
+                  <View style={styles.locationRow}>
+                    <MaterialIcons name="place" size={20} color="#EF4444" />
+                    <View style={styles.locationInfo}>
+                      <Text style={styles.locationLabel}>DESTINO</Text>
+                      <Text style={styles.locationAddress}>{currentRequest.destination.address}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.tripDetails}>
+                  <View style={styles.detailCard}>
+                    <MaterialIcons name="straighten" size={20} color="#6B7280" />
+                    <Text style={styles.detailLabel}>Distância</Text>
+                    <Text style={styles.detailValue}>{currentRequest.distance} km</Text>
+                  </View>
+                  <View style={styles.detailCard}>
+                    <MaterialIcons name="access-time" size={20} color="#6B7280" />
+                    <Text style={styles.detailLabel}>Tempo</Text>
+                    <Text style={styles.detailValue}>{currentRequest.estimatedTime} min</Text>
+                  </View>
+                  <View style={styles.detailCard}>
+                    <MaterialIcons name="attach-money" size={20} color="#6B7280" />
+                    <Text style={styles.detailLabel}>Valor</Text>
+                    <Text style={styles.detailValue}>{currentRequest.fare} AOA</Text>
+                  </View>
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity 
+                    style={styles.rejectButton} 
+                    onPress={rejectRequest}
+                  >
+                    <MaterialIcons name="close" size={20} color="#EF4444" />
+                    <Text style={styles.rejectButtonText}>Recusar</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.acceptButton} 
+                    onPress={acceptRequest}
+                  >
+                    <MaterialIcons name="check" size={20} color="#ffffff" />
+                    <Text style={styles.acceptButtonText}>Aceitar</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -549,7 +703,6 @@ const styles = StyleSheet.create({
   },
   centerLocationButton: {
     position: 'absolute',
-    bottom: 100,
     right: 20,
     width: 56,
     height: 56,
@@ -565,5 +718,166 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 8,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    maxHeight: height * 0.75,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  modalHeaderIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#EBF4FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  passengerSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 20,
+  },
+  passengerInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  passengerName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  requestTime: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  routeSection: {
+    marginBottom: 24,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  locationInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  locationLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  locationAddress: {
+    fontSize: 16,
+    color: '#1F2937',
+    fontWeight: '500',
+  },
+  routeLine: {
+    width: 2,
+    height: 24,
+    backgroundColor: '#D1D5DB',
+    marginLeft: 9,
+    marginVertical: 4,
+  },
+  tripDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 24,
+  },
+  detailCard: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  detailValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 2,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  rejectButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+  },
+  rejectButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#EF4444',
+    marginLeft: 6,
+  },
+  acceptButton: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10B981',
+    paddingVertical: 16,
+    borderRadius: 16,
+    shadowColor: '#10B981',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  acceptButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginLeft: 6,
   },
 });

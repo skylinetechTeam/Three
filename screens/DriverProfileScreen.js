@@ -10,16 +10,21 @@ import {
   Alert,
   Switch,
   Image,
+  Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import LocalDatabase from '../services/localDatabase';
 import Toast from 'react-native-toast-message';
+
+const { height } = Dimensions.get('window');
 
 export default function DriverProfileScreen({ navigation }) {
   const [driverProfile, setDriverProfile] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoAcceptEnabled, setAutoAcceptEnabled] = useState(false);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     loadDriverProfile();
@@ -171,11 +176,11 @@ export default function DriverProfileScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
       
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -201,7 +206,11 @@ export default function DriverProfileScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatarContainer}>
@@ -406,9 +415,8 @@ export default function DriverProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.bottomSpacer} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
