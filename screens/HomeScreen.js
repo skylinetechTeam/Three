@@ -103,7 +103,12 @@ export default function HomeScreen({ navigation, route }) {
   useEffect(() => {
     if (route?.params?.selectedDestination) {
       const dest = route.params.selectedDestination;
+      const autoStartFlow = route?.params?.autoStartFlow;
+      const fromFavorites = route?.params?.fromFavorites;
+      
       console.log('📍 Received destination from navigation:', dest);
+      console.log('🚀 Auto start flow:', autoStartFlow);
+      console.log('⭐ From favorites:', fromFavorites);
       
       setSelectedDestination(dest);
       setDestination(dest.name || dest.address);
@@ -115,11 +120,42 @@ export default function HomeScreen({ navigation, route }) {
           location.coords.longitude,
           dest.lat,
           dest.lng
-        );
+        ).then((routeData) => {
+          // Se veio dos favoritos com autoStartFlow, criar estimate e mostrar modal automaticamente
+          if (autoStartFlow && fromFavorites && routeData) {
+            setTimeout(() => {
+              console.log('🎯 Criando estimate e mostrando modal automaticamente...');
+              
+              // Criar estimate similar ao fluxo normal
+              const estimatedDistance = routeData.distance || 5000;
+              const estimatedTime = routeData.duration || 900;
+              const vehicleType = selectedTaxiType === 'Premium' ? 'privado' : 'coletivo';
+              const estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime, vehicleType);
+              
+              const estimate = {
+                distance: estimatedDistance,
+                distanceText: routeData.distanceText || `${(estimatedDistance/1000).toFixed(1)} km`,
+                time: estimatedTime,
+                timeText: routeData.durationText || `${Math.round(estimatedTime/60)} min`,
+                fare: estimatedFare,
+                vehicleType: vehicleType,
+                destination: dest
+              };
+              
+              console.log('📊 Estimate criado automaticamente:', estimate);
+              setRideEstimate(estimate);
+              setShowConfirmationModal(true);
+            }, 1500); // Delay para garantir que a rota foi calculada
+          }
+        });
       }
       
       // Clear the params to prevent re-triggering
-      navigation.setParams({ selectedDestination: undefined });
+      navigation.setParams({ 
+        selectedDestination: undefined, 
+        autoStartFlow: undefined,
+        fromFavorites: undefined 
+      });
     }
   }, [route?.params?.selectedDestination, location]);
 

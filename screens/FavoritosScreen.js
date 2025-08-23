@@ -391,16 +391,37 @@ const FavoritosScreen = () => {
   };
 
   const handleGoToFavorite = (favorito) => {
-    // Navigate to HomeScreen with the favorite location as destination
-    navigation.navigate('Home', {
-      selectedDestination: {
-        name: favorito.nome,
-        address: favorito.endereco,
-        lat: favorito.latitude || favorito.lat,
-        lng: favorito.longitude || favorito.lng,
-        categories: favorito.categories || []
+    try {
+      console.log('🚗 Iniciando solicitação de corrida para favorito:', favorito.nome);
+      
+      // Navigate to HomeScreen with the favorite location as destination
+      // and trigger automatic search flow
+      navigation.navigate('Home', {
+        selectedDestination: {
+          name: favorito.nome,
+          address: favorito.endereco,
+          lat: favorito.latitude || favorito.lat,
+          lng: favorito.longitude || favorito.lng,
+          categories: favorito.categories || []
+        },
+        autoStartFlow: true, // Flag para iniciar automaticamente o fluxo
+        fromFavorites: true  // Flag para identificar origem
+      });
+      
+      // Feedback visual opcional (se Toast estiver disponível)
+      if (typeof Toast !== 'undefined') {
+        Toast.show({
+          type: 'info',
+          text1: '🚗 Preparando corrida',
+          text2: `Destino: ${favorito.nome}`,
+          position: 'top',
+          visibilityTime: 3000,
+        });
       }
-    });
+    } catch (error) {
+      console.error('Erro ao navegar para favorito:', error);
+      Alert.alert('Erro', 'Não foi possível iniciar a corrida. Tente novamente.');
+    }
   };
 
   const filteredFavoritos = favoritos.filter(item =>
@@ -471,8 +492,8 @@ const FavoritosScreen = () => {
           style={styles.primaryButton}
           onPress={() => handleGoToFavorite(item)}
         >
-          <MaterialIcons name="directions" size={18} color="#ffffff" />
-          <Text style={styles.primaryButtonText}>Navegar</Text>
+          <MaterialIcons name="navigation" size={18} color="#ffffff" />
+          <Text style={styles.primaryButtonText}>Solicitar Corrida</Text>
         </TouchableOpacity>
       </View>
     </View>
