@@ -1120,9 +1120,9 @@ export default function DriverMapScreen({ navigation, route }) {
                      map.addLayer(destinationMarker);
                      console.log('✅ Destination marker added');
                      
-                     // Step 3: Create route line - MULTIPLE ATTEMPTS TO GUARANTEE SUCCESS
+                                          // Step 3: Create route line - STABLE VERSION WITH BLUE COLOR
                      console.log('🛣️ Creating route line...');
-                     const routeColor = phase === 'pickup' ? '#2563EB' : '#10B981';
+                     const routeColor = '#4285F4'; // Using same blue color as HomeScreen
                      console.log('🎨 Using color:', routeColor);
                      
                      const coordinates = [
@@ -1135,8 +1135,9 @@ export default function DriverMapScreen({ navigation, route }) {
                      try {
                          routeLine = L.polyline(coordinates, {
                              color: routeColor,
-                             weight: 8,
-                             opacity: 0.9,
+                             weight: 5,
+                             opacity: 0.8,
+                             smoothFactor: 1,
                              lineCap: 'round',
                              lineJoin: 'round'
                          });
@@ -1150,8 +1151,9 @@ export default function DriverMapScreen({ navigation, route }) {
                      try {
                          const backupLine = L.polyline(coordinates, {
                              color: routeColor,
-                             weight: 12,
-                             opacity: 0.7
+                             weight: 5,
+                             opacity: 0.8,
+                             smoothFactor: 1
                          }).addTo(map);
                          console.log('✅ Method 2: Backup line added');
                      } catch (e) {
@@ -1162,8 +1164,9 @@ export default function DriverMapScreen({ navigation, route }) {
                      try {
                          const simpleLine = new L.Polyline(coordinates, {
                              color: routeColor,
-                             weight: 6,
-                             opacity: 1.0
+                             weight: 5,
+                             opacity: 0.8,
+                             smoothFactor: 1
                          });
                          simpleLine.addTo(map);
                          console.log('✅ Method 3: Simple line added');
@@ -1173,14 +1176,17 @@ export default function DriverMapScreen({ navigation, route }) {
                      
                      console.log('🛣️ Route line creation attempts completed');
                      
-                     // Step 4: Calculate distance and time
-                     const distance = driverPos.distanceTo(L.latLng(destinationLat, destinationLng));
-                     const estimatedTime = Math.round(distance / 1000 * 2.5);
-                     
-                     routeSummary = {
-                         totalDistance: distance,
-                         totalTime: estimatedTime * 60
-                     };
+                     // Step 4: Calculate distance and time (fallback if OSRM didn't provide data)
+                     if (!routeSummary) {
+                         const currentDriverPos = driverMarker.getLatLng();
+                         const distance = currentDriverPos.distanceTo(L.latLng(destinationLat, destinationLng));
+                         const estimatedTime = Math.round(distance / 1000 * 2.5);
+                         
+                         routeSummary = {
+                             totalDistance: distance,
+                             totalTime: estimatedTime * 60
+                         };
+                     }
                      
                      console.log('📊 Route summary:', routeSummary);
                      
@@ -1574,102 +1580,7 @@ export default function DriverMapScreen({ navigation, route }) {
         <MaterialIcons name="my-location" size={24} color="#ffffff" />
       </TouchableOpacity>
 
-      {/* Test Navigation Button (only when not in navigation mode) */}
-      {!navigationMode && isOnline && location && (
-        <TouchableOpacity 
-          style={[styles.testNavigationButton, { bottom: insets.bottom + 170 }]}
-          onPress={() => {
-            // First test if we can create a simple line
-            if (webViewRef.current) {
-              const script = `
-                console.log('Testing line creation...');
-                if (typeof testCreateLine === 'function') {
-                  testCreateLine();
-                } else {
-                  console.error('testCreateLine function not available');
-                }
-              `;
-              webViewRef.current.postMessage(script);
-            }
-            
-            // Then start actual navigation test
-            setTimeout(() => {
-              const testDestination = {
-                lat: location.coords.latitude + 0.01,
-                lng: location.coords.longitude + 0.01,
-              };
-              
-              const testRide = {
-                id: 'test_ride',
-                passengerName: 'Passageiro Teste',
-                pickup: testDestination,
-                destination: {
-                  lat: location.coords.latitude + 0.02,
-                  lng: location.coords.longitude + 0.02,
-                  address: 'Destino Teste'
-                },
-                fare: 500,
-                paymentMethod: 'Teste'
-              };
-              
-              setActiveRide(testRide);
-              setNavigationMode(true);
-              setRidePhase('pickup');
-              
-              Toast.show({
-                type: "info",
-                text1: "Teste de Navegação",
-                text2: "Simulando corrida para teste",
-              });
-            }, 2000);
-          }}
-        >
-          <MaterialIcons name="navigation" size={20} color="#ffffff" />
-        </TouchableOpacity>
-      )}
-
-      {/* Debug Button */}
-      {!navigationMode && location && (
-        <TouchableOpacity 
-          style={[styles.debugButton, { bottom: insets.bottom + 240 }]}
-          onPress={() => {
-            if (webViewRef.current) {
-              const script = `
-                console.log('=== DEBUG INFO ===');
-                console.log('Map object:', typeof map);
-                console.log('Driver marker:', !!driverMarker);
-                console.log('L.polyline function:', typeof L.polyline);
-                console.log('Current location:', driverMarker ? driverMarker.getLatLng() : 'No driver marker');
-                
-                // Force create a test line
-                if (driverMarker) {
-                  const pos = driverMarker.getLatLng();
-                  const testLine = L.polyline([
-                    [pos.lat, pos.lng],
-                    [pos.lat + 0.005, pos.lng + 0.005]
-                  ], {
-                    color: '#FF0000',
-                    weight: 5,
-                    opacity: 1.0
-                  });
-                  
-                  console.log('Adding test line to map...');
-                  testLine.addTo(map);
-                  console.log('Test line added successfully');
-                  
-                  setTimeout(() => {
-                    map.removeLayer(testLine);
-                    console.log('Test line removed');
-                  }, 3000);
-                }
-              `;
-              webViewRef.current.postMessage(script);
-            }
-          }}
-        >
-          <MaterialIcons name="bug-report" size={16} color="#ffffff" />
-        </TouchableOpacity>
-      )}
+     
 
       {/* Navigation Controls */}
       {navigationMode && (
@@ -1752,7 +1663,7 @@ export default function DriverMapScreen({ navigation, route }) {
                   <View style={styles.detailCard}>
                     <MaterialIcons name="straighten" size={20} color="#6B7280" />
                     <Text style={styles.detailLabel}>Distância</Text>
-                    <Text style={styles.detailValue}>{currentRequest.distance} km</Text>
+                    <Text style={styles.detailValue}>{currentRequest.estimatedDistance} km</Text>
                   </View>
                   <View style={styles.detailCard}>
                     <MaterialIcons name="access-time" size={20} color="#6B7280" />
@@ -1762,7 +1673,7 @@ export default function DriverMapScreen({ navigation, route }) {
                   <View style={styles.detailCard}>
                     <MaterialIcons name="attach-money" size={20} color="#6B7280" />
                     <Text style={styles.detailLabel}>Valor</Text>
-                    <Text style={styles.detailValue}>{currentRequest.fare} AOA</Text>
+                    <Text style={styles.detailValue}>{currentRequest.estimatedFare} AOA</Text>
                   </View>
                 </View>
 

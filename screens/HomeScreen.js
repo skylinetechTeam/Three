@@ -1710,19 +1710,19 @@ export default function HomeScreen({ navigation }) {
                   <View style={styles.vehicleRow}>
                     <Text style={styles.vehicleLabel}>Modelo:</Text>
                     <Text style={styles.vehicleValue}>
-                      {driverInfo.vehicle ? `${driverInfo.vehicle.make} ${driverInfo.vehicle.model}` : 'Toyota Corolla'}
+                      {driverInfo.vehicleInfo ? `${driverInfo.plateplate?.make} ${driverInfo.vehicleInfo?.model}` : 'Toyota Corolla'}
                     </Text>
                   </View>
                   <View style={styles.vehicleRow}>
                     <Text style={styles.vehicleLabel}>Placa:</Text>
                     <Text style={styles.vehiclePlate}>
-                      {driverInfo.vehicle ? driverInfo.vehicle.plate : 'ABC-1234'}
+                      {driverInfo.plate ? driverInfo.plate.plate : 'ABC-1234'}
                     </Text>
                   </View>
                   <View style={styles.vehicleRow}>
                     <Text style={styles.vehicleLabel}>Cor:</Text>
                     <Text style={styles.vehicleValue}>
-                      {driverInfo.vehicle ? driverInfo.vehicle.color : 'Branco'}
+                      {driverInfo.vehicleInfo ? driverInfo.vehicleInfo.color : 'Branco'}
                     </Text>
                   </View>
                 </View>
@@ -1858,7 +1858,7 @@ export default function HomeScreen({ navigation }) {
             {isSearching && (
               <View style={styles.searchingIndicator}>
                 <MaterialIcons name="search" size={20} color="#2563EB" />
-                <Text style={styles.searchingText}>Buscando com HERE Maps...</Text>
+                <Text style={styles.searchingText}>Buscando...</Text>
               </View>
             )}
 
