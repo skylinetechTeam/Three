@@ -22,6 +22,13 @@ import { WebView } from 'react-native-webview';
 import Toast from 'react-native-toast-message';
 import apiService from '../services/apiService';
 import LocalDatabase from '../services/localDatabase';
+import { 
+  isValidCollectiveRoute, 
+  getCollectiveRouteInfo,
+  getCollectiveRoutePrice,
+  getAllCollectiveRoutes,
+  getLocationCoordinates 
+} from '../config/collectiveRoutes';
 
 const { width, height } = Dimensions.get('window');
 
@@ -93,6 +100,16 @@ export default function HomeScreen({ navigation, route }) {
         accuracy: Location.Accuracy.High,
       });
       setLocation(location);
+      
+      // Obter nome da localização atual
+      if (location?.coords) {
+        const locationName = await reverseGeocode(
+          location.coords.latitude, 
+          location.coords.longitude
+        );
+        setCurrentLocationName(locationName);
+        console.log('📍 Nome da localização atual definido como:', locationName);
+      }
       
       // Initialize passenger profile
       await initializePassenger();
@@ -543,6 +560,20 @@ export default function HomeScreen({ navigation, route }) {
       const js = `window.__setUserLocation(${location.coords.latitude}, ${location.coords.longitude}, ${accuracy}); true;`;
       console.log('📍 Updating user location on map:', js);
       webViewRef.current.injectJavaScript(js);
+      
+      // Atualizar nome da localização se mudou significativamente
+      const updateLocationName = async () => {
+        const newLocationName = await reverseGeocode(
+          location.coords.latitude, 
+          location.coords.longitude
+        );
+        if (newLocationName !== currentLocationName) {
+          console.log('📍 Localização mudou de', currentLocationName, 'para', newLocationName);
+          setCurrentLocationName(newLocationName);
+        }
+      };
+      
+      updateLocationName();
     }
   }, [location]);
 
@@ -988,12 +1019,26 @@ export default function HomeScreen({ navigation, route }) {
       // Usar dados da rota ou valores padrão
       const estimatedDistance = routeData?.distance || 5000;
       const estimatedTime = routeData?.duration || 900;
-      const vehicleType = selectedTaxiType === 'Premium' ? 'privado' : 'coletivo';
+      const vehicleType = selectedTaxiType === 'Privado' ? 'privado' : 'coletivo';
+      console.log('🚗 [Favorito] selectedTaxiType:', selectedTaxiType);
+      console.log('🎯 [Favorito] vehicleType mapeado:', vehicleType);
       
       // Calcular tarifa
       let estimatedFare;
       try {
-        estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime, vehicleType);
+        if (vehicleType === 'coletivo') {
+          // Para coletivos, usar preço da rota específica
+          estimatedFare = getCollectiveRoutePrice(destination.name || destination.address);
+          console.log('🚌 [Favorito] Preço fixo do coletivo:', estimatedFare, 'AOA');
+        } else {
+          // Para privados, calcular baseado na distância e tempo
+          const distanceInKm = estimatedDistance / 1000;
+          const timeInMinutes = estimatedTime / 60;
+          console.log('📏 [Favorito] Distância em km:', distanceInKm);
+          console.log('⏱️ [Favorito] Tempo em minutos:', timeInMinutes);
+          estimatedFare = apiService.calculateEstimatedFare(distanceInKm, timeInMinutes, vehicleType);
+          console.log('💰 [Favorito] Tarifa calculada privado:', estimatedFare, 'AOA');
+        }
       } catch (error) {
         console.error('❌ Erro ao calcular tarifa:', error);
         estimatedFare = vehicleType === 'privado' ? 800 : 500;
@@ -1080,15 +1125,34 @@ export default function HomeScreen({ navigation, route }) {
       console.log('📡 Nominatim API response:', data);
       
       if (data && data?.length > 0) {
-        const formattedPlaces = data.map((item, index) => ({
+        let formattedPlaces = data.map((item, index) => ({
           id: `osm_${index}`,
           name: item.display_name.split(',')[0],
           address: item.display_name,
           lat: parseFloat(item.lat),
           lng: parseFloat(item.lon),
           distance: item.distance,
-          categories: item.categories || []
+          categories: item.categories || [],
+          isValidForCollective: isValidCollectiveRoute(item.display_name.split(',')[0])
         }));
+        
+        // Se coletivo estiver selecionado, filtrar apenas rotas válidas
+        if (selectedTaxiType === 'Coletivo') {
+          const validPlaces = formattedPlaces.filter(place => place.isValidForCollective);
+          const invalidCount = formattedPlaces.length - validPlaces.length;
+          
+          if (invalidCount > 0) {
+            console.log(`🚌 Filtrando para coletivo: ${validPlaces.length} válidos de ${formattedPlaces.length} encontrados`);
+            Toast.show({
+              type: "info",
+              text1: `${validPlaces.length} destinos disponíveis`,
+              text2: `Para táxis coletivos (${invalidCount} destinos filtrados)`,
+              visibilityTime: 3000,
+            });
+          }
+          
+          formattedPlaces = validPlaces;
+        }
         
         console.log('✅ Formatted places:', formattedPlaces);
         setFilteredResults(formattedPlaces);
@@ -1106,6 +1170,13 @@ export default function HomeScreen({ navigation, route }) {
 
   const handleLocationSelect = async (selectedLocation) => {
     console.log('🎯 Location selected:', selectedLocation);
+    
+    // Validar se a rota é permitida para coletivos
+    if (!validateCollectiveRoute(selectedLocation)) {
+      // Se a rota não é válida para coletivo, não continuar
+      return;
+    }
+    
     setDestination(selectedLocation.name);
     setSelectedDestination(selectedLocation);
     setIsSearchExpanded(false);
@@ -1133,10 +1204,29 @@ export default function HomeScreen({ navigation, route }) {
       
       // Calcular estimativa da corrida
       console.log('💰 Calculando estimativa da corrida...');
-      const estimatedDistance = routeInfo?.distance || 5;
-      const estimatedTime = routeInfo?.duration || 15;
-      const vehicleType = selectedTaxiType === 'Premium' ? 'privado' : 'coletivo';
-      const estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime, vehicleType);
+      console.log('📊 routeInfo disponível:', !!routeInfo, routeInfo);
+      const estimatedDistance = routeInfo?.distance || 5000; // metros
+      const estimatedTime = routeInfo?.duration || 900; // segundos
+      const vehicleType = selectedTaxiType === 'Privado' ? 'privado' : 'coletivo';
+      console.log('🚗 selectedTaxiType:', selectedTaxiType);
+      console.log('🎯 vehicleType mapeado:', vehicleType);
+      console.log('📏 Distância estimada:', estimatedDistance, 'metros');
+      console.log('⏱️ Tempo estimado:', estimatedTime, 'segundos');
+      
+      let estimatedFare;
+      if (vehicleType === 'coletivo') {
+        // Para coletivos, usar preço da rota específica
+        estimatedFare = getCollectiveRoutePrice(selectedLocation.name || selectedLocation.address);
+        console.log('🚌 Preço fixo do coletivo:', estimatedFare, 'AOA');
+      } else {
+        // Para privados, calcular baseado na distância e tempo
+        const distanceInKm = estimatedDistance / 1000;
+        const timeInMinutes = estimatedTime / 60;
+        console.log('📏 Distância em km:', distanceInKm);
+        console.log('⏱️ Tempo em minutos:', timeInMinutes);
+        estimatedFare = apiService.calculateEstimatedFare(distanceInKm, timeInMinutes, vehicleType);
+        console.log('💰 Tarifa calculada privado:', estimatedFare, 'AOA');
+      }
       
       const estimate = {
         distance: estimatedDistance,
@@ -1149,8 +1239,10 @@ export default function HomeScreen({ navigation, route }) {
       };
       
       console.log('📊 Estimativa calculada:', estimate);
+      console.log('🎭 Definindo rideEstimate e mostrando modal...');
       setRideEstimate(estimate);
       setShowConfirmationModal(true);
+      console.log('✅ Modal de confirmação deve estar visível agora!');
       
           }
   };
@@ -1177,7 +1269,7 @@ export default function HomeScreen({ navigation, route }) {
             passengerName: passengerProfile.name,
             passengerPhone: passengerProfile.phone,
             pickup: {
-              address: 'Localização atual',
+              address: currentLocationName,
               lat: location.coords.latitude,
               lng: location.coords.longitude
             },
@@ -1425,6 +1517,7 @@ export default function HomeScreen({ navigation, route }) {
     setDriverInfo(null);
     setRequestId(null);
     setCurrentRide(null);
+    setRideEstimate(null);
     
     // Clear route on map
     const js = `window.__clearRoute(); true;`;
@@ -1435,6 +1528,154 @@ export default function HomeScreen({ navigation, route }) {
       clearInterval(window.driverSearchInterval);
       window.driverSearchInterval = null;
     }
+  };
+
+  // Estado para armazenar nome da localização atual
+  const [currentLocationName, setCurrentLocationName] = useState('Minha localização');
+
+  // Função para encontrar local mais próximo das rotas conhecidas
+  const findNearestKnownLocation = (latitude, longitude) => {
+    try {
+      let closestLocation = null;
+      let minDistance = Infinity;
+      
+      // Calcular distância para todos os locais conhecidos
+      Object.entries({
+        'Vila de Viana': { lat: -8.9167, lng: 13.3667 },
+        '1° De Maio': { lat: -8.8295, lng: 13.2441 },
+        'Kilamba': { lat: -8.9833, lng: 13.2167 },
+        'Ponte Amarela': { lat: -8.8500, lng: 13.2600 },
+        'Golf 2': { lat: -8.8940, lng: 13.2894 },
+        'Sequele': { lat: -8.8200, lng: 13.2300 },
+        'Estalagem': { lat: -8.8350, lng: 13.2450 },
+        'Mutamba': { lat: -8.8390, lng: 13.2894 },
+        'Benfica': { lat: -8.8600, lng: 13.2700 },
+        'Talatona': { lat: -8.9500, lng: 13.1833 },
+        'Kimbango': { lat: -8.8800, lng: 13.3200 },
+        'Cuca': { lat: -8.8100, lng: 13.2200 },
+        'Capalanga': { lat: -8.8580, lng: 13.3540 },
+        'Desvio': { lat: -8.8700, lng: 13.2800 },
+        'Zango Oito Mil': { lat: -8.8800, lng: 13.3800 },
+        'Hoje Yenda': { lat: -8.8400, lng: 13.2600 },
+        'Ilha': { lat: -8.7775, lng: 13.2437 },
+        'Camama': { lat: -8.9043, lng: 13.2868 },
+        'Zango 3': { lat: -8.8580, lng: 13.3540 }
+      }).forEach(([name, coords]) => {
+        const distance = calculateDistance(latitude, longitude, coords.lat, coords.lng);
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestLocation = name;
+        }
+      });
+      
+      // Se estiver a menos de 500 metros, usar o local conhecido
+      if (minDistance < 500) {
+        console.log(`📍 Localização próxima encontrada: ${closestLocation} (${Math.round(minDistance)}m)`);
+        return closestLocation;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('❌ Erro ao encontrar local mais próximo:', error);
+      return null;
+    }
+  };
+
+  // Função para fazer geocodificação reversa
+  const reverseGeocode = async (latitude, longitude) => {
+    try {
+      console.log('🔍 Fazendo geocodificação reversa para:', latitude, longitude);
+      
+      // Primeiro, verificar se está próximo de algum local conhecido
+      const nearestKnownLocation = findNearestKnownLocation(latitude, longitude);
+      if (nearestKnownLocation) {
+        return nearestKnownLocation;
+      }
+      
+      // Usar Nominatim para geocodificação reversa
+      const reverseUrl = `${NOMINATIM_BASE_URL}/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=pt&addressdetails=1`;
+      
+      const response = await fetch(reverseUrl, {
+        headers: {
+          'User-Agent': 'TaxiApp/1.0 (contact@example.com)'
+        }
+      });
+      
+      const data = await response.json();
+      console.log('📍 Resultado da geocodificação reversa:', data);
+      
+      if (data && data.display_name) {
+        // Extrair o nome mais relevante (primeiro item antes da primeira vírgula)
+        const locationName = data.display_name.split(',')[0].trim();
+        console.log('📍 Nome do local extraído:', locationName);
+        return locationName;
+      }
+      
+      return 'Localização atual';
+    } catch (error) {
+      console.error('❌ Erro na geocodificação reversa:', error);
+      return 'Localização atual';
+    }
+  };
+
+  // Função para validar rota de coletivo
+  const validateCollectiveRoute = (destination) => {
+    console.log('🔍 Validando rota de coletivo:', destination.name, 'para tipo:', selectedTaxiType);
+    if (selectedTaxiType !== 'Coletivo') return true; // Privado pode ir a qualquer lugar
+    
+    const isValid = isValidCollectiveRoute(destination.name || destination.address);
+    
+    if (!isValid) {
+      console.log('❌ Rota não permitida para coletivo:', destination.name);
+      
+      Toast.show({
+        type: "error",
+        text1: "Rota não disponível para coletivo",
+        text2: "Esta rota não está disponível para táxis coletivos. Selecione 'Privado' ou escolha outro destino.",
+        visibilityTime: 5000,
+      });
+      
+      return false;
+    }
+    
+    const routeInfo = getCollectiveRouteInfo(destination.name || destination.address);
+    if (routeInfo) {
+      console.log('✅ Rota válida para coletivo:', routeInfo.routeName);
+      console.log('📍 Coordenadas origem:', routeInfo.originCoords);
+      console.log('📍 Coordenadas destino:', routeInfo.destinationCoords);
+      Toast.show({
+        type: "success",
+        text1: "Rota disponível",
+        text2: `${routeInfo.routeName} - ${routeInfo.price} AOA`,
+        visibilityTime: 3000,
+      });
+    }
+    
+    return true;
+  };
+
+  // Função para cancelar a modal de confirmação
+  const handleCancelConfirmation = () => {
+    console.log('❌ Cancelando modal de confirmação e limpando estado...');
+    console.log('🧹 Estado antes da limpeza:', {
+      destination,
+      selectedDestination: !!selectedDestination,
+      routeInfo: !!routeInfo,
+      rideEstimate: !!rideEstimate
+    });
+    
+    setShowConfirmationModal(false);
+    // Resetar todos os estados relacionados
+    setDestination('');
+    setSelectedDestination(null);
+    setRouteInfo(null);
+    setRideEstimate(null);
+    
+    // Limpar rota no mapa
+    const js = `window.__clearRoute(); true;`;
+    webViewRef.current?.injectJavaScript(js);
+    
+    console.log('✅ Estado limpo - modal de confirmação cancelada');
   };
 
   const handleCallDriver = () => {
@@ -1672,6 +1913,41 @@ export default function HomeScreen({ navigation, route }) {
               ]}
               onPress={async () => {
                 console.log('🚌 Changing taxi type to Coletivo');
+                
+                // Se já tem um destino selecionado, validar se é permitido para coletivo
+                if (selectedDestination) {
+                  const isValid = isValidCollectiveRoute(selectedDestination.name || selectedDestination.address);
+                  if (!isValid) {
+                    Toast.show({
+                      type: "error",
+                      text1: "Rota não disponível para coletivo",
+                      text2: "O destino selecionado não está disponível para táxis coletivos. Escolha outro destino ou mantenha 'Privado'.",
+                      visibilityTime: 5000,
+                    });
+                    setIsDropdownOpen(false);
+                    return; // Não mudar para coletivo
+                  } else {
+                    // Rota válida, mostrar informações
+                    const routeInfo = getCollectiveRouteInfo(selectedDestination.name || selectedDestination.address);
+                    if (routeInfo) {
+                      Toast.show({
+                        type: "success",
+                        text1: "Mudança para coletivo",
+                        text2: `${routeInfo.routeName} - ${routeInfo.price} AOA`,
+                        visibilityTime: 3000,
+                      });
+                    }
+                  }
+                } else {
+                  // Se não tem destino selecionado, mostrar dica sobre rotas disponíveis
+                  Toast.show({
+                    type: "info",
+                    text1: "Coletivo selecionado",
+                    text2: "Escolha um dos destinos disponíveis para táxis coletivos",
+                    visibilityTime: 4000,
+                  });
+                }
+                
                 setSelectedTaxiType('Coletivo');
                 setIsDropdownOpen(false);
                 // Save preference
@@ -2035,8 +2311,8 @@ export default function HomeScreen({ navigation, route }) {
             onPress={() => {
               if (location) {
                 handleLocationSelect({
-                  name: "Localização atual",
-                  address: "Minha localização",
+                  name: currentLocationName,
+                  address: currentLocationName,
                   lat: location.coords.latitude,
                   lng: location.coords.longitude
                 });
@@ -2048,15 +2324,60 @@ export default function HomeScreen({ navigation, route }) {
             </View>
             <View style={styles.currentLocationInfo}>
               <Text style={styles.currentLocationText}>Usar localização atual</Text>
-              <Text style={styles.currentLocationSubtext}>Sua posição no mapa</Text>
+              <Text style={styles.currentLocationSubtext}>{currentLocationName}</Text>
             </View>
           </TouchableOpacity>
+
+          {/* Rotas de Coletivo Disponíveis */}
+          {selectedTaxiType === 'Coletivo' && !destination && (
+            <View style={styles.collectiveRoutesSection}>
+              <Text style={styles.sectionTitle}>Rotas disponíveis para coletivos</Text>
+              <ScrollView
+                style={styles.routesList}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {getAllCollectiveRoutes().slice(0, 10).map((route, index) => (
+                  <TouchableOpacity
+                    key={route.id}
+                    style={styles.routeItem}
+                    onPress={() => {
+                      const routeInfo = getCollectiveRouteInfo(route.destination);
+                      if (routeInfo && routeInfo.destinationCoords) {
+                        const selectedLocation = {
+                          name: route.destination,
+                          address: route.name,
+                          lat: routeInfo.destinationCoords.lat,
+                          lng: routeInfo.destinationCoords.lng
+                        };
+                        
+                        console.log('🚌 Rota de coletivo selecionada:', routeInfo);
+                        console.log('📍 Chamando handleLocationSelect para processar rota...');
+                        
+                        // Chamar handleLocationSelect para processar a rota completa
+                        handleLocationSelect(selectedLocation);
+                      }
+                    }}
+                  >
+                    <View style={styles.routeIcon}>
+                      <MaterialIcons name="directions-bus" size={18} color="#4285F4" />
+                    </View>
+                    <View style={styles.routeInfo}>
+                      <Text style={styles.routeName}>{route.name}</Text>
+                      <Text style={styles.routePrice}>{route.price} AOA</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
 
           {/* Search Results */}
           <View style={styles.searchResultsSection}>
             <Text style={styles.sectionTitle}>
               {isSearching ? 'Buscando...' : 
                filteredResults?.length > 0 ? `Resultados da busca (${filteredResults?.length})` : 
+               selectedTaxiType === 'Coletivo' ? 'Digite para buscar destinos de coletivo' :
                'Digite para buscar locais'}
             </Text>
 
@@ -2115,14 +2436,14 @@ export default function HomeScreen({ navigation, route }) {
         visible={showConfirmationModal}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowConfirmationModal(false)}
+        onRequestClose={handleCancelConfirmation}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.confirmationModal}>
             <View style={styles.confirmationHeader}>
               <Text style={styles.confirmationTitle}>Confirmar Corrida</Text>
               <TouchableOpacity
-                onPress={() => setShowConfirmationModal(false)}
+                onPress={handleCancelConfirmation}
                 style={styles.closeButton}
               >
                 <MaterialIcons name="close" size={24} color="#6B7280" />
@@ -2134,7 +2455,7 @@ export default function HomeScreen({ navigation, route }) {
                 <View style={styles.routePreview}>
                   <View style={styles.routePoint}>
                     <MaterialIcons name="radio-button-checked" size={20} color="#10B981" />
-                    <Text style={styles.routePointText}>Sua localização</Text>
+                    <Text style={styles.routePointText}>{currentLocationName}</Text>
                   </View>
                   <View style={styles.routeLine} />
                   <View style={styles.routePoint}>
@@ -2177,7 +2498,7 @@ export default function HomeScreen({ navigation, route }) {
                 <View style={styles.confirmationActions}>
                   <TouchableOpacity
                     style={styles.cancelConfirmButton}
-                    onPress={() => setShowConfirmationModal(false)}
+                    onPress={handleCancelConfirmation}
                   >
                     <Text style={styles.cancelConfirmText}>Cancelar</Text>
                   </TouchableOpacity>
@@ -3328,5 +3649,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
+  },
+  
+  // Estilos para seção de rotas de coletivo
+  collectiveRoutesSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  routesList: {
+    maxHeight: 200,
+  },
+  routeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  routeIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EBF4FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  routeInfo: {
+    flex: 1,
+  },
+  routeName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  routePrice: {
+    fontSize: 13,
+    color: '#4285F4',
+    fontWeight: '500',
   },
 });
