@@ -1305,193 +1305,193 @@ export default function DriverMapScreen({ navigation, route }) {
                          [destinationLat, destinationLng]
                      ];
                      
-                     // Try to get real route from OSRM
-                     try {
-                         console.log('🌐 Fetching real route from OSRM...');
-                         const routeUrl = \`https://router.project-osrm.org/route/v1/driving/\${driverPos.lng},\${driverPos.lat};\${destinationLng},\${destinationLat}?overview=full&geometries=geojson\`;
-                         
-                         const response = await fetch(routeUrl);
-                         const data = await response.json();
-                         
-                         if (data.routes && data.routes.length > 0) {
-                             const route = data.routes[0];
-                             const coordinates = route.geometry.coordinates;
+                     // Try to get real route from OSRM using Promises
+                     console.log('🌐 Fetching real route from OSRM...');
+                     const routeUrl = \`https://router.project-osrm.org/route/v1/driving/\${driverPos.lng},\${driverPos.lat};\${destinationLng},\${destinationLat}?overview=full&geometries=geojson\`;
+                     
+                     fetch(routeUrl)
+                         .then(response => response.json())
+                         .then(data => {
+                             if (data.routes && data.routes.length > 0) {
+                                 const route = data.routes[0];
+                                 const coordinates = route.geometry.coordinates;
+                                 
+                                 // Convert coordinates from [lng, lat] to [lat, lng] for Leaflet
+                                 const leafletCoords = coordinates.map(coord => [coord[1], coord[0]]);
+                                 console.log('✅ Real route coordinates received:', leafletCoords.length, 'points');
+                                 
+                                 // Update route summary with real data
+                                 routeSummary = {
+                                     totalDistance: route.distance,
+                                     totalTime: route.duration
+                                 };
+                                 
+                                 // Create shadow line first (behind the main route)
+                                 const shadowLine = L.polyline(leafletCoords, {
+                                     color: '#000000',
+                                     weight: 8,
+                                     opacity: 0.3,
+                                     smoothFactor: 1,
+                                     lineCap: 'round',
+                                     lineJoin: 'round'
+                                 });
+                                 shadowLine.addTo(map);
+                                 console.log('✅ Shadow route line added');
+                                 
+                                 // Create main route line
+                                 routeLine = L.polyline(leafletCoords, {
+                                     color: routeColor,
+                                     weight: 6,
+                                     opacity: 0.9,
+                                     smoothFactor: 1,
+                                     lineCap: 'round',
+                                     lineJoin: 'round'
+                                 });
+                                 
+                                 routeLine.addTo(map);
+                                 console.log('✅ Real road route created and added to map successfully');
+                                 
+                                 try {
+                                     window.ReactNativeWebView?.postMessage(JSON.stringify({
+                                         type: 'navigation_status',
+                                         message: 'Real road route created with ' + leafletCoords.length + ' waypoints'
+                                     }));
+                                 } catch (e) {}
+                                 
+                                 // Setup navigation elements and UI
+                                 setupNavigationElements();
+                                 updateNavigationUI(phase, passengerName);
+                                 
+                                 // Fit map to route bounds
+                                 setTimeout(() => {
+                                     if (routeLine && routeLine.getLatLngs) {
+                                         const bounds = L.latLngBounds(routeLine.getLatLngs());
+                                         map.fitBounds(bounds, { 
+                                             padding: [80, 80],
+                                             maxZoom: 15
+                                         });
+                                         console.log('✅ Map fitted to real route bounds');
+                                     }
+                                 }, 500);
+                                 
+                             } else {
+                                 throw new Error('No route found from OSRM');
+                             }
+                         })
+                         .catch(e => {
+                             console.warn('⚠️ OSRM route failed, using straight line fallback:', e.message);
                              
-                             // Convert coordinates from [lng, lat] to [lat, lng] for Leaflet
-                             const leafletCoords = coordinates.map(coord => [coord[1], coord[0]]);
-                             console.log('✅ Real route coordinates received:', leafletCoords.length, 'points');
-                             
-                             // Update route summary with real data
-                             routeSummary = {
-                                 totalDistance: route.distance,
-                                 totalTime: route.duration
-                             };
-                             
-                             // Create shadow line first (behind the main route)
-                             const shadowLine = L.polyline(leafletCoords, {
-                                 color: '#000000',
-                                 weight: 8,
-                                 opacity: 0.3,
-                                 smoothFactor: 1,
-                                 lineCap: 'round',
-                                 lineJoin: 'round'
-                             });
-                             shadowLine.addTo(map);
-                             console.log('✅ Shadow route line added');
-                             
-                             // Create main route line
-                             routeLine = L.polyline(leafletCoords, {
-                                 color: routeColor,
-                                 weight: 6,
-                                 opacity: 0.9,
-                                 smoothFactor: 1,
-                                 lineCap: 'round',
-                                 lineJoin: 'round'
-                             });
-                             
-                             routeLine.addTo(map);
-                             console.log('✅ Real road route created and added to map successfully');
-                             
+                             // Fallback to straight line
                              try {
-                                 window.ReactNativeWebView?.postMessage(JSON.stringify({
-                                     type: 'navigation_status',
-                                     message: 'Real road route created with ' + leafletCoords.length + ' waypoints'
-                                 }));
-                             } catch (e) {}
-                             
-                         } else {
-                             throw new Error('No route found from OSRM');
-                         }
-                         
-                     } catch (e) {
-                         console.warn('⚠️ OSRM route failed, using straight line fallback:', e.message);
-                         
-                         // Fallback to straight line
-                         try {
-                             // Create shadow line
-                             const shadowLine = L.polyline(straightCoordinates, {
-                                 color: '#000000',
-                                 weight: 8,
-                                 opacity: 0.3,
-                                 smoothFactor: 1,
-                                 lineCap: 'round',
-                                 lineJoin: 'round'
-                             });
-                             shadowLine.addTo(map);
-                             
-                             // Create main route line
-                             routeLine = L.polyline(straightCoordinates, {
-                                 color: routeColor,
-                                 weight: 6,
-                                 opacity: 0.9,
-                                 smoothFactor: 1,
-                                 lineCap: 'round',
-                                 lineJoin: 'round'
-                             });
-                             
-                             routeLine.addTo(map);
-                             console.log('✅ Fallback straight route created successfully');
-                             
-                             try {
-                                 window.ReactNativeWebView?.postMessage(JSON.stringify({
-                                     type: 'navigation_status',
-                                     message: 'Fallback straight route created (OSRM unavailable)'
-                                 }));
-                             } catch (e) {}
-                             
-                         } catch (fallbackError) {
-                             console.error('❌ Even fallback route creation failed:', fallbackError);
-                             
-                             try {
-                                 window.ReactNativeWebView?.postMessage(JSON.stringify({
-                                     type: 'error',
-                                     message: 'Failed to create any route: ' + fallbackError.message
-                                 }));
-                             } catch (e) {}
-                         }
-                     }
-                     
-                     console.log('🛣️ Route line creation attempts completed');
-                     
-                     // Step 4: Calculate distance and time (fallback if OSRM didn't provide data)
-                     if (!routeSummary) {
-                         const currentDriverPos = driverMarker.getLatLng();
-                         const distance = currentDriverPos.distanceTo(L.latLng(destinationLat, destinationLng));
-                         const estimatedTime = Math.round(distance / 1000 * 2.5);
-                         
-                         routeSummary = {
-                             totalDistance: distance,
-                             totalTime: estimatedTime * 60
-                         };
-                     }
-                     
-                     console.log('📊 Route summary:', routeSummary);
-                     
-                     // Step 5: Setup instructions based on route
-                     if (routeSummary && routeSummary.totalDistance) {
-                         // Generate more realistic instructions based on distance
-                         const distanceKm = (routeSummary.totalDistance / 1000).toFixed(1);
-                         const durationMin = Math.round(routeSummary.totalTime / 60);
-                         
-                         routeInstructions = [
-                             { text: \`🚗 Siga em direção a \${phase === 'pickup' ? passengerName : 'destino'} (\${distanceKm} km)\` },
-                             { text: '🛣️ Continue pela rota principal' },
-                             { text: \`⏱️ Tempo estimado: \${durationMin} minutos\` },
-                             { text: '🎯 Mantenha-se na direção indicada' },
-                             { text: '🏁 Aproximando-se do destino' },
-                             { text: '✅ Você chegou ao destino!' }
-                         ];
-                     } else {
-                         // Fallback instructions
-                         routeInstructions = [
-                             { text: \`🚗 Siga em direção a \${phase === 'pickup' ? passengerName : 'destino'}\` },
-                             { text: '➡️ Continue na rota principal' },
-                             { text: '🎯 Mantenha-se na direção indicada' },
-                             { text: '🏁 Aproximando-se do destino' },
-                             { text: '✅ Você chegou ao destino!' }
-                         ];
-                     }
-                     currentInstructionIndex = 0;
-                     
-                     // Step 6: Update UI
-                     console.log('🖥️ Updating navigation UI...');
-                     updateNavigationUI(phase, passengerName);
-                     
-                     // Step 7: Show navigation elements
-                     const arrivalBtn = document.getElementById('arrivalButton');
-                     const navInfo = document.getElementById('navigationInfo');
-                     
-                     if (arrivalBtn) arrivalBtn.style.display = 'block';
-                     if (navInfo) navInfo.style.display = 'block';
-                     console.log('✅ Navigation UI elements shown');
-                     
-                     // Step 8: Zoom to show route
-                     console.log('🔍 Fitting map to route...');
-                     setTimeout(() => {
-                         let boundsCoords;
-                         if (routeLine && routeLine.getLatLngs) {
-                             // Use actual route coordinates if available
-                             boundsCoords = routeLine.getLatLngs();
-                             console.log('📍 Using route coordinates for bounds');
-                         } else {
-                             // Fallback to straight line coordinates
-                             boundsCoords = [
-                                 [driverPos.lat, driverPos.lng],
-                                 [destinationLat, destinationLng]
-                             ];
-                             console.log('📍 Using fallback coordinates for bounds');
-                         }
-                         
-                         const bounds = L.latLngBounds(boundsCoords);
-                         map.fitBounds(bounds, { 
-                             padding: [80, 80], // More padding for better view
-                             maxZoom: 15 // Closer zoom for better detail
+                                 // Create shadow line
+                                 const shadowLine = L.polyline(straightCoordinates, {
+                                     color: '#000000',
+                                     weight: 8,
+                                     opacity: 0.3,
+                                     smoothFactor: 1,
+                                     lineCap: 'round',
+                                     lineJoin: 'round'
+                                 });
+                                 shadowLine.addTo(map);
+                                 
+                                 // Create main route line
+                                 routeLine = L.polyline(straightCoordinates, {
+                                     color: routeColor,
+                                     weight: 6,
+                                     opacity: 0.9,
+                                     smoothFactor: 1,
+                                     lineCap: 'round',
+                                     lineJoin: 'round'
+                                 });
+                                 
+                                 routeLine.addTo(map);
+                                 console.log('✅ Fallback straight route created successfully');
+                                 
+                                 try {
+                                     window.ReactNativeWebView?.postMessage(JSON.stringify({
+                                         type: 'navigation_status',
+                                         message: 'Fallback straight route created (OSRM unavailable)'
+                                     }));
+                                 } catch (e) {}
+                                 
+                                                                   // Setup navigation elements and UI for fallback
+                                  setupNavigationElements();
+                                  updateNavigationUI(phase, passengerName);
+                                  setTimeout(() => {
+                                      const bounds = L.latLngBounds(straightCoordinates);
+                                      map.fitBounds(bounds, { 
+                                          padding: [80, 80],
+                                          maxZoom: 15
+                                      });
+                                      console.log('✅ Map fitted to fallback route bounds');
+                                  }, 500);
+                                 
+                             } catch (fallbackError) {
+                                 console.error('❌ Even fallback route creation failed:', fallbackError);
+                                 
+                                 try {
+                                     window.ReactNativeWebView?.postMessage(JSON.stringify({
+                                         type: 'error',
+                                         message: 'Failed to create any route: ' + fallbackError.message
+                                     }));
+                                 } catch (e) {}
+                             }
                          });
-                         console.log('✅ Map fitted to route bounds');
-                     }, 1000); // Increased delay to ensure route is fully loaded
                      
-                     // Step 9: Start simulation
-                     startTurnByTurnSimulation();
+                     // Step 4: Setup common elements (will be called in both success and fallback)
+                     function setupNavigationElements() {
+                         // Calculate fallback distance if no route summary
+                         if (!routeSummary) {
+                             const currentDriverPos = driverMarker.getLatLng();
+                             const distance = currentDriverPos.distanceTo(L.latLng(destinationLat, destinationLng));
+                             const estimatedTime = Math.round(distance / 1000 * 2.5);
+                             
+                             routeSummary = {
+                                 totalDistance: distance,
+                                 totalTime: estimatedTime * 60
+                             };
+                         }
+                         
+                         console.log('📊 Route summary:', routeSummary);
+                         
+                         // Setup instructions based on route
+                         if (routeSummary && routeSummary.totalDistance) {
+                             const distanceKm = (routeSummary.totalDistance / 1000).toFixed(1);
+                             const durationMin = Math.round(routeSummary.totalTime / 60);
+                             
+                             routeInstructions = [
+                                 { text: \`🚗 Siga em direção a \${phase === 'pickup' ? passengerName : 'destino'} (\${distanceKm} km)\` },
+                                 { text: '🛣️ Continue pela rota principal' },
+                                 { text: \`⏱️ Tempo estimado: \${durationMin} minutos\` },
+                                 { text: '🎯 Mantenha-se na direção indicada' },
+                                 { text: '🏁 Aproximando-se do destino' },
+                                 { text: '✅ Você chegou ao destino!' }
+                             ];
+                         } else {
+                             routeInstructions = [
+                                 { text: \`🚗 Siga em direção a \${phase === 'pickup' ? passengerName : 'destino'}\` },
+                                 { text: '➡️ Continue na rota principal' },
+                                 { text: '🎯 Mantenha-se na direção indicada' },
+                                 { text: '🏁 Aproximando-se do destino' },
+                                 { text: '✅ Você chegou ao destino!' }
+                             ];
+                         }
+                         currentInstructionIndex = 0;
+                         
+                         // Show navigation elements
+                         const arrivalBtn = document.getElementById('arrivalButton');
+                         const navInfo = document.getElementById('navigationInfo');
+                         
+                         if (arrivalBtn) arrivalBtn.style.display = 'block';
+                         if (navInfo) navInfo.style.display = 'block';
+                         console.log('✅ Navigation UI elements shown');
+                         
+                         // Start simulation
+                         startTurnByTurnSimulation();
+                     }
+                     
+                     // This function will be called by both success and fallback paths
+                     window.setupNavigationElements = setupNavigationElements;
                      
                      console.log('🎉 === NAVIGATION SETUP COMPLETE ===');
                      
