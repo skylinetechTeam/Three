@@ -1180,11 +1180,14 @@ export default function HomeScreen({ navigation, route }) {
       
       // Calcular estimativa da corrida
       console.log('💰 Calculando estimativa da corrida...');
+      console.log('📊 routeInfo disponível:', !!routeInfo, routeInfo);
       const estimatedDistance = routeInfo?.distance || 5000; // metros
       const estimatedTime = routeInfo?.duration || 900; // segundos
       const vehicleType = selectedTaxiType === 'Privado' ? 'privado' : 'coletivo';
       console.log('🚗 selectedTaxiType:', selectedTaxiType);
       console.log('🎯 vehicleType mapeado:', vehicleType);
+      console.log('📏 Distância estimada:', estimatedDistance, 'metros');
+      console.log('⏱️ Tempo estimado:', estimatedTime, 'segundos');
       
       let estimatedFare;
       if (vehicleType === 'coletivo') {
@@ -1212,8 +1215,10 @@ export default function HomeScreen({ navigation, route }) {
       };
       
       console.log('📊 Estimativa calculada:', estimate);
+      console.log('🎭 Definindo rideEstimate e mostrando modal...');
       setRideEstimate(estimate);
       setShowConfirmationModal(true);
+      console.log('✅ Modal de confirmação deve estar visível agora!');
       
           }
   };
@@ -1503,6 +1508,7 @@ export default function HomeScreen({ navigation, route }) {
 
   // Função para validar rota de coletivo
   const validateCollectiveRoute = (destination) => {
+    console.log('🔍 Validando rota de coletivo:', destination.name, 'para tipo:', selectedTaxiType);
     if (selectedTaxiType !== 'Coletivo') return true; // Privado pode ir a qualquer lugar
     
     const isValid = isValidCollectiveRoute(destination.name || destination.address);
@@ -2226,22 +2232,18 @@ export default function HomeScreen({ navigation, route }) {
                     onPress={() => {
                       const routeInfo = getCollectiveRouteInfo(route.destination);
                       if (routeInfo && routeInfo.destinationCoords) {
-                        setDestination(route.destination);
-                        setSelectedDestination({
+                        const selectedLocation = {
                           name: route.destination,
                           address: route.name,
                           lat: routeInfo.destinationCoords.lat,
                           lng: routeInfo.destinationCoords.lng
-                        });
-                        setIsSearchExpanded(false);
+                        };
                         
                         console.log('🚌 Rota de coletivo selecionada:', routeInfo);
-                        Toast.show({
-                          type: "success",
-                          text1: "Rota selecionada",
-                          text2: `${routeInfo.routeName} - ${routeInfo.price} AOA`,
-                          visibilityTime: 3000,
-                        });
+                        console.log('📍 Chamando handleLocationSelect para processar rota...');
+                        
+                        // Chamar handleLocationSelect para processar a rota completa
+                        handleLocationSelect(selectedLocation);
                       }
                     }}
                   >
