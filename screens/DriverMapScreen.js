@@ -21,6 +21,9 @@ import Toast from 'react-native-toast-message';
 
 const { width, height } = Dimensions.get('window');
 
+// OSRM Configuration for real road routing
+const OSRM_BASE_URL = 'https://router.project-osrm.org';
+
 export default function DriverMapScreen({ navigation, route }) {
   const [location, setLocation] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
@@ -1291,72 +1294,120 @@ export default function DriverMapScreen({ navigation, route }) {
                          }));
                      } catch (e) {}
                      
-                                          // Step 3: Create route line - FIXED VERSION
-                     console.log('🛣️ Creating route line...');
+                                          // Step 3: Create real route using OSRM API
+                     console.log('🛣️ Creating real road route...');
                      const routeColor = '#4285F4'; // Using same blue color as HomeScreen
                      console.log('🎨 Using color:', routeColor);
                      
-                     const coordinates = [
+                     // First create a straight line as fallback
+                     const straightCoordinates = [
                          [driverPos.lat, driverPos.lng],
                          [destinationLat, destinationLng]
                      ];
-                     console.log('📐 Route coordinates:', coordinates);
                      
-                     // Create the main route line
+                     // Try to get real route from OSRM
                      try {
-                         routeLine = L.polyline(coordinates, {
-                             color: routeColor,
-                             weight: 6,
-                             opacity: 0.9,
-                             smoothFactor: 1,
-                             lineCap: 'round',
-                             lineJoin: 'round'
-                         });
+                         console.log('🌐 Fetching real route from OSRM...');
+                         const routeUrl = \`https://router.project-osrm.org/route/v1/driving/\${driverPos.lng},\${driverPos.lat};\${destinationLng},\${destinationLat}?overview=full&geometries=geojson\`;
                          
-                         // Add to map
-                         routeLine.addTo(map);
-                         console.log('✅ Route line created and added to map successfully');
+                         const response = await fetch(routeUrl);
+                         const data = await response.json();
                          
-                         try {
-                             window.ReactNativeWebView?.postMessage(JSON.stringify({
-                                 type: 'navigation_status',
-                                 message: 'Route line created and added successfully'
-                             }));
-                         } catch (e) {}
-                         
-                         // Also create a shadow line for better visibility
-                         const shadowLine = L.polyline(coordinates, {
-                             color: '#000000',
-                             weight: 8,
-                             opacity: 0.3,
-                             smoothFactor: 1,
-                             lineCap: 'round',
-                             lineJoin: 'round'
-                         });
-                         shadowLine.addTo(map);
-                         console.log('✅ Shadow line added for better visibility');
-                         
-                         try {
-                             window.ReactNativeWebView?.postMessage(JSON.stringify({
-                                 type: 'navigation_status',
-                                 message: 'Shadow line added for better visibility'
-                             }));
-                         } catch (e) {}
-                         
-                     } catch (e) {
-                         console.error('❌ Failed to create route line:', e);
-                         
-                         // Fallback: try simple approach
-                         try {
-                             routeLine = new L.Polyline(coordinates, {
+                         if (data.routes && data.routes.length > 0) {
+                             const route = data.routes[0];
+                             const coordinates = route.geometry.coordinates;
+                             
+                             // Convert coordinates from [lng, lat] to [lat, lng] for Leaflet
+                             const leafletCoords = coordinates.map(coord => [coord[1], coord[0]]);
+                             console.log('✅ Real route coordinates received:', leafletCoords.length, 'points');
+                             
+                             // Update route summary with real data
+                             routeSummary = {
+                                 totalDistance: route.distance,
+                                 totalTime: route.duration
+                             };
+                             
+                             // Create shadow line first (behind the main route)
+                             const shadowLine = L.polyline(leafletCoords, {
+                                 color: '#000000',
+                                 weight: 8,
+                                 opacity: 0.3,
+                                 smoothFactor: 1,
+                                 lineCap: 'round',
+                                 lineJoin: 'round'
+                             });
+                             shadowLine.addTo(map);
+                             console.log('✅ Shadow route line added');
+                             
+                             // Create main route line
+                             routeLine = L.polyline(leafletCoords, {
                                  color: routeColor,
                                  weight: 6,
-                                 opacity: 0.9
+                                 opacity: 0.9,
+                                 smoothFactor: 1,
+                                 lineCap: 'round',
+                                 lineJoin: 'round'
                              });
-                             map.addLayer(routeLine);
-                             console.log('✅ Fallback route line created successfully');
+                             
+                             routeLine.addTo(map);
+                             console.log('✅ Real road route created and added to map successfully');
+                             
+                             try {
+                                 window.ReactNativeWebView?.postMessage(JSON.stringify({
+                                     type: 'navigation_status',
+                                     message: 'Real road route created with ' + leafletCoords.length + ' waypoints'
+                                 }));
+                             } catch (e) {}
+                             
+                         } else {
+                             throw new Error('No route found from OSRM');
+                         }
+                         
+                     } catch (e) {
+                         console.warn('⚠️ OSRM route failed, using straight line fallback:', e.message);
+                         
+                         // Fallback to straight line
+                         try {
+                             // Create shadow line
+                             const shadowLine = L.polyline(straightCoordinates, {
+                                 color: '#000000',
+                                 weight: 8,
+                                 opacity: 0.3,
+                                 smoothFactor: 1,
+                                 lineCap: 'round',
+                                 lineJoin: 'round'
+                             });
+                             shadowLine.addTo(map);
+                             
+                             // Create main route line
+                             routeLine = L.polyline(straightCoordinates, {
+                                 color: routeColor,
+                                 weight: 6,
+                                 opacity: 0.9,
+                                 smoothFactor: 1,
+                                 lineCap: 'round',
+                                 lineJoin: 'round'
+                             });
+                             
+                             routeLine.addTo(map);
+                             console.log('✅ Fallback straight route created successfully');
+                             
+                             try {
+                                 window.ReactNativeWebView?.postMessage(JSON.stringify({
+                                     type: 'navigation_status',
+                                     message: 'Fallback straight route created (OSRM unavailable)'
+                                 }));
+                             } catch (e) {}
+                             
                          } catch (fallbackError) {
-                             console.error('❌ Fallback route creation also failed:', fallbackError);
+                             console.error('❌ Even fallback route creation failed:', fallbackError);
+                             
+                             try {
+                                 window.ReactNativeWebView?.postMessage(JSON.stringify({
+                                     type: 'error',
+                                     message: 'Failed to create any route: ' + fallbackError.message
+                                 }));
+                             } catch (e) {}
                          }
                      }
                      
@@ -1376,14 +1427,30 @@ export default function DriverMapScreen({ navigation, route }) {
                      
                      console.log('📊 Route summary:', routeSummary);
                      
-                     // Step 5: Setup instructions
-                     routeInstructions = [
-                         { text: \`🚗 Siga em direção a \${phase === 'pickup' ? passengerName : 'destino'}\` },
-                         { text: '➡️ Continue na rota principal' },
-                         { text: '🎯 Mantenha-se na direção indicada' },
-                         { text: '🏁 Aproximando-se do destino' },
-                         { text: '✅ Você chegou ao destino!' }
-                     ];
+                     // Step 5: Setup instructions based on route
+                     if (routeSummary && routeSummary.totalDistance) {
+                         // Generate more realistic instructions based on distance
+                         const distanceKm = (routeSummary.totalDistance / 1000).toFixed(1);
+                         const durationMin = Math.round(routeSummary.totalTime / 60);
+                         
+                         routeInstructions = [
+                             { text: \`🚗 Siga em direção a \${phase === 'pickup' ? passengerName : 'destino'} (\${distanceKm} km)\` },
+                             { text: '🛣️ Continue pela rota principal' },
+                             { text: \`⏱️ Tempo estimado: \${durationMin} minutos\` },
+                             { text: '🎯 Mantenha-se na direção indicada' },
+                             { text: '🏁 Aproximando-se do destino' },
+                             { text: '✅ Você chegou ao destino!' }
+                         ];
+                     } else {
+                         // Fallback instructions
+                         routeInstructions = [
+                             { text: \`🚗 Siga em direção a \${phase === 'pickup' ? passengerName : 'destino'}\` },
+                             { text: '➡️ Continue na rota principal' },
+                             { text: '🎯 Mantenha-se na direção indicada' },
+                             { text: '🏁 Aproximando-se do destino' },
+                             { text: '✅ Você chegou ao destino!' }
+                         ];
+                     }
                      currentInstructionIndex = 0;
                      
                      // Step 6: Update UI
@@ -1401,13 +1468,27 @@ export default function DriverMapScreen({ navigation, route }) {
                      // Step 8: Zoom to show route
                      console.log('🔍 Fitting map to route...');
                      setTimeout(() => {
-                         const bounds = L.latLngBounds(coordinates);
+                         let boundsCoords;
+                         if (routeLine && routeLine.getLatLngs) {
+                             // Use actual route coordinates if available
+                             boundsCoords = routeLine.getLatLngs();
+                             console.log('📍 Using route coordinates for bounds');
+                         } else {
+                             // Fallback to straight line coordinates
+                             boundsCoords = [
+                                 [driverPos.lat, driverPos.lng],
+                                 [destinationLat, destinationLng]
+                             ];
+                             console.log('📍 Using fallback coordinates for bounds');
+                         }
+                         
+                         const bounds = L.latLngBounds(boundsCoords);
                          map.fitBounds(bounds, { 
-                             padding: [50, 50],
-                             maxZoom: 13
+                             padding: [80, 80], // More padding for better view
+                             maxZoom: 15 // Closer zoom for better detail
                          });
-                         console.log('✅ Map fitted to bounds');
-                     }, 500);
+                         console.log('✅ Map fitted to route bounds');
+                     }, 1000); // Increased delay to ensure route is fully loaded
                      
                      // Step 9: Start simulation
                      startTurnByTurnSimulation();
@@ -1468,14 +1549,25 @@ export default function DriverMapScreen({ navigation, route }) {
                      routeLine = null;
                  }
                  
-                 // Clear any other polylines that might exist
+                 // Clear any other polylines that might exist (including shadow lines)
                  try {
+                     const layersToRemove = [];
                      map.eachLayer(function (layer) {
-                         if (layer instanceof L.Polyline && layer !== routeLine) {
-                             map.removeLayer(layer);
+                         // Remove all polylines (route lines and shadow lines)
+                         if (layer instanceof L.Polyline) {
+                             layersToRemove.push(layer);
                          }
                      });
-                     console.log('✅ All polylines cleared');
+                     
+                     layersToRemove.forEach(layer => {
+                         try {
+                             map.removeLayer(layer);
+                         } catch (e) {
+                             console.warn('⚠️ Error removing layer:', e);
+                         }
+                     });
+                     
+                     console.log('✅ All polylines cleared:', layersToRemove.length, 'layers removed');
                  } catch (e) {
                      console.warn('⚠️ Error clearing polylines:', e);
                  }
