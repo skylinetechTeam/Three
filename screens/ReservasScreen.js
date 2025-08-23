@@ -507,26 +507,33 @@ const ReservasScreen = () => {
         </View>
       )}
 
-      <View style={styles.reservaActions}>
-        {item.status === 'Pendente' && (
-          <>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.confirmButton]}
-              onPress={() => handleStatusChange(item.id, 'Confirmada')}
-            >
-              <Ionicons name="checkmark" size={16} color="#ffffff" />
-              <Text style={styles.confirmButtonText}>Confirmar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.cancelButton]}
-              onPress={() => handleCancelReserva(item.id)}
-            >
-              <Ionicons name="close" size={16} color="#ffffff" />
-              <Text style={styles.cancelButtonText}>Cancelar</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
+      {item.status === 'Pendente' && (
+        <View style={styles.reservaActions}>
+          <TouchableOpacity
+            style={styles.confirmButton}
+            onPress={() => handleStatusChange(item.id, 'Confirmada')}
+          >
+            <Ionicons name="checkmark-circle" size={18} color="#ffffff" />
+            <Text style={styles.confirmButtonText}>Confirmar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.cancelReservaButton}
+            onPress={() => handleCancelReserva(item.id)}
+          >
+            <Ionicons name="close-circle" size={18} color="#ffffff" />
+            <Text style={styles.cancelReservaButtonText}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
+      {item.status !== 'Pendente' && (
+        <View style={styles.statusOnlyActions}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+            <Ionicons name={getStatusIcon(item.status)} size={16} color="#ffffff" />
+            <Text style={styles.statusBadgeText}>{item.status}</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 
@@ -1466,33 +1473,47 @@ const styles = StyleSheet.create({
   // Reserva item styles
   reservaItem: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 16,
-    ...SHADOWS.medium,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
   },
   reservaHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   reservaStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEE2E2',
-    borderRadius: 10,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
   },
   reservaStatusText: {
     fontSize: 12,
-    fontWeight: 'bold',
-    marginLeft: 5,
+    fontWeight: '700',
+    marginLeft: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   reservaPreco: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '800',
     color: COLORS.primary,
   },
   reservaRoute: {
@@ -1555,41 +1576,84 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1F2937',
   },
-  reservaActions: {
+    reservaActions: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 10,
+    gap: 12,
+    marginTop: 16,
   },
-  actionButton: {
+  confirmButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-  },
-
-  confirmButton: {
-    backgroundColor: COLORS.primary,
-    flex: 1,
-    marginRight: 10,
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#10B981',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   confirmButtonText: {
     color: '#ffffff',
-    fontWeight: 'bold',
+    fontWeight: '700',
     fontSize: 14,
-    marginLeft: 5,
+    marginLeft: 6,
   },
-  cancelButton: {
-    backgroundColor: COLORS.notification,
+  cancelReservaButton: {
     flex: 1,
-    marginLeft: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#EF4444',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  cancelButtonText: {
+  cancelReservaButtonText: {
     color: '#ffffff',
-    fontWeight: 'bold',
+    fontWeight: '700',
     fontSize: 14,
-    marginLeft: 5,
+    marginLeft: 6,
+  },
+  statusOnlyActions: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statusBadgeText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13,
+    marginLeft: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   // Empty state
   emptyState: {

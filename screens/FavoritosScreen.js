@@ -406,45 +406,57 @@ const FavoritosScreen = () => {
   };
 
   const renderFavoritoItem = ({ item }) => (
-    <View style={styles.favoritoItem}>
-      <View style={styles.favoritoIcon}>
-        <MaterialIcons 
-          name={getIconForCategory(item.categories)} 
-          size={24} 
-          color={COLORS.primary} 
-        />
-      </View>
-      <View style={styles.favoritoInfo}>
-        <Text style={styles.favoritoNome}>{item.nome}</Text>
-        <Text style={styles.favoritoEndereco}>{item.endereco}</Text>
-        <View style={styles.favoritoMeta}>
-          <View style={styles.favoritoTag}>
-            <Text style={styles.favoritoTagText}>{item.tipo}</Text>
+    <View style={styles.favoritoCard}>
+      <View style={styles.cardHeader}>
+        <View style={styles.iconContainer}>
+          <View style={styles.iconBackground}>
+            <MaterialIcons 
+              name={getIconForCategory(item.categories)} 
+              size={20} 
+              color="#ffffff" 
+            />
           </View>
-          <View style={styles.favoritoTag}>
-            <Text style={styles.favoritoTagText}>{item.frequencia}</Text>
+        </View>
+        <View style={styles.headerInfo}>
+          <Text style={styles.favoritoNome}>{item.nome}</Text>
+          <Text style={styles.favoritoEndereco}>{item.endereco}</Text>
+        </View>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => handleEditFavorito(item)}
+          >
+            <Ionicons name="pencil" size={16} color="#6B7280" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleRemoveFavorito(item.id)}
+          >
+            <Ionicons name="trash-outline" size={16} color="#EF4444" />
+          </TouchableOpacity>
+        </View>
+      </View>
+      
+      <View style={styles.cardBody}>
+        <View style={styles.tagsContainer}>
+          <View style={styles.typeTag}>
+            <Ionicons name="location-outline" size={12} color={COLORS.primary} />
+            <Text style={styles.tagText}>{item.tipo}</Text>
+          </View>
+          <View style={styles.frequencyTag}>
+            <Ionicons name="time-outline" size={12} color="#6B7280" />
+            <Text style={styles.tagText}>{item.frequencia}</Text>
           </View>
         </View>
       </View>
-      <View style={styles.favoritoActions}>
+      
+      <View style={styles.cardFooter}>
         <TouchableOpacity
-          style={[styles.actionButton, styles.goButton]}
+          style={styles.primaryButton}
           onPress={() => handleGoToFavorite(item)}
         >
-          <MaterialIcons name="directions" size={20} color="#ffffff" />
-          <Text style={styles.goButtonText}>Ir</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleEditFavorito(item)}
-        >
-          <Ionicons name="pencil" size={18} color={COLORS.primary} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleRemoveFavorito(item.id)}
-        >
-          <Ionicons name="trash" size={18} color="#ef4444" />
+          <MaterialIcons name="directions" size={18} color="#ffffff" />
+          <Text style={styles.primaryButtonText}>Navegar</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -1395,81 +1407,149 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 5,
   },
-  favoritoItem: {
+  favoritoCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    marginBottom: 12,
     padding: 16,
-    ...SHADOWS.small,
+    paddingBottom: 12,
   },
-  favoritoIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: COLORS.input.background,
+  iconContainer: {
+    marginRight: 12,
+  },
+  iconBackground: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    shadowColor: COLORS.primary,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  favoritoInfo: {
+  headerInfo: {
     flex: 1,
   },
   favoritoNome: {
     fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text.primary,
+    fontWeight: '700',
+    color: '#111827',
     marginBottom: 4,
   },
   favoritoEndereco: {
     fontSize: 14,
-    color: COLORS.text.secondary,
-    marginBottom: 4,
+    color: '#6B7280',
+    lineHeight: 20,
   },
-  favoritoMeta: {
+  headerActions: {
     flexDirection: 'row',
-    marginTop: 4,
+    alignItems: 'center',
   },
-  favoritoTag: {
-    backgroundColor: COLORS.input.background,
-    borderRadius: 10,
-    paddingVertical: 4,
+  editButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F9FAFB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  deleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  cardBody: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  typeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    paddingVertical: 6,
     paddingHorizontal: 10,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#DBEAFE',
   },
-  favoritoTagText: {
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '500',
-  },
-  favoritoActions: {
+  frequencyTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    minWidth: 140,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  actionButton: {
-    padding: 8,
-    marginLeft: 10,
-  },
-  goButton: {
-    backgroundColor: COLORS.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginLeft: 0,
-    marginRight: 10,
-  },
-  goButtonText: {
-    color: '#ffffff',
+  tagText: {
     fontSize: 12,
     fontWeight: '600',
+    color: '#374151',
     marginLeft: 4,
+    textTransform: 'capitalize',
+  },
+  cardFooter: {
+    padding: 16,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: COLORS.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  primaryButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 6,
   },
   emptyState: {
     flex: 1,

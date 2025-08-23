@@ -129,6 +129,8 @@ export const clearDataByKey = async (key) => {
   }
 };
 
+export { DATA_KEYS };
+
 export default {
   clearAllUserData,
   clearFavoritesAndReservas,
