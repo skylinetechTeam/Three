@@ -76,9 +76,20 @@ export default function DriverMapScreen({ navigation, route }) {
 
   useEffect(() => {
     if (activeRide && location && webViewRef.current && navigationMode) {
-      startNavigationToDestination();
+      console.log('🎯 useEffect triggered for navigation:', {
+        activeRide: !!activeRide,
+        location: !!location,
+        webViewRef: !!webViewRef.current,
+        navigationMode,
+        ridePhase
+      });
+      
+      // Small delay to ensure WebView is ready
+      setTimeout(() => {
+        startNavigationToDestination();
+      }, 500);
     }
-  }, [activeRide, location, navigationMode]);
+  }, [activeRide, location, navigationMode, ridePhase]);
 
   const initializeDriver = async () => {
     try {
@@ -547,17 +558,34 @@ export default function DriverMapScreen({ navigation, route }) {
       
       // Start navigation immediately after accepting
       setTimeout(() => {
-        if (webViewRef.current && location) {
+        if (webViewRef.current && location && currentRequest) {
+          console.log('🚗 Starting navigation after ride acceptance...');
+          console.log('📍 Current location:', location.coords);
+          console.log('🎯 Pickup location:', currentRequest.pickup);
+          console.log('👤 Passenger:', currentRequest.passengerName);
+          
           const destination = currentRequest.pickup;
           const script = `
+            console.log('📱 Received navigation command from React Native');
+            console.log('🎯 Destination coords:', ${destination.lat}, ${destination.lng});
             if (typeof startNavigation === 'function') {
-              console.log('Triggering navigation to pickup location');
+              console.log('✅ startNavigation function exists, calling it now...');
               startNavigation(${destination.lat}, ${destination.lng}, '${currentRequest.passengerName}', 'pickup');
+            } else {
+              console.error('❌ startNavigation function not found!');
+              alert('Erro: Função de navegação não encontrada');
             }
           `;
           webViewRef.current.postMessage(script);
+          console.log('📤 Navigation script sent to WebView');
+        } else {
+          console.error('❌ Cannot start navigation:', {
+            webViewRef: !!webViewRef.current,
+            location: !!location,
+            currentRequest: !!currentRequest
+          });
         }
-      }, 1000);
+      }, 1500); // Increased timeout to ensure WebView is ready
       
       setCurrentRequest(null);
       
@@ -624,16 +652,39 @@ export default function DriverMapScreen({ navigation, route }) {
   };
 
   const startNavigationToDestination = () => {
-    if (!activeRide || !location || !webViewRef.current) return;
+    console.log('🧭 startNavigationToDestination called');
+    
+    if (!activeRide || !location || !webViewRef.current) {
+      console.error('❌ Navigation requirements not met:', {
+        activeRide: !!activeRide,
+        location: !!location,
+        webViewRef: !!webViewRef.current
+      });
+      return;
+    }
 
     const destination = ridePhase === 'pickup' ? activeRide.pickup : activeRide.destination;
     
+    console.log('🎯 Starting navigation to:', {
+      destination,
+      ridePhase,
+      passengerName: activeRide.passengerName
+    });
+    
     const script = `
+      console.log('📍 Navigation script received - Phase: ${ridePhase}');
+      console.log('🎯 Destination coordinates:', ${destination.lat}, ${destination.lng});
       if (typeof startNavigation === 'function') {
+        console.log('✅ Calling startNavigation function...');
         startNavigation(${destination.lat}, ${destination.lng}, '${activeRide.passengerName}', '${ridePhase}');
+      } else {
+        console.error('❌ startNavigation function not available!');
+        alert('Erro: Função de navegação não está disponível');
       }
     `;
+    
     webViewRef.current.postMessage(script);
+    console.log('📤 Navigation script sent to WebView');
   };
 
   const simulateArrival = () => {
@@ -1120,7 +1171,7 @@ export default function DriverMapScreen({ navigation, route }) {
                      map.addLayer(destinationMarker);
                      console.log('✅ Destination marker added');
                      
-                                          // Step 3: Create route line - STABLE VERSION WITH BLUE COLOR
+                                          // Step 3: Create route line - FIXED VERSION
                      console.log('🛣️ Creating route line...');
                      const routeColor = '#4285F4'; // Using same blue color as HomeScreen
                      console.log('🎨 Using color:', routeColor);
@@ -1131,47 +1182,48 @@ export default function DriverMapScreen({ navigation, route }) {
                      ];
                      console.log('📐 Route coordinates:', coordinates);
                      
-                     // Method 1: Standard polyline
+                     // Create the main route line
                      try {
                          routeLine = L.polyline(coordinates, {
                              color: routeColor,
-                             weight: 5,
-                             opacity: 0.8,
+                             weight: 6,
+                             opacity: 0.9,
                              smoothFactor: 1,
                              lineCap: 'round',
                              lineJoin: 'round'
                          });
-                         map.addLayer(routeLine);
-                         console.log('✅ Method 1: Standard polyline added');
-                     } catch (e) {
-                         console.error('❌ Method 1 failed:', e);
-                     }
-                     
-                     // Method 2: Backup thick line
-                     try {
-                         const backupLine = L.polyline(coordinates, {
-                             color: routeColor,
-                             weight: 5,
-                             opacity: 0.8,
-                             smoothFactor: 1
-                         }).addTo(map);
-                         console.log('✅ Method 2: Backup line added');
-                     } catch (e) {
-                         console.error('❌ Method 2 failed:', e);
-                     }
-                     
-                     // Method 3: Simple line with different approach
-                     try {
-                         const simpleLine = new L.Polyline(coordinates, {
-                             color: routeColor,
-                             weight: 5,
-                             opacity: 0.8,
-                             smoothFactor: 1
+                         
+                         // Add to map
+                         routeLine.addTo(map);
+                         console.log('✅ Route line created and added to map successfully');
+                         
+                         // Also create a shadow line for better visibility
+                         const shadowLine = L.polyline(coordinates, {
+                             color: '#000000',
+                             weight: 8,
+                             opacity: 0.3,
+                             smoothFactor: 1,
+                             lineCap: 'round',
+                             lineJoin: 'round'
                          });
-                         simpleLine.addTo(map);
-                         console.log('✅ Method 3: Simple line added');
+                         shadowLine.addTo(map);
+                         console.log('✅ Shadow line added for better visibility');
+                         
                      } catch (e) {
-                         console.error('❌ Method 3 failed:', e);
+                         console.error('❌ Failed to create route line:', e);
+                         
+                         // Fallback: try simple approach
+                         try {
+                             routeLine = new L.Polyline(coordinates, {
+                                 color: routeColor,
+                                 weight: 6,
+                                 opacity: 0.9
+                             });
+                             map.addLayer(routeLine);
+                             console.log('✅ Fallback route line created successfully');
+                         } catch (fallbackError) {
+                             console.error('❌ Fallback route creation also failed:', fallbackError);
+                         }
                      }
                      
                      console.log('🛣️ Route line creation attempts completed');
@@ -1235,17 +1287,48 @@ export default function DriverMapScreen({ navigation, route }) {
              }
 
              function clearPreviousRoute() {
+                 console.log('🧹 Clearing previous route elements...');
+                 
                  if (routeControl) {
-                     map.removeControl(routeControl);
+                     try {
+                         map.removeControl(routeControl);
+                         console.log('✅ Route control removed');
+                     } catch (e) {
+                         console.warn('⚠️ Error removing route control:', e);
+                     }
                      routeControl = null;
                  }
+                 
                  if (destinationMarker) {
-                     map.removeLayer(destinationMarker);
+                     try {
+                         map.removeLayer(destinationMarker);
+                         console.log('✅ Destination marker removed');
+                     } catch (e) {
+                         console.warn('⚠️ Error removing destination marker:', e);
+                     }
                      destinationMarker = null;
                  }
+                 
                  if (routeLine) {
-                     map.removeLayer(routeLine);
+                     try {
+                         map.removeLayer(routeLine);
+                         console.log('✅ Route line removed');
+                     } catch (e) {
+                         console.warn('⚠️ Error removing route line:', e);
+                     }
                      routeLine = null;
+                 }
+                 
+                 // Clear any other polylines that might exist
+                 try {
+                     map.eachLayer(function (layer) {
+                         if (layer instanceof L.Polyline && layer !== routeLine) {
+                             map.removeLayer(layer);
+                         }
+                     });
+                     console.log('✅ All polylines cleared');
+                 } catch (e) {
+                     console.warn('⚠️ Error clearing polylines:', e);
                  }
              }
 
@@ -1579,6 +1662,30 @@ export default function DriverMapScreen({ navigation, route }) {
       >
         <MaterialIcons name="my-location" size={24} color="#ffffff" />
       </TouchableOpacity>
+
+      {/* Test Navigation Button - Only in development */}
+      {__DEV__ && !navigationMode && (
+        <TouchableOpacity 
+          style={[styles.testNavigationButton, { bottom: insets.bottom + 160 }]}
+          onPress={() => {
+            if (webViewRef.current && location) {
+              console.log('🧪 Testing navigation with sample destination...');
+              const script = `
+                console.log('🧪 Test navigation button pressed');
+                if (typeof testCreateLine === 'function') {
+                  testCreateLine();
+                } else {
+                  console.error('❌ testCreateLine function not found');
+                  alert('Função de teste não encontrada');
+                }
+              `;
+              webViewRef.current.postMessage(script);
+            }
+          }}
+        >
+          <MaterialIcons name="route" size={20} color="#ffffff" />
+        </TouchableOpacity>
+      )}
 
      
 
