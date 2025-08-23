@@ -89,7 +89,7 @@ export default function DriverMapScreen({ navigation, route }) {
       
       // Small delay to ensure WebView is ready
       setTimeout(() => {
-        startNavigationTo();
+        startNavigationToDestination();
       }, 500);
     }
   }, [activeRide, location, navigationMode, ridePhase]);
@@ -680,14 +680,15 @@ export default function DriverMapScreen({ navigation, route }) {
   const startNavigationToDestination = () => {
     console.log('🧭 startNavigationToDestination called');
     
-    if (!activeRide || !location || !webViewRef.current) {
-      console.error('❌ Navigation requirements not met:', {
-        activeRide: !!activeRide,
-        location: !!location,
-        webViewRef: !!webViewRef.current
-      });
-      return;
-    }
+    try {
+      if (!activeRide || !location || !webViewRef.current) {
+        console.error('❌ Navigation requirements not met:', {
+          activeRide: !!activeRide,
+          location: !!location,
+          webViewRef: !!webViewRef.current
+        });
+        return;
+      }
 
     const destination = ridePhase === 'pickup' ? activeRide.pickup : activeRide.destination;
     
@@ -778,6 +779,25 @@ export default function DriverMapScreen({ navigation, route }) {
         webViewRef.current?.postMessage(backupScript);
       }
     }, 2000);
+    
+    } catch (error) {
+      console.error('❌ Error in startNavigationToDestination:', error);
+      // Tentar um método de fallback mais simples
+      if (webViewRef.current && activeRide) {
+        const fallbackDestination = ridePhase === 'pickup' ? activeRide.pickup : activeRide.destination;
+        const fallbackScript = `
+          console.log('🔄 Fallback navigation attempt due to error');
+          try {
+            if (typeof startNavigation === 'function') {
+              startNavigation(${fallbackDestination?.lat || 0}, ${fallbackDestination?.lng || 0}, '${activeRide?.passengerName || 'Passageiro'}', '${ridePhase || 'pickup'}');
+            }
+          } catch (e) {
+            console.error('Fallback navigation also failed:', e);
+          }
+        `;
+        webViewRef.current.postMessage(fallbackScript);
+      }
+    }
   };
 
   const simulateArrival = () => {
@@ -1937,6 +1957,8 @@ export default function DriverMapScreen({ navigation, route }) {
                 console.log('🧭 Navigation status:', data.message);
               } else if (data.type === 'error') {
                 console.error('❌ WebView error:', data.message);
+                // Verificar se é o erro específico que estamos procurando
+              
               } else if (data.type === 'debug') {
                 console.log('🐛 WebView debug:', data.message);
               }
@@ -1944,6 +1966,9 @@ export default function DriverMapScreen({ navigation, route }) {
               console.error('Error parsing WebView message:', error);
               // Log the raw message for debugging
               console.log('Raw WebView message:', event.nativeEvent.data);
+              
+              // Verificar se a mensagem raw contém o erro que estamos procurando
+             
             }
           }}
         />
