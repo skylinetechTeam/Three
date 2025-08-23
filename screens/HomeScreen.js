@@ -988,12 +988,20 @@ export default function HomeScreen({ navigation, route }) {
       // Usar dados da rota ou valores padrão
       const estimatedDistance = routeData?.distance || 5000;
       const estimatedTime = routeData?.duration || 900;
-      const vehicleType = selectedTaxiType === 'Premium' ? 'privado' : 'coletivo';
+      const vehicleType = selectedTaxiType === 'Privado' ? 'privado' : 'coletivo';
+      console.log('🚗 [Favorito] selectedTaxiType:', selectedTaxiType);
+      console.log('🎯 [Favorito] vehicleType mapeado:', vehicleType);
       
       // Calcular tarifa
       let estimatedFare;
       try {
-        estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime, vehicleType);
+        // Converter distância de metros para quilômetros
+        const distanceInKm = estimatedDistance / 1000;
+        const timeInMinutes = estimatedTime / 60;
+        console.log('📏 [Favorito] Distância em km:', distanceInKm);
+        console.log('⏱️ [Favorito] Tempo em minutos:', timeInMinutes);
+        estimatedFare = apiService.calculateEstimatedFare(distanceInKm, timeInMinutes, vehicleType);
+        console.log('💰 [Favorito] Tarifa calculada:', estimatedFare, 'AOA');
       } catch (error) {
         console.error('❌ Erro ao calcular tarifa:', error);
         estimatedFare = vehicleType === 'privado' ? 800 : 500;
@@ -1133,10 +1141,18 @@ export default function HomeScreen({ navigation, route }) {
       
       // Calcular estimativa da corrida
       console.log('💰 Calculando estimativa da corrida...');
-      const estimatedDistance = routeInfo?.distance || 5;
-      const estimatedTime = routeInfo?.duration || 15;
-      const vehicleType = selectedTaxiType === 'Premium' ? 'privado' : 'coletivo';
-      const estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime, vehicleType);
+      const estimatedDistance = routeInfo?.distance || 5000; // metros
+      const estimatedTime = routeInfo?.duration || 900; // segundos
+      const vehicleType = selectedTaxiType === 'Privado' ? 'privado' : 'coletivo';
+      console.log('🚗 selectedTaxiType:', selectedTaxiType);
+      console.log('🎯 vehicleType mapeado:', vehicleType);
+      // Converter para unidades corretas: km e minutos
+      const distanceInKm = estimatedDistance / 1000;
+      const timeInMinutes = estimatedTime / 60;
+      console.log('📏 Distância em km:', distanceInKm);
+      console.log('⏱️ Tempo em minutos:', timeInMinutes);
+      const estimatedFare = apiService.calculateEstimatedFare(distanceInKm, timeInMinutes, vehicleType);
+      console.log('💰 Tarifa calculada:', estimatedFare, 'AOA');
       
       const estimate = {
         distance: estimatedDistance,
