@@ -26,7 +26,8 @@ import {
   isValidCollectiveRoute, 
   getCollectiveRouteInfo,
   getCollectiveRoutePrice,
-  getAllCollectiveRoutes 
+  getAllCollectiveRoutes,
+  getLocationCoordinates 
 } from '../config/collectiveRoutes';
 
 const { width, height } = Dimensions.get('window');
@@ -1522,6 +1523,8 @@ export default function HomeScreen({ navigation, route }) {
     const routeInfo = getCollectiveRouteInfo(destination.name || destination.address);
     if (routeInfo) {
       console.log('✅ Rota válida para coletivo:', routeInfo.routeName);
+      console.log('📍 Coordenadas origem:', routeInfo.originCoords);
+      console.log('📍 Coordenadas destino:', routeInfo.destinationCoords);
       Toast.show({
         type: "success",
         text1: "Rota disponível",
@@ -2221,15 +2224,25 @@ export default function HomeScreen({ navigation, route }) {
                     key={route.id}
                     style={styles.routeItem}
                     onPress={() => {
-                      setDestination(route.destination);
-                      setSelectedDestination({
-                        name: route.destination,
-                        address: route.name,
-                        // Coordenadas aproximadas - em produção, usar coordenadas reais
-                        lat: -8.8390 + (index * 0.01),
-                        lng: 13.2894 + (index * 0.01)
-                      });
-                      setIsSearchExpanded(false);
+                      const routeInfo = getCollectiveRouteInfo(route.destination);
+                      if (routeInfo && routeInfo.destinationCoords) {
+                        setDestination(route.destination);
+                        setSelectedDestination({
+                          name: route.destination,
+                          address: route.name,
+                          lat: routeInfo.destinationCoords.lat,
+                          lng: routeInfo.destinationCoords.lng
+                        });
+                        setIsSearchExpanded(false);
+                        
+                        console.log('🚌 Rota de coletivo selecionada:', routeInfo);
+                        Toast.show({
+                          type: "success",
+                          text1: "Rota selecionada",
+                          text2: `${routeInfo.routeName} - ${routeInfo.price} AOA`,
+                          visibilityTime: 3000,
+                        });
+                      }
                     }}
                   >
                     <View style={styles.routeIcon}>
