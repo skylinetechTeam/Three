@@ -674,17 +674,66 @@ export default function DriverMapScreen({ navigation, route }) {
     const script = `
       console.log('📍 Navigation script received - Phase: ${ridePhase}');
       console.log('🎯 Destination coordinates:', ${destination.lat}, ${destination.lng});
+      
+      // Send confirmation that script was received
+      try {
+        window.ReactNativeWebView?.postMessage(JSON.stringify({
+          type: 'debug',
+          message: 'Navigation script received and executing'
+        }));
+      } catch (e) {
+        console.error('Failed to send confirmation:', e);
+      }
+      
       if (typeof startNavigation === 'function') {
         console.log('✅ Calling startNavigation function...');
         startNavigation(${destination.lat}, ${destination.lng}, '${activeRide.passengerName}', '${ridePhase}');
       } else {
         console.error('❌ startNavigation function not available!');
+        try {
+          window.ReactNativeWebView?.postMessage(JSON.stringify({
+            type: 'error',
+            message: 'startNavigation function not found in WebView'
+          }));
+        } catch (e) {}
         alert('Erro: Função de navegação não está disponível');
       }
     `;
     
     webViewRef.current.postMessage(script);
     console.log('📤 Navigation script sent to WebView');
+    
+    // Set a timeout to check if navigation started
+    setTimeout(() => {
+      console.log('🕐 Checking if navigation started...');
+      // Try to force navigation if no response received
+      const forceScript = `
+        console.log('🔄 Force navigation attempt');
+        try {
+          if (typeof window.testCreateLine === 'function') {
+            console.log('🧪 Using test line creation as fallback');
+            window.testCreateLine();
+            window.ReactNativeWebView?.postMessage(JSON.stringify({
+              type: 'navigation_status',
+              message: 'Fallback navigation method used'
+            }));
+          } else {
+            console.log('❌ No fallback method available');
+            window.ReactNativeWebView?.postMessage(JSON.stringify({
+              type: 'error',
+              message: 'No navigation methods available'
+            }));
+          }
+        } catch (e) {
+          console.error('❌ Force navigation failed:', e);
+          window.ReactNativeWebView?.postMessage(JSON.stringify({
+            type: 'error',
+            message: 'Force navigation failed: ' + e.message
+          }));
+        }
+      `;
+      webViewRef.current?.postMessage(forceScript);
+    }, 3000);
   };
 
   const simulateArrival = () => {
@@ -1147,9 +1196,25 @@ export default function DriverMapScreen({ navigation, route }) {
                  console.log('🎯 Destination:', destinationLat, destinationLng);
                  console.log('🔄 Phase:', phase);
                  
+                 // Send status to React Native
+                 try {
+                     window.ReactNativeWebView?.postMessage(JSON.stringify({
+                         type: 'debug',
+                         message: 'startNavigation called with: ' + destinationLat + ', ' + destinationLng + ', phase: ' + phase
+                     }));
+                 } catch (e) {
+                     console.error('Failed to send debug message:', e);
+                 }
+                 
                  // Safety check
                  if (!driverMarker) {
                      console.error('❌ No driver marker found!');
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'error',
+                             message: 'No driver marker found'
+                         }));
+                     } catch (e) {}
                      alert('Erro: Localização do motorista não encontrada');
                      return;
                  }
@@ -1163,6 +1228,13 @@ export default function DriverMapScreen({ navigation, route }) {
                      console.log('🧹 Clearing previous routes...');
                      clearPreviousRoute();
                      
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'debug',
+                             message: 'Step 1: Previous routes cleared'
+                         }));
+                     } catch (e) {}
+                     
                      // Step 2: Create destination marker
                      console.log('🎯 Creating destination marker...');
                      destinationMarker = L.marker([destinationLat, destinationLng], { 
@@ -1170,6 +1242,13 @@ export default function DriverMapScreen({ navigation, route }) {
                      });
                      map.addLayer(destinationMarker);
                      console.log('✅ Destination marker added');
+                     
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'debug',
+                             message: 'Step 2: Destination marker created and added'
+                         }));
+                     } catch (e) {}
                      
                                           // Step 3: Create route line - FIXED VERSION
                      console.log('🛣️ Creating route line...');
@@ -1197,6 +1276,13 @@ export default function DriverMapScreen({ navigation, route }) {
                          routeLine.addTo(map);
                          console.log('✅ Route line created and added to map successfully');
                          
+                         try {
+                             window.ReactNativeWebView?.postMessage(JSON.stringify({
+                                 type: 'navigation_status',
+                                 message: 'Route line created and added successfully'
+                             }));
+                         } catch (e) {}
+                         
                          // Also create a shadow line for better visibility
                          const shadowLine = L.polyline(coordinates, {
                              color: '#000000',
@@ -1208,6 +1294,13 @@ export default function DriverMapScreen({ navigation, route }) {
                          });
                          shadowLine.addTo(map);
                          console.log('✅ Shadow line added for better visibility');
+                         
+                         try {
+                             window.ReactNativeWebView?.postMessage(JSON.stringify({
+                                 type: 'navigation_status',
+                                 message: 'Shadow line added for better visibility'
+                             }));
+                         } catch (e) {}
                          
                      } catch (e) {
                          console.error('❌ Failed to create route line:', e);
@@ -1280,8 +1373,23 @@ export default function DriverMapScreen({ navigation, route }) {
                      
                      console.log('🎉 === NAVIGATION SETUP COMPLETE ===');
                      
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'navigation_status',
+                             message: 'Navigation setup complete successfully'
+                         }));
+                     } catch (e) {}
+                     
                  } catch (error) {
                      console.error('❌ Error in startNavigation:', error);
+                     
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'error',
+                             message: 'Navigation setup failed: ' + error.message
+                         }));
+                     } catch (e) {}
+                     
                      alert('Erro na navegação: ' + error.message);
                  }
              }
@@ -1467,6 +1575,49 @@ export default function DriverMapScreen({ navigation, route }) {
                  updateDriverLocation(${location?.coords.latitude || 0}, ${location?.coords.longitude || 0});
              }
              
+             // Verify all functions are available and send status
+             setTimeout(() => {
+                 console.log('🔍 Verifying navigation functions...');
+                 const functionsStatus = {
+                     startNavigation: typeof startNavigation === 'function',
+                     clearNavigation: typeof clearNavigation === 'function',
+                     updateDriverLocation: typeof updateDriverLocation === 'function',
+                     testCreateLine: typeof testCreateLine === 'function',
+                     map: typeof map !== 'undefined',
+                     L: typeof L !== 'undefined'
+                 };
+                 
+                 console.log('📊 Functions status:', functionsStatus);
+                 
+                 try {
+                     window.ReactNativeWebView?.postMessage(JSON.stringify({
+                         type: 'debug',
+                         message: 'WebView functions status: ' + JSON.stringify(functionsStatus)
+                     }));
+                 } catch (e) {
+                     console.error('Failed to send functions status:', e);
+                 }
+                 
+                 // Test basic map functionality
+                 if (map && driverMarker) {
+                     console.log('✅ Map and driver marker are ready');
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'navigation_status',
+                             message: 'WebView map initialization complete'
+                         }));
+                     } catch (e) {}
+                 } else {
+                     console.error('❌ Map or driver marker not ready');
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'error',
+                             message: 'Map initialization failed'
+                         }));
+                     } catch (e) {}
+                 }
+             }, 2000);
+             
              // Debug function to test line creation
              function testCreateLine() {
                  console.log('🧪 === TESTING LINE CREATION ===');
@@ -1636,11 +1787,21 @@ export default function DriverMapScreen({ navigation, route }) {
           onMessage={(event) => {
             try {
               const data = JSON.parse(event.nativeEvent.data);
+              console.log('📱 Message received from WebView:', data);
+              
               if (data.type === 'arrival') {
                 simulateArrival();
+              } else if (data.type === 'navigation_status') {
+                console.log('🧭 Navigation status:', data.message);
+              } else if (data.type === 'error') {
+                console.error('❌ WebView error:', data.message);
+              } else if (data.type === 'debug') {
+                console.log('🐛 WebView debug:', data.message);
               }
             } catch (error) {
               console.error('Error parsing WebView message:', error);
+              // Log the raw message for debugging
+              console.log('Raw WebView message:', event.nativeEvent.data);
             }
           }}
         />
@@ -1668,10 +1829,30 @@ export default function DriverMapScreen({ navigation, route }) {
         <TouchableOpacity 
           style={[styles.testNavigationButton, { bottom: insets.bottom + 160 }]}
           onPress={() => {
-            if (webViewRef.current && location) {
-              console.log('🧪 Testing navigation with sample destination...');
+            if (webViewRef.current && location && activeRide) {
+              console.log('🧪 Testing navigation with actual ride data...');
+              const destination = ridePhase === 'pickup' ? activeRide.pickup : activeRide.destination;
               const script = `
-                console.log('🧪 Test navigation button pressed');
+                console.log('🧪 === MANUAL NAVIGATION TEST ===');
+                console.log('📍 Testing with actual ride destination:', ${destination.lat}, ${destination.lng});
+                
+                // Force navigation with current ride data
+                if (typeof startNavigation === 'function') {
+                  console.log('✅ Forcing navigation with ride data...');
+                  startNavigation(${destination.lat}, ${destination.lng}, '${activeRide.passengerName}', '${ridePhase}');
+                } else if (typeof testCreateLine === 'function') {
+                  console.log('🔄 Using test line as fallback...');
+                  testCreateLine();
+                } else {
+                  console.error('❌ No navigation functions available');
+                  alert('Nenhuma função de navegação disponível');
+                }
+              `;
+              webViewRef.current.postMessage(script);
+            } else if (webViewRef.current && location) {
+              console.log('🧪 Testing basic line creation...');
+              const script = `
+                console.log('🧪 Basic line test');
                 if (typeof testCreateLine === 'function') {
                   testCreateLine();
                 } else {
