@@ -101,6 +101,16 @@ export default function HomeScreen({ navigation, route }) {
       });
       setLocation(location);
       
+      // Obter nome da localização atual
+      if (location?.coords) {
+        const locationName = await reverseGeocode(
+          location.coords.latitude, 
+          location.coords.longitude
+        );
+        setCurrentLocationName(locationName);
+        console.log('📍 Nome da localização atual definido como:', locationName);
+      }
+      
       // Initialize passenger profile
       await initializePassenger();
     })();
@@ -550,6 +560,20 @@ export default function HomeScreen({ navigation, route }) {
       const js = `window.__setUserLocation(${location.coords.latitude}, ${location.coords.longitude}, ${accuracy}); true;`;
       console.log('📍 Updating user location on map:', js);
       webViewRef.current.injectJavaScript(js);
+      
+      // Atualizar nome da localização se mudou significativamente
+      const updateLocationName = async () => {
+        const newLocationName = await reverseGeocode(
+          location.coords.latitude, 
+          location.coords.longitude
+        );
+        if (newLocationName !== currentLocationName) {
+          console.log('📍 Localização mudou de', currentLocationName, 'para', newLocationName);
+          setCurrentLocationName(newLocationName);
+        }
+      };
+      
+      updateLocationName();
     }
   }, [location]);
 
@@ -1245,7 +1269,7 @@ export default function HomeScreen({ navigation, route }) {
             passengerName: passengerProfile.name,
             passengerPhone: passengerProfile.phone,
             pickup: {
-              address: 'Localização atual',
+              address: currentLocationName,
               lat: location.coords.latitude,
               lng: location.coords.longitude
             },
@@ -1503,6 +1527,94 @@ export default function HomeScreen({ navigation, route }) {
     if (window.driverSearchInterval) {
       clearInterval(window.driverSearchInterval);
       window.driverSearchInterval = null;
+    }
+  };
+
+  // Estado para armazenar nome da localização atual
+  const [currentLocationName, setCurrentLocationName] = useState('Minha localização');
+
+  // Função para encontrar local mais próximo das rotas conhecidas
+  const findNearestKnownLocation = (latitude, longitude) => {
+    try {
+      let closestLocation = null;
+      let minDistance = Infinity;
+      
+      // Calcular distância para todos os locais conhecidos
+      Object.entries({
+        'Vila de Viana': { lat: -8.9167, lng: 13.3667 },
+        '1° De Maio': { lat: -8.8295, lng: 13.2441 },
+        'Kilamba': { lat: -8.9833, lng: 13.2167 },
+        'Ponte Amarela': { lat: -8.8500, lng: 13.2600 },
+        'Golf 2': { lat: -8.8940, lng: 13.2894 },
+        'Sequele': { lat: -8.8200, lng: 13.2300 },
+        'Estalagem': { lat: -8.8350, lng: 13.2450 },
+        'Mutamba': { lat: -8.8390, lng: 13.2894 },
+        'Benfica': { lat: -8.8600, lng: 13.2700 },
+        'Talatona': { lat: -8.9500, lng: 13.1833 },
+        'Kimbango': { lat: -8.8800, lng: 13.3200 },
+        'Cuca': { lat: -8.8100, lng: 13.2200 },
+        'Capalanga': { lat: -8.8580, lng: 13.3540 },
+        'Desvio': { lat: -8.8700, lng: 13.2800 },
+        'Zango Oito Mil': { lat: -8.8800, lng: 13.3800 },
+        'Hoje Yenda': { lat: -8.8400, lng: 13.2600 },
+        'Ilha': { lat: -8.7775, lng: 13.2437 },
+        'Camama': { lat: -8.9043, lng: 13.2868 },
+        'Zango 3': { lat: -8.8580, lng: 13.3540 }
+      }).forEach(([name, coords]) => {
+        const distance = calculateDistance(latitude, longitude, coords.lat, coords.lng);
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestLocation = name;
+        }
+      });
+      
+      // Se estiver a menos de 500 metros, usar o local conhecido
+      if (minDistance < 500) {
+        console.log(`📍 Localização próxima encontrada: ${closestLocation} (${Math.round(minDistance)}m)`);
+        return closestLocation;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('❌ Erro ao encontrar local mais próximo:', error);
+      return null;
+    }
+  };
+
+  // Função para fazer geocodificação reversa
+  const reverseGeocode = async (latitude, longitude) => {
+    try {
+      console.log('🔍 Fazendo geocodificação reversa para:', latitude, longitude);
+      
+      // Primeiro, verificar se está próximo de algum local conhecido
+      const nearestKnownLocation = findNearestKnownLocation(latitude, longitude);
+      if (nearestKnownLocation) {
+        return nearestKnownLocation;
+      }
+      
+      // Usar Nominatim para geocodificação reversa
+      const reverseUrl = `${NOMINATIM_BASE_URL}/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=pt&addressdetails=1`;
+      
+      const response = await fetch(reverseUrl, {
+        headers: {
+          'User-Agent': 'TaxiApp/1.0 (contact@example.com)'
+        }
+      });
+      
+      const data = await response.json();
+      console.log('📍 Resultado da geocodificação reversa:', data);
+      
+      if (data && data.display_name) {
+        // Extrair o nome mais relevante (primeiro item antes da primeira vírgula)
+        const locationName = data.display_name.split(',')[0].trim();
+        console.log('📍 Nome do local extraído:', locationName);
+        return locationName;
+      }
+      
+      return 'Localização atual';
+    } catch (error) {
+      console.error('❌ Erro na geocodificação reversa:', error);
+      return 'Localização atual';
     }
   };
 
@@ -2199,8 +2311,8 @@ export default function HomeScreen({ navigation, route }) {
             onPress={() => {
               if (location) {
                 handleLocationSelect({
-                  name: "Localização atual",
-                  address: "Minha localização",
+                  name: currentLocationName,
+                  address: currentLocationName,
                   lat: location.coords.latitude,
                   lng: location.coords.longitude
                 });
@@ -2212,7 +2324,7 @@ export default function HomeScreen({ navigation, route }) {
             </View>
             <View style={styles.currentLocationInfo}>
               <Text style={styles.currentLocationText}>Usar localização atual</Text>
-              <Text style={styles.currentLocationSubtext}>Sua posição no mapa</Text>
+              <Text style={styles.currentLocationSubtext}>{currentLocationName}</Text>
             </View>
           </TouchableOpacity>
 
@@ -2343,7 +2455,7 @@ export default function HomeScreen({ navigation, route }) {
                 <View style={styles.routePreview}>
                   <View style={styles.routePoint}>
                     <MaterialIcons name="radio-button-checked" size={20} color="#10B981" />
-                    <Text style={styles.routePointText}>Sua localização</Text>
+                    <Text style={styles.routePointText}>{currentLocationName}</Text>
                   </View>
                   <View style={styles.routeLine} />
                   <View style={styles.routePoint}>
