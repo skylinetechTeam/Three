@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS, SHADOWS } from '../config/theme';
-import { checkForExistingData, clearDataByKey, DATA_KEYS } from '../utils/dataCleaner';
+import { checkForExistingData } from '../utils/dataCleaner';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -41,7 +41,11 @@ const ReservasScreen = () => {
     data: '',
     hora: '',
     tipoTaxi: 'Coletivo',
-    observacoes: ''
+    observacoes: '',
+    origemLat: null,
+    origemLng: null,
+    destinoLat: null,
+    destinoLng: null
   });
   const [location, setLocation] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
@@ -191,7 +195,9 @@ const ReservasScreen = () => {
   const handleLocationSelect = (selectedLocation) => {
     setNovaReserva(prev => ({
       ...prev,
-      [searchField]: selectedLocation.address
+      [searchField]: selectedLocation.address,
+      [`${searchField}Lat`]: selectedLocation.lat,
+      [`${searchField}Lng`]: selectedLocation.lng
     }));
     setSearchResults([]);
     setShowAddressSearch(false);
@@ -300,7 +306,11 @@ const ReservasScreen = () => {
       data: '',
       hora: '',
       tipoTaxi: 'Coletivo',
-      observacoes: ''
+      observacoes: '',
+      origemLat: null,
+      origemLng: null,
+      destinoLat: null,
+      destinoLng: null
     });
     setCurrentStep(1);
     setSearchResults([]);
@@ -314,7 +324,7 @@ const ReservasScreen = () => {
   // Função para limpar todos os dados de reservas
   const clearAllReservas = async () => {
     Alert.alert(
-      "Limpar Todas as Reservas",
+      "🗑️ Limpar Todas as Reservas",
       "Tem certeza que deseja remover todas as reservas? Esta ação não pode ser desfeita.",
       [
         {
@@ -325,15 +335,31 @@ const ReservasScreen = () => {
           text: "Limpar Todas", 
           onPress: async () => {
             try {
-              const success = await clearDataByKey(DATA_KEYS.RESERVAS);
-              if (success) {
-                setReservas([]);
-                Alert.alert("Sucesso", "Todas as reservas foram removidas!");
-              } else {
-                Alert.alert("Erro", "Não foi possível limpar as reservas.");
+              console.log('Iniciando limpeza de reservas...');
+              
+              // Verificar se existem reservas antes de limpar
+              const existingData = await AsyncStorage.getItem('ride_requests');
+              if (!existingData) {
+                Alert.alert("Aviso", "Não há reservas para limpar.");
+                return;
               }
+              
+              // Limpar do AsyncStorage
+              await AsyncStorage.removeItem('ride_requests');
+              
+              // Atualizar o estado local
+              setReservas([]);
+              
+              console.log('Reservas limpas com sucesso');
+              Alert.alert("✅ Sucesso", "Todas as reservas foram removidas com sucesso!");
+              
             } catch (error) {
-              Alert.alert("Erro", "Não foi possível limpar as reservas.");
+              console.error('Erro ao limpar reservas:', error);
+              Alert.alert(
+                "❌ Erro", 
+                "Não foi possível limpar as reservas. Tente novamente.",
+                [{ text: "OK" }]
+              );
             }
           },
           style: "destructive"
@@ -401,24 +427,7 @@ const ReservasScreen = () => {
     saveReservasToStorage(updatedReservas);
   };
 
-  const handleGoToReserva = (reserva) => {
-    // Navigate to HomeScreen with the reservation destination
-    navigation.navigate('Home', {
-      selectedDestination: {
-        name: reserva.destino,
-        address: reserva.destino,
-        lat: reserva.destinoLat || reserva.destino_lat,
-        lng: reserva.destinoLng || reserva.destino_lng,
-        categories: []
-      },
-      selectedOrigin: {
-        name: reserva.origem,
-        address: reserva.origem,
-        lat: reserva.origemLat || reserva.origem_lat,
-        lng: reserva.origemLng || reserva.origem_lng
-      }
-    });
-  };
+
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -514,34 +523,33 @@ const ReservasScreen = () => {
         </View>
       )}
 
-      <View style={styles.reservaActions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.goReservaButton]}
-          onPress={() => handleGoToReserva(item)}
-        >
-          <MaterialIcons name="directions" size={16} color="#ffffff" />
-          <Text style={styles.goReservaButtonText}>Ir</Text>
-        </TouchableOpacity>
-        
-        {item.status === 'Pendente' && (
-          <>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.confirmButton]}
-              onPress={() => handleStatusChange(item.id, 'Confirmada')}
-            >
-              <Ionicons name="checkmark" size={16} color="#ffffff" />
-              <Text style={styles.confirmButtonText}>Confirmar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.cancelButton]}
-              onPress={() => handleCancelReserva(item.id)}
-            >
-              <Ionicons name="close" size={16} color="#ffffff" />
-              <Text style={styles.cancelButtonText}>Cancelar</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
+      {item.status === 'Pendente' && (
+        <View style={styles.reservaActions}>
+          <TouchableOpacity
+            style={styles.confirmButton}
+            onPress={() => handleStatusChange(item.id, 'Confirmada')}
+          >
+            <Ionicons name="checkmark-circle" size={18} color="#ffffff" />
+            <Text style={styles.confirmButtonText}>Confirmar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.cancelReservaButton}
+            onPress={() => handleCancelReserva(item.id)}
+          >
+            <Ionicons name="close-circle" size={18} color="#ffffff" />
+            <Text style={styles.cancelReservaButtonText}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
+      {item.status !== 'Pendente' && (
+        <View style={styles.statusOnlyActions}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+            <Ionicons name={getStatusIcon(item.status)} size={16} color="#ffffff" />
+            <Text style={styles.statusBadgeText}>{item.status}</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 
@@ -603,7 +611,9 @@ const ReservasScreen = () => {
                     if (location) {
                       setNovaReserva(prev => ({ 
                         ...prev, 
-                        origem: 'Minha Localização'
+                        origem: 'Minha Localização',
+                        origemLat: location.coords.latitude,
+                        origemLng: location.coords.longitude
                       }));
                       validateField('origem', 'Minha Localização');
                     }
@@ -626,7 +636,9 @@ const ReservasScreen = () => {
                   if (location) {
                     setNovaReserva(prev => ({ 
                       ...prev, 
-                      origem: 'Minha Localização'
+                      origem: 'Minha Localização',
+                      origemLat: location.coords.latitude,
+                      origemLng: location.coords.longitude
                     }));
                   }
                 }}
@@ -660,7 +672,9 @@ const ReservasScreen = () => {
                     if (location) {
                       setNovaReserva(prev => ({ 
                         ...prev, 
-                        destino: 'Minha Localização'
+                        destino: 'Minha Localização',
+                        destinoLat: location.coords.latitude,
+                        destinoLng: location.coords.longitude
                       }));
                       validateField('destino', 'Minha Localização');
                     }
@@ -776,6 +790,13 @@ const ReservasScreen = () => {
               )}
             </View>
 
+
+          </>
+        );
+
+      case 3:
+        return (
+          <>
             {/* Tipo de táxi */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Tipo de Táxi</Text>
@@ -799,12 +820,7 @@ const ReservasScreen = () => {
                 ))}
               </View>
             </View>
-          </>
-        );
 
-      case 3:
-        return (
-          <>
             {/* Observações */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Observações (opcional)</Text>
@@ -843,8 +859,8 @@ const ReservasScreen = () => {
                 <Text style={styles.resumoValue}>{novaReserva.tipoTaxi}</Text>
               </View>
               <View style={styles.resumoItem}>
-                <Text style={styles.resumoLabel}>Preço:</Text>
-                <Text style={styles.resumoValue}>{novaReserva.tipoTaxi === 'Coletivo' ? '500' : '800'} Kz</Text>
+                <Text style={styles.resumoLabel}>Preço estimado:</Text>
+                <Text style={[styles.resumoValue, styles.resumoPrice]}>{novaReserva.tipoTaxi === 'Coletivo' ? '500' : '800'} Kz</Text>
               </View>
             </View>
           </>
@@ -999,13 +1015,24 @@ const ReservasScreen = () => {
             <View style={styles.handle} />
             
             {/* Header */}
-            <View style={styles.header}>
+            <View style={styles.modalHeader}>
+              <View style={styles.headerIconContainer}>
+                <Ionicons 
+                  name="calendar" 
+                  size={24} 
+                  color="#ffffff" 
+                />
+              </View>
               <View style={styles.headerContent}>
-                <Text style={styles.title}>Nova Reserva</Text>
-                <Text style={styles.subtitle}>Passo {currentStep} de 4</Text>
+                <Text style={styles.modalTitle}>Nova Reserva</Text>
+                <Text style={styles.modalSubtitle}>
+                  {currentStep === 1 && 'Definir rota'}
+                  {currentStep === 2 && 'Data e hora'}
+                  {currentStep === 3 && 'Finalizar reserva'}
+                </Text>
               </View>
               <TouchableOpacity
-                style={styles.closeBtn}
+                style={styles.closeButton}
                 onPress={resetForm}
               >
                 <Ionicons name="close" size={20} color="#6B7280" />
@@ -1014,35 +1041,19 @@ const ReservasScreen = () => {
 
             {/* Progress */}
             <View style={styles.progressContainer}>
-              {[1, 2, 3, 4].map((step) => (
-                <View key={step} style={styles.progressStep}>
-                  <View style={[
-                    styles.progressDot,
-                    currentStep >= step && styles.progressDotActive
-                  ]}>
-                    {currentStep > step ? (
-                      <Ionicons name="checkmark" size={12} color="#fff" />
-                    ) : (
-                      <Text style={[
-                        styles.progressNumber,
-                        currentStep >= step && styles.progressNumberActive
-                      ]}>
-                        {step}
-                      </Text>
-                    )}
-                  </View>
-                  {step < 4 && (
-                    <View style={[
-                      styles.progressLine,
-                      currentStep > step && styles.progressLineActive
-                    ]} />
-                  )}
-                </View>
-              ))}
+              <View style={styles.progressTrack}>
+                <View style={[
+                  styles.progressFill,
+                  { width: `${(currentStep / 3) * 100}%` }
+                ]} />
+              </View>
+              <Text style={styles.progressText}>
+                Etapa {currentStep} de 3
+              </Text>
             </View>
 
             {/* Content */}
-            <View style={styles.content}>
+            <View style={styles.modalContent}>
               <ScrollView 
                 style={styles.scrollView}
                 contentContainerStyle={styles.scrollContent}
@@ -1055,7 +1066,7 @@ const ReservasScreen = () => {
             </View>
 
             {/* Footer */}
-            <View style={styles.footer}>
+            <View style={styles.modalFooter}>
               {renderStepButtons()}
             </View>
           </Animated.View>
@@ -1136,103 +1147,121 @@ const styles = StyleSheet.create({
   reservasList: {
     paddingBottom: 20,
   },
-  // Modal styles
+  // Modal styles modernos
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
   },
   backdrop: {
     flex: 1,
   },
   bottomSheet: {
     backgroundColor: '#ffffff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     maxHeight: height * 0.9,
     minHeight: height * 0.7,
-    ...SHADOWS.large,
-    paddingTop: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -10,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 25,
+    paddingTop: 8,
   },
   handle: {
-    width: 32,
+    width: 36,
     height: 4,
     backgroundColor: '#E5E7EB',
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: 20,
   },
-  header: {
+  modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     paddingHorizontal: 24,
-    marginBottom: 24,
+    paddingBottom: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  headerIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    shadowColor: COLORS.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   headerContent: {
     flex: 1,
   },
-  title: {
-    fontSize: 24,
+  modalTitle: {
+    fontSize: 22,
     fontWeight: '700',
     color: '#111827',
     marginBottom: 4,
   },
-  subtitle: {
+  modalSubtitle: {
     fontSize: 14,
     color: '#6B7280',
+    fontWeight: '500',
   },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F9FAFB',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   progressContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
     paddingHorizontal: 24,
     marginBottom: 32,
   },
-  progressStep: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  progressDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  progressTrack: {
+    height: 6,
     backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 8,
   },
-  progressDotActive: {
+  progressFill: {
+    height: '100%',
     backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    borderRadius: 3,
+    shadowColor: COLORS.primary,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  progressNumber: {
-    fontSize: 14,
+  progressText: {
+    fontSize: 12,
+    color: '#6B7280',
     fontWeight: '600',
-    color: '#9CA3AF',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  progressNumberActive: {
-    color: '#ffffff',
-  },
-  progressLine: {
-    width: 30,
-    height: 2,
-    backgroundColor: '#E5E7EB',
-    marginHorizontal: 6,
-  },
-  progressLineActive: {
-    backgroundColor: COLORS.primary,
-  },
-  content: {
+  modalContent: {
     flex: 1,
     paddingHorizontal: 24,
   },
@@ -1242,10 +1271,10 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 20,
   },
-  footer: {
+  modalFooter: {
     paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    paddingTop: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
@@ -1460,33 +1489,47 @@ const styles = StyleSheet.create({
   // Reserva item styles
   reservaItem: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 16,
-    ...SHADOWS.medium,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
   },
   reservaHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   reservaStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEE2E2',
-    borderRadius: 10,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
   },
   reservaStatusText: {
     fontSize: 12,
-    fontWeight: 'bold',
-    marginLeft: 5,
+    fontWeight: '700',
+    marginLeft: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   reservaPreco: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '800',
     color: COLORS.primary,
   },
   reservaRoute: {
@@ -1549,51 +1592,84 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1F2937',
   },
-  reservaActions: {
+    reservaActions: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 10,
+    gap: 12,
+    marginTop: 16,
   },
-  actionButton: {
+  confirmButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-  },
-  goReservaButton: {
-    backgroundColor: COLORS.primary,
-    marginRight: 10,
-    minWidth: 60,
-  },
-  goReservaButtonText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  confirmButton: {
-    backgroundColor: COLORS.primary,
-    flex: 1,
-    marginRight: 10,
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#10B981',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   confirmButtonText: {
     color: '#ffffff',
-    fontWeight: 'bold',
+    fontWeight: '700',
     fontSize: 14,
-    marginLeft: 5,
+    marginLeft: 6,
   },
-  cancelButton: {
-    backgroundColor: COLORS.notification,
+  cancelReservaButton: {
     flex: 1,
-    marginLeft: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#EF4444',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  cancelButtonText: {
+  cancelReservaButtonText: {
     color: '#ffffff',
-    fontWeight: 'bold',
+    fontWeight: '700',
     fontSize: 14,
-    marginLeft: 5,
+    marginLeft: 6,
+  },
+  statusOnlyActions: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statusBadgeText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13,
+    marginLeft: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   // Empty state
   emptyState: {
@@ -1766,6 +1842,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#1F2937',
+  },
+  resumoPrice: {
+    color: COLORS.primary,
+    fontSize: 16,
   },
   // Novos estilos para melhorias
   inputError: {
