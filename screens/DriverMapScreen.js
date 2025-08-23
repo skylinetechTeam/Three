@@ -566,18 +566,41 @@ export default function DriverMapScreen({ navigation, route }) {
           
           const destination = currentRequest.pickup;
           const script = `
-            console.log('📱 Received navigation command from React Native');
-            console.log('🎯 Destination coords:', ${destination.lat}, ${destination.lng});
-            if (typeof startNavigation === 'function') {
-              console.log('✅ startNavigation function exists, calling it now...');
-              startNavigation(${destination.lat}, ${destination.lng}, '${currentRequest.passengerName}', 'pickup');
-            } else {
-              console.error('❌ startNavigation function not found!');
-              alert('Erro: Função de navegação não encontrada');
-            }
+            (function() {
+              console.log('🚀 === IMMEDIATE NAVIGATION AFTER ACCEPT ===');
+              console.log('🎯 Pickup coords:', ${destination.lat}, ${destination.lng});
+              
+              try {
+                window.ReactNativeWebView?.postMessage(JSON.stringify({
+                  type: 'debug',
+                  message: 'Navigation after accept - injecting script'
+                }));
+              } catch (e) {}
+              
+              if (typeof startNavigation === 'function') {
+                console.log('✅ Executing pickup navigation...');
+                startNavigation(${destination.lat}, ${destination.lng}, '${currentRequest.passengerName}', 'pickup');
+                return true;
+              } else if (typeof testCreateLine === 'function') {
+                console.log('🔄 Using test line for pickup...');
+                testCreateLine();
+                return true;
+              } else {
+                console.error('❌ No navigation functions available!');
+                alert('Erro: Função de navegação não encontrada');
+                return false;
+              }
+            })();
           `;
-          webViewRef.current.postMessage(script);
-          console.log('📤 Navigation script sent to WebView');
+          
+          try {
+            webViewRef.current.injectJavaScript(script);
+            console.log('💉 Pickup navigation script injected');
+          } catch (error) {
+            console.error('❌ Failed to inject pickup script:', error);
+            webViewRef.current.postMessage(script);
+            console.log('📤 Fallback: Pickup script sent via postMessage');
+          }
         } else {
           console.error('❌ Cannot start navigation:', {
             webViewRef: !!webViewRef.current,
@@ -671,69 +694,87 @@ export default function DriverMapScreen({ navigation, route }) {
       passengerName: activeRide.passengerName
     });
     
+    // Method 1: Using injectJavaScript (more reliable)
     const script = `
-      console.log('📍 Navigation script received - Phase: ${ridePhase}');
-      console.log('🎯 Destination coordinates:', ${destination.lat}, ${destination.lng});
-      
-      // Send confirmation that script was received
-      try {
-        window.ReactNativeWebView?.postMessage(JSON.stringify({
-          type: 'debug',
-          message: 'Navigation script received and executing'
-        }));
-      } catch (e) {
-        console.error('Failed to send confirmation:', e);
-      }
-      
-      if (typeof startNavigation === 'function') {
-        console.log('✅ Calling startNavigation function...');
-        startNavigation(${destination.lat}, ${destination.lng}, '${activeRide.passengerName}', '${ridePhase}');
-      } else {
-        console.error('❌ startNavigation function not available!');
+      (function() {
+        console.log('🚀 === DIRECT NAVIGATION INJECTION ===');
+        console.log('📍 Phase: ${ridePhase}');
+        console.log('🎯 Destination:', ${destination.lat}, ${destination.lng});
+        
+        // Send immediate confirmation
         try {
           window.ReactNativeWebView?.postMessage(JSON.stringify({
-            type: 'error',
-            message: 'startNavigation function not found in WebView'
+            type: 'debug',
+            message: 'Script injected directly - executing navigation'
           }));
-        } catch (e) {}
-        alert('Erro: Função de navegação não está disponível');
-      }
-    `;
-    
-    webViewRef.current.postMessage(script);
-    console.log('📤 Navigation script sent to WebView');
-    
-    // Set a timeout to check if navigation started
-    setTimeout(() => {
-      console.log('🕐 Checking if navigation started...');
-      // Try to force navigation if no response received
-      const forceScript = `
-        console.log('🔄 Force navigation attempt');
-        try {
-          if (typeof window.testCreateLine === 'function') {
-            console.log('🧪 Using test line creation as fallback');
-            window.testCreateLine();
-            window.ReactNativeWebView?.postMessage(JSON.stringify({
-              type: 'navigation_status',
-              message: 'Fallback navigation method used'
-            }));
-          } else {
-            console.log('❌ No fallback method available');
-            window.ReactNativeWebView?.postMessage(JSON.stringify({
-              type: 'error',
-              message: 'No navigation methods available'
-            }));
-          }
         } catch (e) {
-          console.error('❌ Force navigation failed:', e);
+          console.error('Failed to send confirmation:', e);
+        }
+        
+        // Force navigation execution
+        try {
+          if (typeof startNavigation === 'function') {
+            console.log('✅ Executing startNavigation directly...');
+            startNavigation(${destination.lat}, ${destination.lng}, '${activeRide.passengerName}', '${ridePhase}');
+            return true;
+          } else {
+            console.error('❌ startNavigation not found');
+            // Try fallback immediately
+            if (typeof testCreateLine === 'function') {
+              console.log('🔄 Using fallback method...');
+              testCreateLine();
+              window.ReactNativeWebView?.postMessage(JSON.stringify({
+                type: 'navigation_status',
+                message: 'Used fallback navigation method'
+              }));
+              return true;
+            }
+          }
+        } catch (error) {
+          console.error('❌ Navigation execution failed:', error);
           window.ReactNativeWebView?.postMessage(JSON.stringify({
             type: 'error',
-            message: 'Force navigation failed: ' + e.message
+            message: 'Navigation failed: ' + error.message
           }));
         }
+        return false;
+      })();
+    `;
+    
+    // Use injectJavaScript for more reliable execution
+    try {
+      webViewRef.current.injectJavaScript(script);
+      console.log('💉 Script injected directly into WebView');
+    } catch (error) {
+      console.error('❌ Failed to inject script:', error);
+      
+      // Fallback to postMessage
+      console.log('🔄 Falling back to postMessage...');
+      webViewRef.current.postMessage(script);
+    }
+    
+    // Backup method after 2 seconds
+    setTimeout(() => {
+      console.log('🕐 Backup navigation attempt...');
+      const backupScript = `
+        console.log('🔄 === BACKUP NAVIGATION ATTEMPT ===');
+        try {
+          if (typeof startNavigation === 'function') {
+            startNavigation(${destination.lat}, ${destination.lng}, '${activeRide.passengerName}', '${ridePhase}');
+          } else if (typeof testCreateLine === 'function') {
+            testCreateLine();
+          }
+        } catch (e) {
+          console.error('Backup failed:', e);
+        }
       `;
-      webViewRef.current?.postMessage(forceScript);
-    }, 3000);
+      
+      try {
+        webViewRef.current?.injectJavaScript(backupScript);
+      } catch (e) {
+        webViewRef.current?.postMessage(backupScript);
+      }
+    }, 2000);
   };
 
   const simulateArrival = () => {
@@ -1777,10 +1818,19 @@ export default function DriverMapScreen({ navigation, route }) {
           onError={(error) => console.error('WebView error:', error)}
           onLoad={() => {
             console.log('🌐 WebView loaded successfully');
-            // Wait a bit for map to initialize, then update location
+            
+            // Initialize location and check if we need to start navigation
             setTimeout(() => {
               if (location) {
                 updateMapLocation(location);
+              }
+              
+              // If we have an active ride, try to start navigation
+              if (activeRide && navigationMode) {
+                console.log('🎯 WebView loaded with active ride - starting navigation...');
+                setTimeout(() => {
+                  startNavigationToDestination();
+                }, 1000);
               }
             }, 2000);
           }}
@@ -1828,41 +1878,63 @@ export default function DriverMapScreen({ navigation, route }) {
       {__DEV__ && !navigationMode && (
         <TouchableOpacity 
           style={[styles.testNavigationButton, { bottom: insets.bottom + 160 }]}
-          onPress={() => {
-            if (webViewRef.current && location && activeRide) {
-              console.log('🧪 Testing navigation with actual ride data...');
-              const destination = ridePhase === 'pickup' ? activeRide.pickup : activeRide.destination;
-              const script = `
-                console.log('🧪 === MANUAL NAVIGATION TEST ===');
-                console.log('📍 Testing with actual ride destination:', ${destination.lat}, ${destination.lng});
+                      onPress={() => {
+              if (webViewRef.current && location && activeRide) {
+                console.log('🧪 Testing navigation with actual ride data...');
+                const destination = ridePhase === 'pickup' ? activeRide.pickup : activeRide.destination;
+                const script = `
+                  (function() {
+                    console.log('🧪 === MANUAL NAVIGATION TEST ===');
+                    console.log('📍 Testing with actual ride destination:', ${destination.lat}, ${destination.lng});
+                    
+                    // Force navigation with current ride data
+                    if (typeof startNavigation === 'function') {
+                      console.log('✅ Forcing navigation with ride data...');
+                      startNavigation(${destination.lat}, ${destination.lng}, '${activeRide.passengerName}', '${ridePhase}');
+                      return true;
+                    } else if (typeof testCreateLine === 'function') {
+                      console.log('🔄 Using test line as fallback...');
+                      testCreateLine();
+                      return true;
+                    } else {
+                      console.error('❌ No navigation functions available');
+                      alert('Nenhuma função de navegação disponível');
+                      return false;
+                    }
+                  })();
+                `;
                 
-                // Force navigation with current ride data
-                if (typeof startNavigation === 'function') {
-                  console.log('✅ Forcing navigation with ride data...');
-                  startNavigation(${destination.lat}, ${destination.lng}, '${activeRide.passengerName}', '${ridePhase}');
-                } else if (typeof testCreateLine === 'function') {
-                  console.log('🔄 Using test line as fallback...');
-                  testCreateLine();
-                } else {
-                  console.error('❌ No navigation functions available');
-                  alert('Nenhuma função de navegação disponível');
+                try {
+                  webViewRef.current.injectJavaScript(script);
+                  console.log('💉 Test script injected directly');
+                } catch (error) {
+                  console.error('❌ Failed to inject test script:', error);
+                  webViewRef.current.postMessage(script);
                 }
-              `;
-              webViewRef.current.postMessage(script);
-            } else if (webViewRef.current && location) {
-              console.log('🧪 Testing basic line creation...');
-              const script = `
-                console.log('🧪 Basic line test');
-                if (typeof testCreateLine === 'function') {
-                  testCreateLine();
-                } else {
-                  console.error('❌ testCreateLine function not found');
-                  alert('Função de teste não encontrada');
+              } else if (webViewRef.current && location) {
+                console.log('🧪 Testing basic line creation...');
+                const script = `
+                  (function() {
+                    console.log('🧪 === BASIC LINE TEST ===');
+                    if (typeof testCreateLine === 'function') {
+                      testCreateLine();
+                      return true;
+                    } else {
+                      console.error('❌ testCreateLine function not found');
+                      alert('Função de teste não encontrada');
+                      return false;
+                    }
+                  })();
+                `;
+                
+                try {
+                  webViewRef.current.injectJavaScript(script);
+                  console.log('💉 Basic test script injected');
+                } catch (error) {
+                  webViewRef.current.postMessage(script);
                 }
-              `;
-              webViewRef.current.postMessage(script);
-            }
-          }}
+              }
+            }}
         >
           <MaterialIcons name="route" size={20} color="#ffffff" />
         </TouchableOpacity>
