@@ -38,7 +38,9 @@ const FavoritosScreen = () => {
     nome: '',
     endereco: '',
     tipo: 'casa',
-    frequencia: 'Ocasional'
+    frequencia: 'Ocasional',
+    latitude: null,
+    longitude: null
   });
   const [location, setLocation] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
@@ -184,7 +186,9 @@ const FavoritosScreen = () => {
     setNewFavorito(prev => ({
       ...prev,
       endereco: selectedLocation.address,
-      nome: selectedLocation.name
+      nome: selectedLocation.name,
+      latitude: selectedLocation.lat,
+      longitude: selectedLocation.lng
     }));
     setSearchResults([]);
     setShowAddressSearch(false);
@@ -249,7 +253,9 @@ const FavoritosScreen = () => {
       nome: '',
       endereco: '',
       tipo: 'casa',
-      frequencia: 'Ocasional'
+      frequencia: 'Ocasional',
+      latitude: null,
+      longitude: null
     });
     setCurrentStep(1);
     setSearchResults([]);
@@ -519,7 +525,9 @@ const FavoritosScreen = () => {
                       setNewFavorito(prev => ({ 
                         ...prev, 
                         endereco: 'Minha Localização',
-                        nome: 'Minha Localização'
+                        nome: 'Minha Localização',
+                        latitude: location.coords.latitude,
+                        longitude: location.coords.longitude
                       }));
                       validateField('endereco', 'Minha Localização');
                       validateField('nome', 'Minha Localização');
@@ -544,7 +552,9 @@ const FavoritosScreen = () => {
                     setNewFavorito(prev => ({ 
                       ...prev, 
                       endereco: 'Minha Localização',
-                      nome: 'Minha Localização'
+                      nome: 'Minha Localização',
+                      latitude: location.coords.latitude,
+                      longitude: location.coords.longitude
                     }));
                   }
                 }}
@@ -797,15 +807,24 @@ const FavoritosScreen = () => {
             <View style={styles.handle} />
             
             {/* Header */}
-            <View style={styles.header}>
+            <View style={styles.modalHeader}>
+              <View style={styles.headerIconContainer}>
+                <Ionicons 
+                  name={isEditing ? "pencil" : "heart"} 
+                  size={24} 
+                  color="#ffffff" 
+                />
+              </View>
               <View style={styles.headerContent}>
-                <Text style={styles.title}>
-                  {isEditing ? 'Editar Favorito' : 'Novo Favorito'}
+                <Text style={styles.modalTitle}>
+                  {isEditing ? 'Editar Favorito' : 'Adicionar aos Favoritos'}
                 </Text>
-                <Text style={styles.subtitle}>Passo {currentStep} de 2</Text>
+                <Text style={styles.modalSubtitle}>
+                  {currentStep === 1 ? 'Informações básicas' : 'Configurações'}
+                </Text>
               </View>
               <TouchableOpacity
-                style={styles.closeBtn}
+                style={styles.closeButton}
                 onPress={resetForm}
               >
                 <Ionicons name="close" size={20} color="#6B7280" />
@@ -814,35 +833,19 @@ const FavoritosScreen = () => {
 
             {/* Progress */}
             <View style={styles.progressContainer}>
-              {[1, 2].map((step) => (
-                <View key={step} style={styles.progressStep}>
-                  <View style={[
-                    styles.progressDot,
-                    currentStep >= step && styles.progressDotActive
-                  ]}>
-                    {currentStep > step ? (
-                      <Ionicons name="checkmark" size={12} color="#fff" />
-                    ) : (
-                      <Text style={[
-                        styles.progressNumber,
-                        currentStep >= step && styles.progressNumberActive
-                      ]}>
-                        {step}
-                      </Text>
-                    )}
-                  </View>
-                  {step < 2 && (
-                    <View style={[
-                      styles.progressLine,
-                      currentStep > step && styles.progressLineActive
-                    ]} />
-                  )}
-                </View>
-              ))}
+              <View style={styles.progressTrack}>
+                <View style={[
+                  styles.progressFill,
+                  { width: `${(currentStep / 2) * 100}%` }
+                ]} />
+              </View>
+              <Text style={styles.progressText}>
+                Etapa {currentStep} de 2
+              </Text>
             </View>
 
             {/* Content */}
-            <View style={styles.content}>
+            <View style={styles.modalContent}>
               <ScrollView 
                 style={styles.scrollView}
                 contentContainerStyle={styles.scrollContent}
@@ -855,7 +858,7 @@ const FavoritosScreen = () => {
             </View>
 
             {/* Footer */}
-            <View style={styles.footer}>
+            <View style={styles.modalFooter}>
               {renderStepButtons()}
             </View>
           </Animated.View>
@@ -1014,76 +1017,137 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 8,
   },
-  // Bottom Sheet styles
-  bottomSheetOverlay: {
+  // Modal styles modernos
+  modalContainer: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
   },
-  bottomSheetBackdrop: {
+  backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  bottomSheetContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    height: height * 0.85,
+  bottomSheet: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: height * 0.9,
+    minHeight: height * 0.7,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -10,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 25,
     paddingTop: 8,
-    ...SHADOWS.large,
   },
-  handleBar: {
-    width: 40,
+  handle: {
+    width: 36,
     height: 4,
-    backgroundColor: COLORS.border,
+    backgroundColor: '#E5E7EB',
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 12,
+    marginBottom: 20,
   },
-  bottomSheetHeader: {
+  modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingHorizontal: 24,
+    paddingBottom: 24,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
-  bottomSheetTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: COLORS.text.primary,
+  headerIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    shadowColor: COLORS.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  headerContent: {
+    flex: 1,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
   },
   closeButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: COLORS.input.background,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F9FAFB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  stepIndicatorContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+  progressContainer: {
+    paddingHorizontal: 24,
+    marginBottom: 32,
   },
-  bottomSheetContent: {
+  progressTrack: {
+    height: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 3,
+    shadowColor: COLORS.primary,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modalContent: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
   },
-  scrollContentContainer: {
-    paddingBottom: 100, // Espaço para os botões
+  scrollView: {
+    flex: 1,
   },
-  bottomSheetFooter: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16, // Safe area para iOS
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  modalFooter: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
-    backgroundColor: COLORS.white,
   },
   inputContainer: {
     width: '100%',
