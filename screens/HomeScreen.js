@@ -1441,6 +1441,7 @@ export default function HomeScreen({ navigation, route }) {
     setDriverInfo(null);
     setRequestId(null);
     setCurrentRide(null);
+    setRideEstimate(null);
     
     // Clear route on map
     const js = `window.__clearRoute(); true;`;
@@ -1451,6 +1452,30 @@ export default function HomeScreen({ navigation, route }) {
       clearInterval(window.driverSearchInterval);
       window.driverSearchInterval = null;
     }
+  };
+
+  // Função para cancelar a modal de confirmação
+  const handleCancelConfirmation = () => {
+    console.log('❌ Cancelando modal de confirmação e limpando estado...');
+    console.log('🧹 Estado antes da limpeza:', {
+      destination,
+      selectedDestination: !!selectedDestination,
+      routeInfo: !!routeInfo,
+      rideEstimate: !!rideEstimate
+    });
+    
+    setShowConfirmationModal(false);
+    // Resetar todos os estados relacionados
+    setDestination('');
+    setSelectedDestination(null);
+    setRouteInfo(null);
+    setRideEstimate(null);
+    
+    // Limpar rota no mapa
+    const js = `window.__clearRoute(); true;`;
+    webViewRef.current?.injectJavaScript(js);
+    
+    console.log('✅ Estado limpo - modal de confirmação cancelada');
   };
 
   const handleCallDriver = () => {
@@ -2131,14 +2156,14 @@ export default function HomeScreen({ navigation, route }) {
         visible={showConfirmationModal}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowConfirmationModal(false)}
+        onRequestClose={handleCancelConfirmation}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.confirmationModal}>
             <View style={styles.confirmationHeader}>
               <Text style={styles.confirmationTitle}>Confirmar Corrida</Text>
               <TouchableOpacity
-                onPress={() => setShowConfirmationModal(false)}
+                onPress={handleCancelConfirmation}
                 style={styles.closeButton}
               >
                 <MaterialIcons name="close" size={24} color="#6B7280" />
@@ -2193,7 +2218,7 @@ export default function HomeScreen({ navigation, route }) {
                 <View style={styles.confirmationActions}>
                   <TouchableOpacity
                     style={styles.cancelConfirmButton}
-                    onPress={() => setShowConfirmationModal(false)}
+                    onPress={handleCancelConfirmation}
                   >
                     <Text style={styles.cancelConfirmText}>Cancelar</Text>
                   </TouchableOpacity>
