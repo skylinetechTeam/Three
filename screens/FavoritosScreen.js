@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS, SHADOWS } from '../config/theme';
-import { checkForExistingData, clearDataByKey, DATA_KEYS } from '../utils/dataCleaner';
+import { checkForExistingData } from '../utils/dataCleaner';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';
@@ -268,7 +268,7 @@ const FavoritosScreen = () => {
   // Função para limpar todos os dados de favoritos
   const clearAllFavorites = async () => {
     Alert.alert(
-      "Limpar Todos os Favoritos",
+      "🗑️ Limpar Todos os Favoritos",
       "Tem certeza que deseja remover todos os favoritos? Esta ação não pode ser desfeita.",
       [
         {
@@ -279,15 +279,31 @@ const FavoritosScreen = () => {
           text: "Limpar Todos", 
           onPress: async () => {
             try {
-              const success = await clearDataByKey(DATA_KEYS.FAVORITES);
-              if (success) {
-                setFavoritos([]);
-                Alert.alert("Sucesso", "Todos os favoritos foram removidos!");
-              } else {
-                Alert.alert("Erro", "Não foi possível limpar os favoritos.");
+              console.log('Iniciando limpeza de favoritos...');
+              
+              // Verificar se existem favoritos antes de limpar
+              const existingData = await AsyncStorage.getItem('favorite_destinations');
+              if (!existingData) {
+                Alert.alert("Aviso", "Não há favoritos para limpar.");
+                return;
               }
+              
+              // Limpar do AsyncStorage
+              await AsyncStorage.removeItem('favorite_destinations');
+              
+              // Atualizar o estado local
+              setFavoritos([]);
+              
+              console.log('Favoritos limpos com sucesso');
+              Alert.alert("✅ Sucesso", "Todos os favoritos foram removidos com sucesso!");
+              
             } catch (error) {
-              Alert.alert("Erro", "Não foi possível limpar os favoritos.");
+              console.error('Erro ao limpar favoritos:', error);
+              Alert.alert(
+                "❌ Erro", 
+                "Não foi possível limpar os favoritos. Tente novamente.",
+                [{ text: "OK" }]
+              );
             }
           },
           style: "destructive"

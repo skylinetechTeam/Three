@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS, SHADOWS } from '../config/theme';
-import { checkForExistingData, clearDataByKey, DATA_KEYS } from '../utils/dataCleaner';
+import { checkForExistingData } from '../utils/dataCleaner';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -324,7 +324,7 @@ const ReservasScreen = () => {
   // Função para limpar todos os dados de reservas
   const clearAllReservas = async () => {
     Alert.alert(
-      "Limpar Todas as Reservas",
+      "🗑️ Limpar Todas as Reservas",
       "Tem certeza que deseja remover todas as reservas? Esta ação não pode ser desfeita.",
       [
         {
@@ -335,15 +335,31 @@ const ReservasScreen = () => {
           text: "Limpar Todas", 
           onPress: async () => {
             try {
-              const success = await clearDataByKey(DATA_KEYS.RESERVAS);
-              if (success) {
-                setReservas([]);
-                Alert.alert("Sucesso", "Todas as reservas foram removidas!");
-              } else {
-                Alert.alert("Erro", "Não foi possível limpar as reservas.");
+              console.log('Iniciando limpeza de reservas...');
+              
+              // Verificar se existem reservas antes de limpar
+              const existingData = await AsyncStorage.getItem('ride_requests');
+              if (!existingData) {
+                Alert.alert("Aviso", "Não há reservas para limpar.");
+                return;
               }
+              
+              // Limpar do AsyncStorage
+              await AsyncStorage.removeItem('ride_requests');
+              
+              // Atualizar o estado local
+              setReservas([]);
+              
+              console.log('Reservas limpas com sucesso');
+              Alert.alert("✅ Sucesso", "Todas as reservas foram removidas com sucesso!");
+              
             } catch (error) {
-              Alert.alert("Erro", "Não foi possível limpar as reservas.");
+              console.error('Erro ao limpar reservas:', error);
+              Alert.alert(
+                "❌ Erro", 
+                "Não foi possível limpar as reservas. Tente novamente.",
+                [{ text: "OK" }]
+              );
             }
           },
           style: "destructive"
