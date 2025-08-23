@@ -29,7 +29,7 @@ const { width, height } = Dimensions.get('window');
 const NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org';
 const OSRM_BASE_URL = 'https://router.project-osrm.org';
 
-export default function HomeScreen({ navigation }) {
+export default function HomeScreen({ navigation, route }) {
   const [location, setLocation] = useState(null);
   const [destination, setDestination] = useState('');
   const [selectedTaxiType, setSelectedTaxiType] = useState('Coletivo');
@@ -54,13 +54,32 @@ export default function HomeScreen({ navigation }) {
   const [driverLocation, setDriverLocation] = useState(null);
   const [showRouteToDriver, setShowRouteToDriver] = useState(false);
   const [driverArrived, setDriverArrived] = useState(false);
+  const [driverProximityTimer, setDriverProximityTimer] = useState(null);
+  const [isDriverNearby, setIsDriverNearby] = useState(false);
   const webViewRef = useRef(null);
   const slideAnim = useRef(new Animated.Value(height)).current;
   const searchTimeoutRef = useRef(null);
+  const proximityTimerRef = useRef(null);
   
   // Animações
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseAnim2 = useRef(new Animated.Value(1)).current;
+
+  // Function to calculate distance between two points (in meters)
+  const calculateDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lng2-lng1) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c; // Distance in meters
+  };
 
   useEffect(() => {
     (async () => {
@@ -78,6 +97,40 @@ export default function HomeScreen({ navigation }) {
       // Initialize passenger profile
       await initializePassenger();
     })();
+  }, []);
+
+  // Handle navigation params (from favorites and reservations)
+  useEffect(() => {
+    if (route?.params?.selectedDestination) {
+      const dest = route.params.selectedDestination;
+      console.log('📍 Received destination from navigation:', dest);
+      
+      setSelectedDestination(dest);
+      setDestination(dest.name || dest.address);
+      
+      // Calculate route info if location is available
+      if (location?.coords && dest.lat && dest.lng) {
+        calculateRouteInfo(
+          location.coords.latitude,
+          location.coords.longitude,
+          dest.lat,
+          dest.lng
+        );
+      }
+      
+      // Clear the params to prevent re-triggering
+      navigation.setParams({ selectedDestination: undefined });
+    }
+  }, [route?.params?.selectedDestination, location]);
+
+  // Cleanup effect for proximity timer
+  useEffect(() => {
+    return () => {
+      if (proximityTimerRef.current) {
+        clearTimeout(proximityTimerRef.current);
+        proximityTimerRef.current = null;
+      }
+    };
   }, []);
 
   const initializePassenger = async () => {
@@ -311,6 +364,64 @@ export default function HomeScreen({ navigation }) {
                 location: data.location,
                 estimatedArrival: data.estimatedArrival
               }));
+              
+              // Update driver location for map
+              if (data.location) {
+                setDriverLocation(data.location);
+                
+                // Check if driver is nearby (within 100 meters)
+                if (location && location.coords) {
+                  const distance = calculateDistance(
+                    location.coords.latitude,
+                    location.coords.longitude,
+                    data.location.latitude,
+                    data.location.longitude
+                  );
+                  
+                  console.log(`📏 Distância até o motorista: ${Math.round(distance)}m`);
+                  
+                  // If driver is very close (within 50 meters) and wasn't nearby before
+                  if (distance <= 50 && !isDriverNearby) {
+                    console.log('🚗 Motorista está muito perto! Iniciando timer de 5 segundos...');
+                    setIsDriverNearby(true);
+                    
+                    // Clear any existing timer
+                    if (proximityTimerRef.current) {
+                      clearTimeout(proximityTimerRef.current);
+                    }
+                    
+                    // Set timer for 5 seconds before switching to destination route
+                    proximityTimerRef.current = setTimeout(() => {
+                      console.log('⏰ 5 segundos passaram! Mudando para rota do destino...');
+                      setDriverArrived(true);
+                      setIsDriverNearby(false);
+                      
+                      Toast.show({
+                        type: "success",
+                        text1: "Motorista chegou!",
+                        text2: "Seguindo para o destino",
+                        visibilityTime: 3000,
+                      });
+                    }, 5000); // 5 seconds
+                    
+                    Toast.show({
+                      type: "info",
+                      text1: "Motorista próximo",
+                      text2: "Preparando para embarque...",
+                      visibilityTime: 3000,
+                    });
+                  }
+                  // If driver moves away, reset proximity
+                  else if (distance > 100 && isDriverNearby) {
+                    console.log('📍 Motorista se afastou, cancelando timer...');
+                    setIsDriverNearby(false);
+                    if (proximityTimerRef.current) {
+                      clearTimeout(proximityTimerRef.current);
+                      proximityTimerRef.current = null;
+                    }
+                  }
+                }
+              }
             }
           });
           
@@ -617,7 +728,7 @@ export default function HomeScreen({ navigation }) {
                     const response = await fetch(routeUrl);
                     const data = await response.json();
                     
-                    if (data.routes && data.routes.length > 0) {
+                    if (data.routes && data.routes?.length > 0) {
                         const route = data.routes[0];
                         const coordinates = route.geometry.coordinates;
                         const leafletCoords = coordinates.map(coord => [coord[1], coord[0]]);
@@ -670,7 +781,7 @@ export default function HomeScreen({ navigation }) {
                     const response = await fetch(routeUrl);
                     const data = await response.json();
                     
-                    if (data.routes && data.routes.length > 0) {
+                    if (data.routes && data.routes?.length > 0) {
                         const route = data.routes[0];
                         const coordinates = route.geometry.coordinates;
                         
@@ -828,7 +939,7 @@ export default function HomeScreen({ navigation }) {
       const response = await fetch(routeUrl);
       const data = await response.json();
       
-      if (data.routes && data.routes.length > 0) {
+      if (data.routes && data.routes?.length > 0) {
         const route = data.routes[0];
         const routeData = {
           distance: route.distance,
@@ -849,7 +960,7 @@ export default function HomeScreen({ navigation }) {
 
   // Search places with OpenStreetMap Nominatim API
   const searchPlacesWithOSM = async (query) => {
-    if (!query || query.length < 2) return [];
+    if (!query || query?.length < 2) return [];
     
     console.log('🔍 Searching for:', query);
     setIsSearching(true);
@@ -874,7 +985,7 @@ export default function HomeScreen({ navigation }) {
       
       console.log('📡 Nominatim API response:', data);
       
-      if (data && data.length > 0) {
+      if (data && data?.length > 0) {
         const formattedPlaces = data.map((item, index) => ({
           id: `osm_${index}`,
           name: item.display_name.split(',')[0],
@@ -1191,7 +1302,7 @@ export default function HomeScreen({ navigation }) {
     console.log('📝 handleSearchChange called with:', text);
     setDestination(text);
     
-    if (text.length < 2) {
+    if (text?.length < 2) {
       console.log('📏 Text too short, clearing results');
       setFilteredResults([]);
       return;
@@ -1259,7 +1370,7 @@ export default function HomeScreen({ navigation }) {
   };
 
   const getIconForCategory = (categories) => {
-    if (!categories || categories.length === 0) return 'place';
+    if (!categories || categories?.length === 0) return 'place';
     
     const categoryId = categories[0].id;
     
@@ -1816,7 +1927,7 @@ export default function HomeScreen({ navigation }) {
                 blurOnSubmit={false}
                 enablesReturnKeyAutomatically={true}
               />
-              {destination.length > 0 && (
+              {destination?.length > 0 && (
                 <TouchableOpacity onPress={() => setDestination('')}>
                   <MaterialIcons name="clear" size={20} color="#6B7280" />
                 </TouchableOpacity>
@@ -1851,7 +1962,7 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.searchResultsSection}>
             <Text style={styles.sectionTitle}>
               {isSearching ? 'Buscando...' : 
-               filteredResults.length > 0 ? `Resultados da busca (${filteredResults.length})` : 
+               filteredResults?.length > 0 ? `Resultados da busca (${filteredResults?.length})` : 
                'Digite para buscar locais'}
             </Text>
 
@@ -1862,7 +1973,7 @@ export default function HomeScreen({ navigation }) {
               </View>
             )}
 
-            {filteredResults.length > 0 ? (
+            {filteredResults?.length > 0 ? (
               <ScrollView
                 style={styles.resultsList}
                 showsVerticalScrollIndicator={false}
@@ -1894,7 +2005,7 @@ export default function HomeScreen({ navigation }) {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            ) : destination.length > 0 && !isSearching ? (
+            ) : destination?.length > 0 && !isSearching ? (
               <View style={styles.noResultsContainer}>
                 <MaterialIcons name="search-off" size={32} color="#D1D5DB" />
                 <Text style={styles.noResultsText}>Nenhum resultado encontrado</Text>

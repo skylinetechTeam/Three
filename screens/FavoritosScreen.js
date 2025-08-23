@@ -21,6 +21,7 @@ import { COLORS, SIZES, FONTS, SHADOWS } from '../config/theme';
 import { checkForExistingData, clearDataByKey, DATA_KEYS } from '../utils/dataCleaner';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import { useNavigation } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,6 +29,7 @@ const { width, height } = Dimensions.get('window');
 const HERE_API_KEY = 'bMtOJnfPZwG3fyrgS24Jif6dt3MXbOoq6H4X4KqxZKY';
 
 const FavoritosScreen = () => {
+  const navigation = useNavigation();
   const [favoritos, setFavoritos] = useState([]);
   const [searchText, setSearchText] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -366,6 +368,19 @@ const FavoritosScreen = () => {
     setShowAddModal(true);
   };
 
+  const handleGoToFavorite = (favorito) => {
+    // Navigate to HomeScreen with the favorite location as destination
+    navigation.navigate('Home', {
+      selectedDestination: {
+        name: favorito.nome,
+        address: favorito.endereco,
+        lat: favorito.latitude || favorito.lat,
+        lng: favorito.longitude || favorito.lng,
+        categories: favorito.categories || []
+      }
+    });
+  };
+
   const filteredFavoritos = favoritos.filter(item =>
     item.nome.toLowerCase().includes(searchText.toLowerCase()) ||
     item.endereco.toLowerCase().includes(searchText.toLowerCase())
@@ -406,6 +421,13 @@ const FavoritosScreen = () => {
         </View>
       </View>
       <View style={styles.favoritoActions}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.goButton]}
+          onPress={() => handleGoToFavorite(item)}
+        >
+          <MaterialIcons name="directions" size={20} color="#ffffff" />
+          <Text style={styles.goButtonText}>Ir</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => handleEditFavorito(item)}
@@ -1362,10 +1384,28 @@ const styles = StyleSheet.create({
   favoritoActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
+    minWidth: 140,
   },
   actionButton: {
     padding: 8,
     marginLeft: 10,
+  },
+  goButton: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginLeft: 0,
+    marginRight: 10,
+  },
+  goButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   emptyState: {
     flex: 1,

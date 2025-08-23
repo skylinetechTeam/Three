@@ -21,6 +21,9 @@ import Toast from 'react-native-toast-message';
 
 const { width, height } = Dimensions.get('window');
 
+// OSRM Configuration for real road routing
+const OSRM_BASE_URL = 'https://router.project-osrm.org';
+
 export default function DriverMapScreen({ navigation, route }) {
   const [location, setLocation] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
@@ -76,9 +79,20 @@ export default function DriverMapScreen({ navigation, route }) {
 
   useEffect(() => {
     if (activeRide && location && webViewRef.current && navigationMode) {
-      startNavigationToDestination();
+      console.log('🎯 useEffect triggered for navigation:', {
+        activeRide: !!activeRide,
+        location: !!location,
+        webViewRef: !!webViewRef.current,
+        navigationMode,
+        ridePhase
+      });
+      
+      // Small delay to ensure WebView is ready
+      setTimeout(() => {
+        startNavigationTo();
+      }, 500);
     }
-  }, [activeRide, location, navigationMode]);
+  }, [activeRide, location, navigationMode, ridePhase]);
 
   const initializeDriver = async () => {
     try {
@@ -163,7 +177,7 @@ export default function DriverMapScreen({ navigation, route }) {
             Toast.show({
               type: "info",
               text1: "Nova solicitação!",
-              text2: `Corrida para ${data.ride.destination.address}`,
+              text2: `Corrida para ${data.ride.destination?.address}`,
             });
           }
         });
@@ -547,17 +561,57 @@ export default function DriverMapScreen({ navigation, route }) {
       
       // Start navigation immediately after accepting
       setTimeout(() => {
-        if (webViewRef.current && location) {
+        if (webViewRef.current && location && currentRequest) {
+          console.log('🚗 Starting navigation after ride acceptance...');
+          console.log('📍 Current location:', location.coords);
+          console.log('🎯 Pickup location:', currentRequest.pickup);
+          console.log('👤 Passenger:', currentRequest.passengerName);
+          
           const destination = currentRequest.pickup;
           const script = `
-            if (typeof startNavigation === 'function') {
-              console.log('Triggering navigation to pickup location');
-              startNavigation(${destination.lat}, ${destination.lng}, '${currentRequest.passengerName}', 'pickup');
-            }
+            (function() {
+              console.log('🚀 === IMMEDIATE NAVIGATION AFTER ACCEPT ===');
+              console.log('🎯 Pickup coords:', ${destination.lat}, ${destination.lng});
+              
+              try {
+                window.ReactNativeWebView?.postMessage(JSON.stringify({
+                  type: 'debug',
+                  message: 'Navigation after accept - injecting script'
+                }));
+              } catch (e) {}
+              
+              if (typeof startNavigation === 'function') {
+                console.log('✅ Executing pickup navigation...');
+                startNavigation(${destination.lat}, ${destination.lng}, '${currentRequest.passengerName}', 'pickup');
+                return true;
+              } else if (typeof testCreateLine === 'function') {
+                console.log('🔄 Using test line for pickup...');
+                testCreateLine();
+                return true;
+              } else {
+                console.error('❌ No navigation functions available!');
+                alert('Erro: Função de navegação não encontrada');
+                return false;
+              }
+            })();
           `;
-          webViewRef.current.postMessage(script);
+          
+          try {
+            webViewRef.current.injectJavaScript(script);
+            console.log('💉 Pickup navigation script injected');
+          } catch (error) {
+            console.error('❌ Failed to inject pickup script:', error);
+            webViewRef.current.postMessage(script);
+            console.log('📤 Fallback: Pickup script sent via postMessage');
+          }
+        } else {
+          console.error('❌ Cannot start navigation:', {
+            webViewRef: !!webViewRef.current,
+            location: !!location,
+            currentRequest: !!currentRequest
+          });
         }
-      }, 1000);
+      }, 1500); // Increased timeout to ensure WebView is ready
       
       setCurrentRequest(null);
       
@@ -624,16 +678,106 @@ export default function DriverMapScreen({ navigation, route }) {
   };
 
   const startNavigationToDestination = () => {
-    if (!activeRide || !location || !webViewRef.current) return;
+    console.log('🧭 startNavigationToDestination called');
+    
+    if (!activeRide || !location || !webViewRef.current) {
+      console.error('❌ Navigation requirements not met:', {
+        activeRide: !!activeRide,
+        location: !!location,
+        webViewRef: !!webViewRef.current
+      });
+      return;
+    }
 
     const destination = ridePhase === 'pickup' ? activeRide.pickup : activeRide.destination;
     
+    console.log('🎯 Starting navigation to:', {
+      destination,
+      ridePhase,
+      passengerName: activeRide.passengerName
+    });
+    
+    // Method 1: Using injectJavaScript (more reliable)
     const script = `
-      if (typeof startNavigation === 'function') {
-        startNavigation(${destination.lat}, ${destination.lng}, '${activeRide.passengerName}', '${ridePhase}');
-      }
+      (function() {
+        console.log('🚀 === DIRECT NAVIGATION INJECTION ===');
+        console.log('📍 Phase: ${ridePhase}');
+        console.log('🎯 Destination:', ${destination.lat}, ${destination.lng});
+        
+        // Send immediate confirmation
+        try {
+          window.ReactNativeWebView?.postMessage(JSON.stringify({
+            type: 'debug',
+            message: 'Script injected directly - executing navigation'
+          }));
+        } catch (e) {
+          console.error('Failed to send confirmation:', e);
+        }
+        
+        // Force navigation execution
+        try {
+          if (typeof startNavigation === 'function') {
+            console.log('✅ Executing startNavigation directly...');
+            startNavigation(${destination.lat}, ${destination.lng}, '${activeRide.passengerName}', '${ridePhase}');
+            return true;
+          } else {
+            console.error('❌ startNavigation not found');
+            // Try fallback immediately
+            if (typeof testCreateLine === 'function') {
+              console.log('🔄 Using fallback method...');
+              testCreateLine();
+              window.ReactNativeWebView?.postMessage(JSON.stringify({
+                type: 'navigation_status',
+                message: 'Used fallback navigation method'
+              }));
+              return true;
+            }
+          }
+        } catch (error) {
+          console.error('❌ Navigation execution failed:', error);
+          window.ReactNativeWebView?.postMessage(JSON.stringify({
+            type: 'error',
+            message: 'Navigation failed: ' + error.message
+          }));
+        }
+        return false;
+      })();
     `;
-    webViewRef.current.postMessage(script);
+    
+    // Use injectJavaScript for more reliable execution
+    try {
+      webViewRef.current.injectJavaScript(script);
+      console.log('💉 Script injected directly into WebView');
+    } catch (error) {
+      console.error('❌ Failed to inject script:', error);
+      
+      // Fallback to postMessage
+      console.log('🔄 Falling back to postMessage...');
+      webViewRef.current.postMessage(script);
+    }
+    
+    // Backup method after 2 seconds
+    setTimeout(() => {
+      console.log('🕐 Backup navigation attempt...');
+      const backupScript = `
+        console.log('🔄 === BACKUP NAVIGATION ATTEMPT ===');
+        try {
+          if (typeof startNavigation === 'function') {
+            startNavigation(${destination.lat}, ${destination.lng}, '${activeRide.passengerName}', '${ridePhase}');
+          } else if (typeof testCreateLine === 'function') {
+            testCreateLine();
+          }
+        } catch (e) {
+          console.error('Backup failed:', e);
+        }
+      `;
+      
+      try {
+        webViewRef.current?.injectJavaScript(backupScript);
+      } catch (e) {
+        webViewRef.current?.postMessage(backupScript);
+      }
+    }, 2000);
   };
 
   const simulateArrival = () => {
@@ -1096,9 +1240,25 @@ export default function DriverMapScreen({ navigation, route }) {
                  console.log('🎯 Destination:', destinationLat, destinationLng);
                  console.log('🔄 Phase:', phase);
                  
+                 // Send status to React Native
+                 try {
+                     window.ReactNativeWebView?.postMessage(JSON.stringify({
+                         type: 'debug',
+                         message: 'startNavigation called with: ' + destinationLat + ', ' + destinationLng + ', phase: ' + phase
+                     }));
+                 } catch (e) {
+                     console.error('Failed to send debug message:', e);
+                 }
+                 
                  // Safety check
                  if (!driverMarker) {
                      console.error('❌ No driver marker found!');
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'error',
+                             message: 'No driver marker found'
+                         }));
+                     } catch (e) {}
                      alert('Erro: Localização do motorista não encontrada');
                      return;
                  }
@@ -1112,6 +1272,13 @@ export default function DriverMapScreen({ navigation, route }) {
                      console.log('🧹 Clearing previous routes...');
                      clearPreviousRoute();
                      
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'debug',
+                             message: 'Step 1: Previous routes cleared'
+                         }));
+                     } catch (e) {}
+                     
                      // Step 2: Create destination marker
                      console.log('🎯 Creating destination marker...');
                      destinationMarker = L.marker([destinationLat, destinationLng], { 
@@ -1120,132 +1287,289 @@ export default function DriverMapScreen({ navigation, route }) {
                      map.addLayer(destinationMarker);
                      console.log('✅ Destination marker added');
                      
-                                          // Step 3: Create route line - STABLE VERSION WITH BLUE COLOR
-                     console.log('🛣️ Creating route line...');
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'debug',
+                             message: 'Step 2: Destination marker created and added'
+                         }));
+                     } catch (e) {}
+                     
+                                          // Step 3: Create real route using OSRM API
+                     console.log('🛣️ Creating real road route...');
                      const routeColor = '#4285F4'; // Using same blue color as HomeScreen
                      console.log('🎨 Using color:', routeColor);
                      
-                     const coordinates = [
+                     // First create a straight line as fallback
+                     const straightCoordinates = [
                          [driverPos.lat, driverPos.lng],
                          [destinationLat, destinationLng]
                      ];
-                     console.log('📐 Route coordinates:', coordinates);
                      
-                     // Method 1: Standard polyline
-                     try {
-                         routeLine = L.polyline(coordinates, {
-                             color: routeColor,
-                             weight: 5,
-                             opacity: 0.8,
-                             smoothFactor: 1,
-                             lineCap: 'round',
-                             lineJoin: 'round'
+                     // Try to get real route from OSRM using Promises
+                     console.log('🌐 Fetching real route from OSRM...');
+                     const routeUrl = \`https://router.project-osrm.org/route/v1/driving/\${driverPos.lng},\${driverPos.lat};\${destinationLng},\${destinationLat}?overview=full&geometries=geojson\`;
+                     
+                     fetch(routeUrl)
+                         .then(response => response.json())
+                         .then(data => {
+                             if (data.routes && data.routes.length > 0) {
+                                 const route = data.routes[0];
+                                 const coordinates = route.geometry.coordinates;
+                                 
+                                 // Convert coordinates from [lng, lat] to [lat, lng] for Leaflet
+                                 const leafletCoords = coordinates.map(coord => [coord[1], coord[0]]);
+                                 console.log('✅ Real route coordinates received:', leafletCoords.length, 'points');
+                                 
+                                 // Update route summary with real data
+                                 routeSummary = {
+                                     totalDistance: route.distance,
+                                     totalTime: route.duration
+                                 };
+                                 
+                                 // Create shadow line first (behind the main route)
+                                 const shadowLine = L.polyline(leafletCoords, {
+                                     color: '#000000',
+                                     weight: 8,
+                                     opacity: 0.3,
+                                     smoothFactor: 1,
+                                     lineCap: 'round',
+                                     lineJoin: 'round'
+                                 });
+                                 shadowLine.addTo(map);
+                                 console.log('✅ Shadow route line added');
+                                 
+                                 // Create main route line
+                                 routeLine = L.polyline(leafletCoords, {
+                                     color: routeColor,
+                                     weight: 6,
+                                     opacity: 0.9,
+                                     smoothFactor: 1,
+                                     lineCap: 'round',
+                                     lineJoin: 'round'
+                                 });
+                                 
+                                 routeLine.addTo(map);
+                                 console.log('✅ Real road route created and added to map successfully');
+                                 
+                                 try {
+                                     window.ReactNativeWebView?.postMessage(JSON.stringify({
+                                         type: 'navigation_status',
+                                         message: 'Real road route created with ' + leafletCoords.length + ' waypoints'
+                                     }));
+                                 } catch (e) {}
+                                 
+                                 // Setup navigation elements and UI
+                                 setupNavigationElements();
+                                 updateNavigationUI(phase, passengerName);
+                                 
+                                 // Fit map to route bounds
+                                 setTimeout(() => {
+                                     if (routeLine && routeLine.getLatLngs) {
+                                         const bounds = L.latLngBounds(routeLine.getLatLngs());
+                                         map.fitBounds(bounds, { 
+                                             padding: [80, 80],
+                                             maxZoom: 15
+                                         });
+                                         console.log('✅ Map fitted to real route bounds');
+                                     }
+                                 }, 500);
+                                 
+                             } else {
+                                 throw new Error('No route found from OSRM');
+                             }
+                         })
+                         .catch(e => {
+                             console.warn('⚠️ OSRM route failed, using straight line fallback:', e.message);
+                             
+                             // Fallback to straight line
+                             try {
+                                 // Create shadow line
+                                 const shadowLine = L.polyline(straightCoordinates, {
+                                     color: '#000000',
+                                     weight: 8,
+                                     opacity: 0.3,
+                                     smoothFactor: 1,
+                                     lineCap: 'round',
+                                     lineJoin: 'round'
+                                 });
+                                 shadowLine.addTo(map);
+                                 
+                                 // Create main route line
+                                 routeLine = L.polyline(straightCoordinates, {
+                                     color: routeColor,
+                                     weight: 6,
+                                     opacity: 0.9,
+                                     smoothFactor: 1,
+                                     lineCap: 'round',
+                                     lineJoin: 'round'
+                                 });
+                                 
+                                 routeLine.addTo(map);
+                                 console.log('✅ Fallback straight route created successfully');
+                                 
+                                 try {
+                                     window.ReactNativeWebView?.postMessage(JSON.stringify({
+                                         type: 'navigation_status',
+                                         message: 'Fallback straight route created (OSRM unavailable)'
+                                     }));
+                                 } catch (e) {}
+                                 
+                                                                   // Setup navigation elements and UI for fallback
+                                  setupNavigationElements();
+                                  updateNavigationUI(phase, passengerName);
+                                  setTimeout(() => {
+                                      const bounds = L.latLngBounds(straightCoordinates);
+                                      map.fitBounds(bounds, { 
+                                          padding: [80, 80],
+                                          maxZoom: 15
+                                      });
+                                      console.log('✅ Map fitted to fallback route bounds');
+                                  }, 500);
+                                 
+                             } catch (fallbackError) {
+                                 console.error('❌ Even fallback route creation failed:', fallbackError);
+                                 
+                                 try {
+                                     window.ReactNativeWebView?.postMessage(JSON.stringify({
+                                         type: 'error',
+                                         message: 'Failed to create any route: ' + fallbackError.message
+                                     }));
+                                 } catch (e) {}
+                             }
                          });
-                         map.addLayer(routeLine);
-                         console.log('✅ Method 1: Standard polyline added');
-                     } catch (e) {
-                         console.error('❌ Method 1 failed:', e);
-                     }
                      
-                     // Method 2: Backup thick line
-                     try {
-                         const backupLine = L.polyline(coordinates, {
-                             color: routeColor,
-                             weight: 5,
-                             opacity: 0.8,
-                             smoothFactor: 1
-                         }).addTo(map);
-                         console.log('✅ Method 2: Backup line added');
-                     } catch (e) {
-                         console.error('❌ Method 2 failed:', e);
-                     }
-                     
-                     // Method 3: Simple line with different approach
-                     try {
-                         const simpleLine = new L.Polyline(coordinates, {
-                             color: routeColor,
-                             weight: 5,
-                             opacity: 0.8,
-                             smoothFactor: 1
-                         });
-                         simpleLine.addTo(map);
-                         console.log('✅ Method 3: Simple line added');
-                     } catch (e) {
-                         console.error('❌ Method 3 failed:', e);
-                     }
-                     
-                     console.log('🛣️ Route line creation attempts completed');
-                     
-                     // Step 4: Calculate distance and time (fallback if OSRM didn't provide data)
-                     if (!routeSummary) {
-                         const currentDriverPos = driverMarker.getLatLng();
-                         const distance = currentDriverPos.distanceTo(L.latLng(destinationLat, destinationLng));
-                         const estimatedTime = Math.round(distance / 1000 * 2.5);
+                     // Step 4: Setup common elements (will be called in both success and fallback)
+                     function setupNavigationElements() {
+                         // Calculate fallback distance if no route summary
+                         if (!routeSummary) {
+                             const currentDriverPos = driverMarker.getLatLng();
+                             const distance = currentDriverPos.distanceTo(L.latLng(destinationLat, destinationLng));
+                             const estimatedTime = Math.round(distance / 1000 * 2.5);
+                             
+                             routeSummary = {
+                                 totalDistance: distance,
+                                 totalTime: estimatedTime * 60
+                             };
+                         }
                          
-                         routeSummary = {
-                             totalDistance: distance,
-                             totalTime: estimatedTime * 60
-                         };
+                         console.log('📊 Route summary:', routeSummary);
+                         
+                         // Setup instructions based on route
+                         if (routeSummary && routeSummary.totalDistance) {
+                             const distanceKm = (routeSummary.totalDistance / 1000).toFixed(1);
+                             const durationMin = Math.round(routeSummary.totalTime / 60);
+                             
+                             routeInstructions = [
+                                 { text: \`🚗 Siga em direção a \${phase === 'pickup' ? passengerName : 'destino'} (\${distanceKm} km)\` },
+                                 { text: '🛣️ Continue pela rota principal' },
+                                 { text: \`⏱️ Tempo estimado: \${durationMin} minutos\` },
+                                 { text: '🎯 Mantenha-se na direção indicada' },
+                                 { text: '🏁 Aproximando-se do destino' },
+                                 { text: '✅ Você chegou ao destino!' }
+                             ];
+                         } else {
+                             routeInstructions = [
+                                 { text: \`🚗 Siga em direção a \${phase === 'pickup' ? passengerName : 'destino'}\` },
+                                 { text: '➡️ Continue na rota principal' },
+                                 { text: '🎯 Mantenha-se na direção indicada' },
+                                 { text: '🏁 Aproximando-se do destino' },
+                                 { text: '✅ Você chegou ao destino!' }
+                             ];
+                         }
+                         currentInstructionIndex = 0;
+                         
+                         // Show navigation elements
+                         const arrivalBtn = document.getElementById('arrivalButton');
+                         const navInfo = document.getElementById('navigationInfo');
+                         
+                         if (arrivalBtn) arrivalBtn.style.display = 'block';
+                         if (navInfo) navInfo.style.display = 'block';
+                         console.log('✅ Navigation UI elements shown');
+                         
+                         // Start simulation
+                         startTurnByTurnSimulation();
                      }
                      
-                     console.log('📊 Route summary:', routeSummary);
-                     
-                     // Step 5: Setup instructions
-                     routeInstructions = [
-                         { text: \`🚗 Siga em direção a \${phase === 'pickup' ? passengerName : 'destino'}\` },
-                         { text: '➡️ Continue na rota principal' },
-                         { text: '🎯 Mantenha-se na direção indicada' },
-                         { text: '🏁 Aproximando-se do destino' },
-                         { text: '✅ Você chegou ao destino!' }
-                     ];
-                     currentInstructionIndex = 0;
-                     
-                     // Step 6: Update UI
-                     console.log('🖥️ Updating navigation UI...');
-                     updateNavigationUI(phase, passengerName);
-                     
-                     // Step 7: Show navigation elements
-                     const arrivalBtn = document.getElementById('arrivalButton');
-                     const navInfo = document.getElementById('navigationInfo');
-                     
-                     if (arrivalBtn) arrivalBtn.style.display = 'block';
-                     if (navInfo) navInfo.style.display = 'block';
-                     console.log('✅ Navigation UI elements shown');
-                     
-                     // Step 8: Zoom to show route
-                     console.log('🔍 Fitting map to route...');
-                     setTimeout(() => {
-                         const bounds = L.latLngBounds(coordinates);
-                         map.fitBounds(bounds, { 
-                             padding: [50, 50],
-                             maxZoom: 13
-                         });
-                         console.log('✅ Map fitted to bounds');
-                     }, 500);
-                     
-                     // Step 9: Start simulation
-                     startTurnByTurnSimulation();
+                     // This function will be called by both success and fallback paths
+                     window.setupNavigationElements = setupNavigationElements;
                      
                      console.log('🎉 === NAVIGATION SETUP COMPLETE ===');
                      
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'navigation_status',
+                             message: 'Navigation setup complete successfully'
+                         }));
+                     } catch (e) {}
+                     
                  } catch (error) {
                      console.error('❌ Error in startNavigation:', error);
+                     
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'error',
+                             message: 'Navigation setup failed: ' + error.message
+                         }));
+                     } catch (e) {}
+                     
                      alert('Erro na navegação: ' + error.message);
                  }
              }
 
              function clearPreviousRoute() {
+                 console.log('🧹 Clearing previous route elements...');
+                 
                  if (routeControl) {
-                     map.removeControl(routeControl);
+                     try {
+                         map.removeControl(routeControl);
+                         console.log('✅ Route control removed');
+                     } catch (e) {
+                         console.warn('⚠️ Error removing route control:', e);
+                     }
                      routeControl = null;
                  }
+                 
                  if (destinationMarker) {
-                     map.removeLayer(destinationMarker);
+                     try {
+                         map.removeLayer(destinationMarker);
+                         console.log('✅ Destination marker removed');
+                     } catch (e) {
+                         console.warn('⚠️ Error removing destination marker:', e);
+                     }
                      destinationMarker = null;
                  }
+                 
                  if (routeLine) {
-                     map.removeLayer(routeLine);
+                     try {
+                         map.removeLayer(routeLine);
+                         console.log('✅ Route line removed');
+                     } catch (e) {
+                         console.warn('⚠️ Error removing route line:', e);
+                     }
                      routeLine = null;
+                 }
+                 
+                 // Clear any other polylines that might exist (including shadow lines)
+                 try {
+                     const layersToRemove = [];
+                     map.eachLayer(function (layer) {
+                         // Remove all polylines (route lines and shadow lines)
+                         if (layer instanceof L.Polyline) {
+                             layersToRemove.push(layer);
+                         }
+                     });
+                     
+                     layersToRemove.forEach(layer => {
+                         try {
+                             map.removeLayer(layer);
+                         } catch (e) {
+                             console.warn('⚠️ Error removing layer:', e);
+                         }
+                     });
+                     
+                     console.log('✅ All polylines cleared:', layersToRemove.length, 'layers removed');
+                 } catch (e) {
+                     console.warn('⚠️ Error clearing polylines:', e);
                  }
              }
 
@@ -1383,6 +1707,49 @@ export default function DriverMapScreen({ navigation, route }) {
                  console.log('Initializing driver location...');
                  updateDriverLocation(${location?.coords.latitude || 0}, ${location?.coords.longitude || 0});
              }
+             
+             // Verify all functions are available and send status
+             setTimeout(() => {
+                 console.log('🔍 Verifying navigation functions...');
+                 const functionsStatus = {
+                     startNavigation: typeof startNavigation === 'function',
+                     clearNavigation: typeof clearNavigation === 'function',
+                     updateDriverLocation: typeof updateDriverLocation === 'function',
+                     testCreateLine: typeof testCreateLine === 'function',
+                     map: typeof map !== 'undefined',
+                     L: typeof L !== 'undefined'
+                 };
+                 
+                 console.log('📊 Functions status:', functionsStatus);
+                 
+                 try {
+                     window.ReactNativeWebView?.postMessage(JSON.stringify({
+                         type: 'debug',
+                         message: 'WebView functions status: ' + JSON.stringify(functionsStatus)
+                     }));
+                 } catch (e) {
+                     console.error('Failed to send functions status:', e);
+                 }
+                 
+                 // Test basic map functionality
+                 if (map && driverMarker) {
+                     console.log('✅ Map and driver marker are ready');
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'navigation_status',
+                             message: 'WebView map initialization complete'
+                         }));
+                     } catch (e) {}
+                 } else {
+                     console.error('❌ Map or driver marker not ready');
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'error',
+                             message: 'Map initialization failed'
+                         }));
+                     } catch (e) {}
+                 }
+             }, 2000);
              
              // Debug function to test line creation
              function testCreateLine() {
@@ -1543,21 +1910,40 @@ export default function DriverMapScreen({ navigation, route }) {
           onError={(error) => console.error('WebView error:', error)}
           onLoad={() => {
             console.log('🌐 WebView loaded successfully');
-            // Wait a bit for map to initialize, then update location
+            
+            // Initialize location and check if we need to start navigation
             setTimeout(() => {
               if (location) {
                 updateMapLocation(location);
+              }
+              
+              // If we have an active ride, try to start navigation
+              if (activeRide && navigationMode) {
+                console.log('🎯 WebView loaded with active ride - starting navigation...');
+                setTimeout(() => {
+                  startNavigationToDestination();
+                }, 1000);
               }
             }, 2000);
           }}
           onMessage={(event) => {
             try {
               const data = JSON.parse(event.nativeEvent.data);
+              console.log('📱 Message received from WebView:', data);
+              
               if (data.type === 'arrival') {
                 simulateArrival();
+              } else if (data.type === 'navigation_status') {
+                console.log('🧭 Navigation status:', data.message);
+              } else if (data.type === 'error') {
+                console.error('❌ WebView error:', data.message);
+              } else if (data.type === 'debug') {
+                console.log('🐛 WebView debug:', data.message);
               }
             } catch (error) {
               console.error('Error parsing WebView message:', error);
+              // Log the raw message for debugging
+              console.log('Raw WebView message:', event.nativeEvent.data);
             }
           }}
         />
@@ -1579,6 +1965,72 @@ export default function DriverMapScreen({ navigation, route }) {
       >
         <MaterialIcons name="my-location" size={24} color="#ffffff" />
       </TouchableOpacity>
+
+      {/* Test Navigation Button - Only in development */}
+      {__DEV__ && !navigationMode && (
+        <TouchableOpacity 
+          style={[styles.testNavigationButton, { bottom: insets.bottom + 160 }]}
+                      onPress={() => {
+              if (webViewRef.current && location && activeRide) {
+                console.log('🧪 Testing navigation with actual ride data...');
+                const destination = ridePhase === 'pickup' ? activeRide.pickup : activeRide.destination;
+                const script = `
+                  (function() {
+                    console.log('🧪 === MANUAL NAVIGATION TEST ===');
+                    console.log('📍 Testing with actual ride destination:', ${destination.lat}, ${destination.lng});
+                    
+                    // Force navigation with current ride data
+                    if (typeof startNavigation === 'function') {
+                      console.log('✅ Forcing navigation with ride data...');
+                      startNavigation(${destination.lat}, ${destination.lng}, '${activeRide.passengerName}', '${ridePhase}');
+                      return true;
+                    } else if (typeof testCreateLine === 'function') {
+                      console.log('🔄 Using test line as fallback...');
+                      testCreateLine();
+                      return true;
+                    } else {
+                      console.error('❌ No navigation functions available');
+                      alert('Nenhuma função de navegação disponível');
+                      return false;
+                    }
+                  })();
+                `;
+                
+                try {
+                  webViewRef.current.injectJavaScript(script);
+                  console.log('💉 Test script injected directly');
+                } catch (error) {
+                  console.error('❌ Failed to inject test script:', error);
+                  webViewRef.current.postMessage(script);
+                }
+              } else if (webViewRef.current && location) {
+                console.log('🧪 Testing basic line creation...');
+                const script = `
+                  (function() {
+                    console.log('🧪 === BASIC LINE TEST ===');
+                    if (typeof testCreateLine === 'function') {
+                      testCreateLine();
+                      return true;
+                    } else {
+                      console.error('❌ testCreateLine function not found');
+                      alert('Função de teste não encontrada');
+                      return false;
+                    }
+                  })();
+                `;
+                
+                try {
+                  webViewRef.current.injectJavaScript(script);
+                  console.log('💉 Basic test script injected');
+                } catch (error) {
+                  webViewRef.current.postMessage(script);
+                }
+              }
+            }}
+        >
+          <MaterialIcons name="route" size={20} color="#ffffff" />
+        </TouchableOpacity>
+      )}
 
      
 

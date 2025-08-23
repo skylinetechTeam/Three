@@ -23,6 +23,7 @@ import { checkForExistingData, clearDataByKey, DATA_KEYS } from '../utils/dataCl
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useNavigation } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -30,6 +31,7 @@ const { width, height } = Dimensions.get('window');
 const HERE_API_KEY = 'bMtOJnfPZwG3fyrgS24Jif6dt3MXbOoq6H4X4KqxZKY';
 
 const ReservasScreen = () => {
+  const navigation = useNavigation();
   const [reservas, setReservas] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
@@ -399,6 +401,25 @@ const ReservasScreen = () => {
     saveReservasToStorage(updatedReservas);
   };
 
+  const handleGoToReserva = (reserva) => {
+    // Navigate to HomeScreen with the reservation destination
+    navigation.navigate('Home', {
+      selectedDestination: {
+        name: reserva.destino,
+        address: reserva.destino,
+        lat: reserva.destinoLat || reserva.destino_lat,
+        lng: reserva.destinoLng || reserva.destino_lng,
+        categories: []
+      },
+      selectedOrigin: {
+        name: reserva.origem,
+        address: reserva.origem,
+        lat: reserva.origemLat || reserva.origem_lat,
+        lng: reserva.origemLng || reserva.origem_lng
+      }
+    });
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'Pendente': return '#f59e0b';
@@ -494,6 +515,14 @@ const ReservasScreen = () => {
       )}
 
       <View style={styles.reservaActions}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.goReservaButton]}
+          onPress={() => handleGoToReserva(item)}
+        >
+          <MaterialIcons name="directions" size={16} color="#ffffff" />
+          <Text style={styles.goReservaButtonText}>Ir</Text>
+        </TouchableOpacity>
+        
         {item.status === 'Pendente' && (
           <>
             <TouchableOpacity
@@ -1532,6 +1561,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 15,
+  },
+  goReservaButton: {
+    backgroundColor: COLORS.primary,
+    marginRight: 10,
+    minWidth: 60,
+  },
+  goReservaButtonText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 12,
+    marginLeft: 4,
   },
   confirmButton: {
     backgroundColor: COLORS.primary,
