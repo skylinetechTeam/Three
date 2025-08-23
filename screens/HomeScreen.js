@@ -22,6 +22,12 @@ import { WebView } from 'react-native-webview';
 import Toast from 'react-native-toast-message';
 import apiService from '../services/apiService';
 import LocalDatabase from '../services/localDatabase';
+import { 
+  isValidCollectiveRoute, 
+  getCollectiveRouteInfo,
+  getCollectiveRoutePrice,
+  getAllCollectiveRoutes 
+} from '../config/collectiveRoutes';
 
 const { width, height } = Dimensions.get('window');
 
@@ -995,13 +1001,19 @@ export default function HomeScreen({ navigation, route }) {
       // Calcular tarifa
       let estimatedFare;
       try {
-        // Converter distância de metros para quilômetros
-        const distanceInKm = estimatedDistance / 1000;
-        const timeInMinutes = estimatedTime / 60;
-        console.log('📏 [Favorito] Distância em km:', distanceInKm);
-        console.log('⏱️ [Favorito] Tempo em minutos:', timeInMinutes);
-        estimatedFare = apiService.calculateEstimatedFare(distanceInKm, timeInMinutes, vehicleType);
-        console.log('💰 [Favorito] Tarifa calculada:', estimatedFare, 'AOA');
+        if (vehicleType === 'coletivo') {
+          // Para coletivos, usar preço da rota específica
+          estimatedFare = getCollectiveRoutePrice(destination.name || destination.address);
+          console.log('🚌 [Favorito] Preço fixo do coletivo:', estimatedFare, 'AOA');
+        } else {
+          // Para privados, calcular baseado na distância e tempo
+          const distanceInKm = estimatedDistance / 1000;
+          const timeInMinutes = estimatedTime / 60;
+          console.log('📏 [Favorito] Distância em km:', distanceInKm);
+          console.log('⏱️ [Favorito] Tempo em minutos:', timeInMinutes);
+          estimatedFare = apiService.calculateEstimatedFare(distanceInKm, timeInMinutes, vehicleType);
+          console.log('💰 [Favorito] Tarifa calculada privado:', estimatedFare, 'AOA');
+        }
       } catch (error) {
         console.error('❌ Erro ao calcular tarifa:', error);
         estimatedFare = vehicleType === 'privado' ? 800 : 500;
@@ -1088,15 +1100,34 @@ export default function HomeScreen({ navigation, route }) {
       console.log('📡 Nominatim API response:', data);
       
       if (data && data?.length > 0) {
-        const formattedPlaces = data.map((item, index) => ({
+        let formattedPlaces = data.map((item, index) => ({
           id: `osm_${index}`,
           name: item.display_name.split(',')[0],
           address: item.display_name,
           lat: parseFloat(item.lat),
           lng: parseFloat(item.lon),
           distance: item.distance,
-          categories: item.categories || []
+          categories: item.categories || [],
+          isValidForCollective: isValidCollectiveRoute(item.display_name.split(',')[0])
         }));
+        
+        // Se coletivo estiver selecionado, filtrar apenas rotas válidas
+        if (selectedTaxiType === 'Coletivo') {
+          const validPlaces = formattedPlaces.filter(place => place.isValidForCollective);
+          const invalidCount = formattedPlaces.length - validPlaces.length;
+          
+          if (invalidCount > 0) {
+            console.log(`🚌 Filtrando para coletivo: ${validPlaces.length} válidos de ${formattedPlaces.length} encontrados`);
+            Toast.show({
+              type: "info",
+              text1: `${validPlaces.length} destinos disponíveis`,
+              text2: `Para táxis coletivos (${invalidCount} destinos filtrados)`,
+              visibilityTime: 3000,
+            });
+          }
+          
+          formattedPlaces = validPlaces;
+        }
         
         console.log('✅ Formatted places:', formattedPlaces);
         setFilteredResults(formattedPlaces);
@@ -1114,6 +1145,13 @@ export default function HomeScreen({ navigation, route }) {
 
   const handleLocationSelect = async (selectedLocation) => {
     console.log('🎯 Location selected:', selectedLocation);
+    
+    // Validar se a rota é permitida para coletivos
+    if (!validateCollectiveRoute(selectedLocation)) {
+      // Se a rota não é válida para coletivo, não continuar
+      return;
+    }
+    
     setDestination(selectedLocation.name);
     setSelectedDestination(selectedLocation);
     setIsSearchExpanded(false);
@@ -1146,13 +1184,21 @@ export default function HomeScreen({ navigation, route }) {
       const vehicleType = selectedTaxiType === 'Privado' ? 'privado' : 'coletivo';
       console.log('🚗 selectedTaxiType:', selectedTaxiType);
       console.log('🎯 vehicleType mapeado:', vehicleType);
-      // Converter para unidades corretas: km e minutos
-      const distanceInKm = estimatedDistance / 1000;
-      const timeInMinutes = estimatedTime / 60;
-      console.log('📏 Distância em km:', distanceInKm);
-      console.log('⏱️ Tempo em minutos:', timeInMinutes);
-      const estimatedFare = apiService.calculateEstimatedFare(distanceInKm, timeInMinutes, vehicleType);
-      console.log('💰 Tarifa calculada:', estimatedFare, 'AOA');
+      
+      let estimatedFare;
+      if (vehicleType === 'coletivo') {
+        // Para coletivos, usar preço da rota específica
+        estimatedFare = getCollectiveRoutePrice(selectedLocation.name || selectedLocation.address);
+        console.log('🚌 Preço fixo do coletivo:', estimatedFare, 'AOA');
+      } else {
+        // Para privados, calcular baseado na distância e tempo
+        const distanceInKm = estimatedDistance / 1000;
+        const timeInMinutes = estimatedTime / 60;
+        console.log('📏 Distância em km:', distanceInKm);
+        console.log('⏱️ Tempo em minutos:', timeInMinutes);
+        estimatedFare = apiService.calculateEstimatedFare(distanceInKm, timeInMinutes, vehicleType);
+        console.log('💰 Tarifa calculada privado:', estimatedFare, 'AOA');
+      }
       
       const estimate = {
         distance: estimatedDistance,
@@ -1454,6 +1500,39 @@ export default function HomeScreen({ navigation, route }) {
     }
   };
 
+  // Função para validar rota de coletivo
+  const validateCollectiveRoute = (destination) => {
+    if (selectedTaxiType !== 'Coletivo') return true; // Privado pode ir a qualquer lugar
+    
+    const isValid = isValidCollectiveRoute(destination.name || destination.address);
+    
+    if (!isValid) {
+      console.log('❌ Rota não permitida para coletivo:', destination.name);
+      
+      Toast.show({
+        type: "error",
+        text1: "Rota não disponível para coletivo",
+        text2: "Esta rota não está disponível para táxis coletivos. Selecione 'Privado' ou escolha outro destino.",
+        visibilityTime: 5000,
+      });
+      
+      return false;
+    }
+    
+    const routeInfo = getCollectiveRouteInfo(destination.name || destination.address);
+    if (routeInfo) {
+      console.log('✅ Rota válida para coletivo:', routeInfo.routeName);
+      Toast.show({
+        type: "success",
+        text1: "Rota disponível",
+        text2: `${routeInfo.routeName} - ${routeInfo.price} AOA`,
+        visibilityTime: 3000,
+      });
+    }
+    
+    return true;
+  };
+
   // Função para cancelar a modal de confirmação
   const handleCancelConfirmation = () => {
     console.log('❌ Cancelando modal de confirmação e limpando estado...');
@@ -1713,6 +1792,41 @@ export default function HomeScreen({ navigation, route }) {
               ]}
               onPress={async () => {
                 console.log('🚌 Changing taxi type to Coletivo');
+                
+                // Se já tem um destino selecionado, validar se é permitido para coletivo
+                if (selectedDestination) {
+                  const isValid = isValidCollectiveRoute(selectedDestination.name || selectedDestination.address);
+                  if (!isValid) {
+                    Toast.show({
+                      type: "error",
+                      text1: "Rota não disponível para coletivo",
+                      text2: "O destino selecionado não está disponível para táxis coletivos. Escolha outro destino ou mantenha 'Privado'.",
+                      visibilityTime: 5000,
+                    });
+                    setIsDropdownOpen(false);
+                    return; // Não mudar para coletivo
+                  } else {
+                    // Rota válida, mostrar informações
+                    const routeInfo = getCollectiveRouteInfo(selectedDestination.name || selectedDestination.address);
+                    if (routeInfo) {
+                      Toast.show({
+                        type: "success",
+                        text1: "Mudança para coletivo",
+                        text2: `${routeInfo.routeName} - ${routeInfo.price} AOA`,
+                        visibilityTime: 3000,
+                      });
+                    }
+                  }
+                } else {
+                  // Se não tem destino selecionado, mostrar dica sobre rotas disponíveis
+                  Toast.show({
+                    type: "info",
+                    text1: "Coletivo selecionado",
+                    text2: "Escolha um dos destinos disponíveis para táxis coletivos",
+                    visibilityTime: 4000,
+                  });
+                }
+                
                 setSelectedTaxiType('Coletivo');
                 setIsDropdownOpen(false);
                 // Save preference
@@ -2093,11 +2207,50 @@ export default function HomeScreen({ navigation, route }) {
             </View>
           </TouchableOpacity>
 
+          {/* Rotas de Coletivo Disponíveis */}
+          {selectedTaxiType === 'Coletivo' && !destination && (
+            <View style={styles.collectiveRoutesSection}>
+              <Text style={styles.sectionTitle}>Rotas disponíveis para coletivos</Text>
+              <ScrollView
+                style={styles.routesList}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {getAllCollectiveRoutes().slice(0, 10).map((route, index) => (
+                  <TouchableOpacity
+                    key={route.id}
+                    style={styles.routeItem}
+                    onPress={() => {
+                      setDestination(route.destination);
+                      setSelectedDestination({
+                        name: route.destination,
+                        address: route.name,
+                        // Coordenadas aproximadas - em produção, usar coordenadas reais
+                        lat: -8.8390 + (index * 0.01),
+                        lng: 13.2894 + (index * 0.01)
+                      });
+                      setIsSearchExpanded(false);
+                    }}
+                  >
+                    <View style={styles.routeIcon}>
+                      <MaterialIcons name="directions-bus" size={18} color="#4285F4" />
+                    </View>
+                    <View style={styles.routeInfo}>
+                      <Text style={styles.routeName}>{route.name}</Text>
+                      <Text style={styles.routePrice}>{route.price} AOA</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           {/* Search Results */}
           <View style={styles.searchResultsSection}>
             <Text style={styles.sectionTitle}>
               {isSearching ? 'Buscando...' : 
                filteredResults?.length > 0 ? `Resultados da busca (${filteredResults?.length})` : 
+               selectedTaxiType === 'Coletivo' ? 'Digite para buscar destinos de coletivo' :
                'Digite para buscar locais'}
             </Text>
 
@@ -3369,5 +3522,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
+  },
+  
+  // Estilos para seção de rotas de coletivo
+  collectiveRoutesSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  routesList: {
+    maxHeight: 200,
+  },
+  routeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  routeIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EBF4FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  routeInfo: {
+    flex: 1,
+  },
+  routeName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  routePrice: {
+    fontSize: 13,
+    color: '#4285F4',
+    fontWeight: '500',
   },
 });
