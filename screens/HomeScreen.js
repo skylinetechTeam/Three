@@ -101,6 +101,8 @@ export default function HomeScreen({ navigation, route }) {
 
   // Handle navigation params (from favorites and reservations)
   useEffect(() => {
+    console.log('🔍 Verificando parâmetros de navegação:', route?.params);
+    
     if (route?.params?.selectedDestination) {
       const dest = route.params.selectedDestination;
       const autoStartFlow = route?.params?.autoStartFlow;
@@ -109,6 +111,7 @@ export default function HomeScreen({ navigation, route }) {
       console.log('📍 Received destination from navigation:', dest);
       console.log('🚀 Auto start flow:', autoStartFlow);
       console.log('⭐ From favorites:', fromFavorites);
+      console.log('📱 Current location available:', !!location?.coords);
       
       setSelectedDestination(dest);
       setDestination(dest.name || dest.address);
@@ -120,34 +123,35 @@ export default function HomeScreen({ navigation, route }) {
           location.coords.longitude,
           dest.lat,
           dest.lng
-        ).then((routeData) => {
-          // Se veio dos favoritos com autoStartFlow, criar estimate e mostrar modal automaticamente
-          if (autoStartFlow && fromFavorites && routeData) {
-            setTimeout(() => {
-              console.log('🎯 Criando estimate e mostrando modal automaticamente...');
-              
-              // Criar estimate similar ao fluxo normal
-              const estimatedDistance = routeData.distance || 5000;
-              const estimatedTime = routeData.duration || 900;
-              const vehicleType = selectedTaxiType === 'Premium' ? 'privado' : 'coletivo';
-              const estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime, vehicleType);
-              
-              const estimate = {
-                distance: estimatedDistance,
-                distanceText: routeData.distanceText || `${(estimatedDistance/1000).toFixed(1)} km`,
-                time: estimatedTime,
-                timeText: routeData.durationText || `${Math.round(estimatedTime/60)} min`,
-                fare: estimatedFare,
-                vehicleType: vehicleType,
-                destination: dest
-              };
-              
-              console.log('📊 Estimate criado automaticamente:', estimate);
+        );
+      }
+      
+      // Se veio dos favoritos com autoStartFlow, criar estimate e mostrar modal automaticamente
+      if (autoStartFlow && fromFavorites) {
+        console.log('🚀 Processando fluxo automático de favorito...');
+        
+        setTimeout(async () => {
+          try {
+            const estimate = await createRideEstimateForFavorite(dest);
+            
+            if (estimate) {
+              console.log('✅ Estimate criado, definindo estado e mostrando modal...');
               setRideEstimate(estimate);
-              setShowConfirmationModal(true);
-            }, 1500); // Delay para garantir que a rota foi calculada
+              
+              // Aguardar um pouco para garantir que o estado foi atualizado
+              setTimeout(() => {
+                setShowConfirmationModal(true);
+                console.log('🎭 Modal de confirmação exibido');
+              }, 200);
+            } else {
+              console.error('❌ Falha ao criar estimate');
+              Alert.alert('Erro', 'Não foi possível calcular a rota. Tente novamente.');
+            }
+          } catch (error) {
+            console.error('❌ Erro no fluxo automático:', error);
+            Alert.alert('Erro', 'Ocorreu um erro ao processar a solicitação.');
           }
-        });
+        }, 1000);
       }
       
       // Clear the params to prevent re-triggering
@@ -964,6 +968,60 @@ export default function HomeScreen({ navigation, route }) {
     </body>
     </html>
   `;
+
+  // Create ride estimate for favorites flow
+  const createRideEstimateForFavorite = async (destination) => {
+    console.log('🎯 Criando estimate para favorito:', destination);
+    
+    try {
+      // Calcular rota primeiro
+      let routeData = null;
+      if (location?.coords && destination.lat && destination.lng) {
+        routeData = await calculateRouteInfo(
+          location.coords.latitude,
+          location.coords.longitude,
+          destination.lat,
+          destination.lng
+        );
+      }
+      
+      // Usar dados da rota ou valores padrão
+      const estimatedDistance = routeData?.distance || 5000;
+      const estimatedTime = routeData?.duration || 900;
+      const vehicleType = selectedTaxiType === 'Premium' ? 'privado' : 'coletivo';
+      
+      // Calcular tarifa
+      let estimatedFare;
+      try {
+        estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime, vehicleType);
+      } catch (error) {
+        console.error('❌ Erro ao calcular tarifa:', error);
+        estimatedFare = vehicleType === 'privado' ? 800 : 500;
+      }
+      
+      const estimate = {
+        distance: estimatedDistance,
+        distanceText: routeData?.distanceText || `${(estimatedDistance/1000).toFixed(1)} km`,
+        time: estimatedTime,
+        timeText: routeData?.durationText || `${Math.round(estimatedTime/60)} min`,
+        fare: estimatedFare,
+        vehicleType: vehicleType,
+        destination: {
+          name: destination.name || destination.address,
+          address: destination.address,
+          lat: destination.lat,
+          lng: destination.lng
+        }
+      };
+      
+      console.log('📊 Estimate criado:', estimate);
+      return estimate;
+      
+    } catch (error) {
+      console.error('❌ Erro ao criar estimate:', error);
+      return null;
+    }
+  };
 
   // Calculate route using OSRM API
   const calculateRouteInfo = async (startLat, startLng, endLat, endLng) => {
@@ -2071,7 +2129,7 @@ export default function HomeScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
 
-            {rideEstimate && (
+            {rideEstimate ? (
               <View style={styles.confirmationBody}>
                 <View style={styles.routePreview}>
                   <View style={styles.routePoint}>
@@ -2131,6 +2189,15 @@ export default function HomeScreen({ navigation, route }) {
                     <Text style={styles.confirmRideText}>Confirmar e Buscar</Text>
                   </TouchableOpacity>
                 </View>
+              </View>
+            ) : (
+              <View style={styles.confirmationBody}>
+                <Text style={styles.debugText}>
+                  ⚠️ Carregando informações da corrida...
+                </Text>
+                <Text style={styles.debugSubtext}>
+                  {rideEstimate ? 'rideEstimate existe' : 'rideEstimate não existe'}
+                </Text>
               </View>
             )}
           </View>
@@ -3249,5 +3316,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#ffffff',
+  },
+  debugText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F59E0B',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  debugSubtext: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
   },
 });
