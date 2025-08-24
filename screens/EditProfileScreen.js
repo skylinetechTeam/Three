@@ -631,18 +631,32 @@ export default function HomeScreen({ navigation }) {
       // Tentar calcular distância em linha reta como fallback
       try {
         const straightLineDistance = apiService.calculateDistance(startLat, startLng, endLat, endLng);
-        const estimatedDistance = straightLineDistance * 1000 * 1.3; // Adicionar 30% para ruas reais
-        const estimatedTime = (estimatedDistance / 1000) * 2 * 60; // 2 min por km em média
+        
+        // Validar se a distância é realista (entre 0.1km e 100km para Luanda)
+        if (straightLineDistance < 0.1 || straightLineDistance > 100) {
+          console.warn('⚠️ Distância calculada fora do esperado:', straightLineDistance, 'km');
+          return null;
+        }
+        
+        // Calcular distância de rota (30% maior que linha reta)
+        const estimatedDistanceKm = Math.min(straightLineDistance * 1.3, 100); // Max 100km
+        const estimatedDistance = estimatedDistanceKm * 1000; // Converter para metros
+        
+        // Calcular tempo baseado na velocidade média em Luanda (20-30 km/h)
+        const averageSpeedKmh = estimatedDistanceKm <= 10 ? 25 : 30; // Mais lento na cidade
+        const estimatedTimeHours = estimatedDistanceKm / averageSpeedKmh;
+        const estimatedTime = Math.max(estimatedTimeHours * 3600, 300); // Mínimo 5 min
         
         console.log('🔄 Using fallback calculation:');
         console.log(`📏 Straight line: ${straightLineDistance.toFixed(2)} km`);
-        console.log(`📏 Estimated route: ${(estimatedDistance/1000).toFixed(2)} km`);
+        console.log(`📏 Estimated route: ${estimatedDistanceKm.toFixed(2)} km`);
         console.log(`⏱️ Estimated time: ${Math.round(estimatedTime/60)} min`);
+        console.log(`🚗 Average speed: ${averageSpeedKmh} km/h`);
         
         const fallbackRouteData = {
           distance: estimatedDistance,
           duration: estimatedTime,
-          distanceText: `${(estimatedDistance / 1000).toFixed(1)} km`,
+          distanceText: `${estimatedDistanceKm.toFixed(1)} km`,
           durationText: `${Math.round(estimatedTime / 60)} min`
         };
         
@@ -743,8 +757,20 @@ export default function HomeScreen({ navigation }) {
           selectedLocation.lat,
           selectedLocation.lng
         );
-        estimatedDistance = straightLineDistance * 1000 * 1.4; // +40% para rotas reais
-        estimatedTime = (estimatedDistance / 1000) * 2.5 * 60; // 2.5 min por km em média
+        
+        // Validar e limitar valores
+        if (straightLineDistance < 0.1 || straightLineDistance > 100) {
+          console.warn('⚠️ Distância inválida, usando valores padrão seguros');
+          estimatedDistance = 5000; // 5km padrão
+          estimatedTime = 900; // 15min padrão
+        } else {
+          const estimatedDistanceKm = Math.min(straightLineDistance * 1.3, 100);
+          estimatedDistance = estimatedDistanceKm * 1000;
+          
+          const averageSpeedKmh = estimatedDistanceKm <= 10 ? 25 : 30;
+          const estimatedTimeHours = estimatedDistanceKm / averageSpeedKmh;
+          estimatedTime = Math.max(estimatedTimeHours * 3600, 300);
+        }
         
         console.log('⚠️ Dados de rota indisponíveis, usando cálculo fallback:');
         console.log(`📏 Distância em linha reta: ${straightLineDistance.toFixed(2)} km`);

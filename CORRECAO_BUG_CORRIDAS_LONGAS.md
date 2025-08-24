@@ -37,7 +37,7 @@ Com esses valores fixos, o cálculo de preço sempre resultava em:
 - ✅ Timeout de 10 segundos
 - ✅ Fallback inteligente usando cálculo de distância em linha reta
 
-### 2. Cálculo de Fallback Inteligente
+### 2. Cálculo de Fallback Inteligente com Validação
 
 Substituído os valores fixos por cálculo baseado na distância real entre origem e destino:
 
@@ -46,12 +46,23 @@ Substituído os valores fixos por cálculo baseado na distância real entre orig
 const estimatedDistance = routeData?.distance || 5000;
 const estimatedTime = routeData?.duration || 900;
 
-// DEPOIS: Cálculo inteligente
-const straightLineDistance = apiService.calculateDistance(
-  startLat, startLng, endLat, endLng
-);
-estimatedDistance = straightLineDistance * 1000 * 1.4; // +40% para rotas reais
-estimatedTime = (estimatedDistance / 1000) * 2.5 * 60; // 2.5 min por km
+// DEPOIS: Cálculo inteligente com validação
+const straightLineDistance = apiService.calculateDistance(startLat, startLng, endLat, endLng);
+
+// Validar se a distância é realista (entre 0.1km e 100km para Luanda)
+if (straightLineDistance < 0.1 || straightLineDistance > 100) {
+  console.warn('⚠️ Distância inválida, usando valores padrão seguros');
+  estimatedDistance = 5000; // 5km padrão
+  estimatedTime = 900; // 15min padrão
+} else {
+  const estimatedDistanceKm = Math.min(straightLineDistance * 1.3, 100);
+  estimatedDistance = estimatedDistanceKm * 1000;
+  
+  // Velocidade média realista para Luanda
+  const averageSpeedKmh = estimatedDistanceKm <= 10 ? 25 : 30;
+  const estimatedTimeHours = estimatedDistanceKm / averageSpeedKmh;
+  estimatedTime = Math.max(estimatedTimeHours * 3600, 300); // Mínimo 5 min
+}
 ```
 
 ### 3. Logs Aprimorados
@@ -92,15 +103,20 @@ Adicionados logs detalhados para facilitar o debug:
 ## Benefícios da Correção
 
 - ✅ **Preços corretos**: Proporcional à distância real
+- ✅ **Valores realistas**: Validação impede distâncias absurdas
 - ✅ **Transparência**: Logs detalhados para debug
 - ✅ **Robustez**: Fallback inteligente quando API falha
 - ✅ **Consistência**: Mesmo comportamento em todas as telas
 - ✅ **Melhor UX**: Usuários veem estimativas realistas
+- ✅ **Segurança**: Limites de 0.1km a 100km para Luanda
 
 ## Notas Técnicas
 
-- O multiplicador de 1.4 (40%) compensa diferenças entre distância em linha reta e rotas reais
-- Tempo estimado de 2.5 min/km considera trânsito urbano médio em Luanda
+- **Multiplicador de rota**: 1.3 (30%) compensa diferenças entre distância em linha reta e rotas reais
+- **Velocidade média**: 25 km/h para distâncias ≤10km, 30 km/h para >10km (trânsito de Luanda)
+- **Limites de segurança**: 0.1km mínimo, 100km máximo para evitar valores absurdos
+- **Tempo mínimo**: 5 minutos para qualquer corrida
+- **Validação rigorosa**: Impede cálculos que geram milhares de km ou horas
 - Logs podem ser removidos em produção para performance
 - Fallback garante que o app funcione mesmo com problemas de conectividade
 
