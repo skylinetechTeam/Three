@@ -91,10 +91,20 @@ export default function HomeScreen({ navigation, route }) {
   // Função de teste para simular o início da corrida (desenvolvimento)
   const testRideStarted = () => {
     console.log('🧪 TESTE: Simulando evento ride_started');
+    console.log('📊 Estado atual:', {
+      requestStatus,
+      driverInfo: !!driverInfo,
+      selectedDestination: !!selectedDestination,
+      driverArrived,
+      location: !!location,
+      webViewRef: !!webViewRef.current,
+      callbacksRegistered: apiService.eventCallbacks?.has('ride_started'),
+      totalCallbacks: apiService.eventCallbacks?.get('ride_started')?.length || 0
+    });
     
     const testData = {
-      rideId: 'test-ride-123',
-      driverId: 'test-driver-456',
+      rideId: requestId || 'test-ride-123',
+      driverId: driverInfo?.id || 'test-driver-456',
       ride: {
         destination: selectedDestination || {
           lat: -8.8284, // Centro de Luanda como fallback
@@ -107,11 +117,21 @@ export default function HomeScreen({ navigation, route }) {
       timestamp: Date.now()
     };
     
+    console.log('🎯 Dados do teste:', testData);
+    
     // Simular o evento através do callback
     if (apiService.eventCallbacks?.has('ride_started')) {
+      console.log('✅ Executando callbacks ride_started...');
       apiService.triggerCallbacks('ride_started', testData);
     } else {
       console.warn('⚠️ Callback ride_started não encontrado!');
+      console.log('📋 Eventos registrados:', Array.from(apiService.eventCallbacks?.keys() || []));
+    }
+    
+    // Também tentar via WebSocket se conectado
+    if (apiService.socket && apiService.isConnected) {
+      console.log('📡 Enviando via WebSocket também...');
+      apiService.socket.emit('ride_started_manual', testData);
     }
   };
 
@@ -2871,29 +2891,59 @@ export default function HomeScreen({ navigation, route }) {
         </View>
       </Modal>
 
-      {/* Botão de teste - apenas para desenvolvimento */}
+      {/* Botões de teste - apenas para desenvolvimento */}
       {__DEV__ && requestStatus === 'accepted' && driverInfo && !driverArrived && (
-        <TouchableOpacity 
-          style={{
-            position: 'absolute',
-            bottom: 120,
-            right: 20,
-            backgroundColor: '#FF6B35',
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            borderRadius: 20,
-            flexDirection: 'row',
-            alignItems: 'center',
-            zIndex: 1000,
-            elevation: 5,
-          }}
-          onPress={testRideStarted}
-        >
-          <MaterialIcons name="play-arrow" size={20} color="#ffffff" />
-          <Text style={{ color: '#ffffff', marginLeft: 4, fontWeight: '600', fontSize: 12 }}>
-            Testar Iniciar
-          </Text>
-        </TouchableOpacity>
+        <View style={{ position: 'absolute', bottom: 120, right: 20, zIndex: 1000 }}>
+          <TouchableOpacity 
+            style={{
+              backgroundColor: '#FF6B35',
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              borderRadius: 20,
+              flexDirection: 'row',
+              alignItems: 'center',
+              elevation: 5,
+              marginBottom: 8,
+            }}
+            onPress={testRideStarted}
+          >
+            <MaterialIcons name="play-arrow" size={20} color="#ffffff" />
+            <Text style={{ color: '#ffffff', marginLeft: 4, fontWeight: '600', fontSize: 12 }}>
+              Testar Iniciar
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={{
+              backgroundColor: '#8B5CF6',
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              borderRadius: 20,
+              flexDirection: 'row',
+              alignItems: 'center',
+              elevation: 5,
+            }}
+            onPress={() => {
+              console.log('🔍 DEBUG Estado completo:', {
+                requestStatus,
+                driverInfo,
+                selectedDestination,
+                currentRide,
+                driverArrived,
+                location: location?.coords,
+                webViewRef: !!webViewRef.current,
+                apiCallbacks: Array.from(apiService.eventCallbacks?.keys() || []),
+                socketConnected: apiService.isConnected,
+                socketExists: !!apiService.socket
+              });
+            }}
+          >
+            <MaterialIcons name="bug-report" size={20} color="#ffffff" />
+            <Text style={{ color: '#ffffff', marginLeft: 4, fontWeight: '600', fontSize: 12 }}>
+              Debug
+            </Text>
+          </TouchableOpacity>
+        </View>
       )}
       </View>
     </KeyboardAvoidingView>

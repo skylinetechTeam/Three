@@ -194,6 +194,12 @@ class ApiService {
       this.triggerCallbacks('ride_started', data);
     });
 
+    // Handler para evento manual do motorista
+    this.socket.on('ride_started_manual', (data) => {
+      console.log('🚗 [ApiService] ride_started_manual recebido:', data);
+      this.triggerCallbacks('ride_started', data);
+    });
+
     this.socket.on('ride_completed', (data) => {
       console.log('✅ [ApiService] ride_completed recebido:', data);
       this.triggerCallbacks('ride_completed', data);

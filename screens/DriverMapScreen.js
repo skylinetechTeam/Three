@@ -813,11 +813,37 @@ export default function DriverMapScreen({ navigation, route }) {
               try {
                 // Start ride via API
                 if (driverProfile?.apiDriverId && activeRide?.id) {
+                  console.log('🚗 Iniciando corrida via API:', {
+                    rideId: activeRide.id,
+                    driverId: driverProfile.apiDriverId,
+                    location: location?.coords
+                  });
+                  
                   await apiService.startRide(
                     activeRide.id, 
                     driverProfile.apiDriverId, 
                     location?.coords
                   );
+                  
+                  console.log('✅ Corrida iniciada com sucesso via API');
+                  
+                  // NOVA FUNCIONALIDADE: Emitir evento manualmente via WebSocket se conectado
+                  if (apiService.socket && apiService.isConnected) {
+                    console.log('📡 Emitindo evento ride_started via WebSocket manual...');
+                    const rideStartedData = {
+                      rideId: activeRide.id,
+                      driverId: driverProfile.apiDriverId,
+                      ride: activeRide,
+                      status: 'started',
+                      timestamp: Date.now()
+                    };
+                    
+                    // Emitir evento para todos os passageiros conectados
+                    apiService.socket.emit('ride_started_manual', rideStartedData);
+                    
+                    // Também executar callbacks localmente para garantir
+                    apiService.triggerCallbacks('ride_started', rideStartedData);
+                  }
                 }
                 
                 setRidePhase('dropoff');
