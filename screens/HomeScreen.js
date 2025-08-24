@@ -1076,11 +1076,15 @@ export default function HomeScreen({ navigation, route }) {
         estimatedFare = vehicleType === 'privado' ? 800 : 500;
       }
       
+      // Garantir formatação correta dos textos
+      const distanceInKm = Math.min(Math.max(estimatedDistance / 1000, 0.1), 999.9);
+      const timeInMin = Math.min(Math.max(Math.round(estimatedTime / 60), 1), 9999);
+      
       const estimate = {
         distance: estimatedDistance,
-        distanceText: routeData?.distanceText || `${(estimatedDistance/1000).toFixed(1)} km`,
+        distanceText: routeData?.distanceText || `${distanceInKm.toFixed(1)} km`,
         time: estimatedTime,
-        timeText: routeData?.durationText || `${Math.round(estimatedTime/60)} min`,
+        timeText: routeData?.durationText || `${timeInMin} min`,
         fare: estimatedFare,
         vehicleType: vehicleType,
         destination: {
@@ -1328,7 +1332,7 @@ export default function HomeScreen({ navigation, route }) {
         
         console.log('⚠️ routeInfo indisponível, usando cálculo fallback:');
         console.log(`📏 Distância em linha reta: ${straightLineDistance.toFixed(2)} km`);
-        console.log(`📏 Distância estimada: ${(estimatedDistance/1000).toFixed(2)} km`);
+        console.log(`📏 Distância estimada: ${(estimatedDistance/1000).toFixed(1)} km`);
         console.log(`⏱️ Tempo estimado: ${Math.round(estimatedTime/60)} min`);
       }
       const vehicleType = selectedTaxiType === 'Privado' ? 'privado' : 'coletivo';
@@ -1352,11 +1356,23 @@ export default function HomeScreen({ navigation, route }) {
         console.log('💰 Tarifa calculada privado:', estimatedFare, 'AOA');
       }
       
+      // Garantir formatação correta dos textos
+      const distanceInKm = Math.min(Math.max(estimatedDistance / 1000, 0.1), 999.9);
+      const timeInMin = Math.min(Math.max(Math.round(estimatedTime / 60), 1), 9999);
+      
+      console.log('🔍 Debug formatação:');
+      console.log('📏 estimatedDistance (metros):', estimatedDistance);
+      console.log('📏 distanceInKm:', distanceInKm);
+      console.log('⏱️ estimatedTime (segundos):', estimatedTime);
+      console.log('⏱️ timeInMin:', timeInMin);
+      console.log('📄 routeInfo?.distanceText:', routeInfo?.distanceText);
+      console.log('📄 routeInfo?.durationText:', routeInfo?.durationText);
+      
       const estimate = {
         distance: estimatedDistance,
-        distanceText: routeInfo?.distanceText || `${estimatedDistance} km`,
+        distanceText: routeInfo?.distanceText || `${distanceInKm.toFixed(1)} km`,
         time: estimatedTime,
-        timeText: routeInfo?.durationText || `${estimatedTime} min`,
+        timeText: routeInfo?.durationText || `${timeInMin} min`,
         fare: estimatedFare,
         vehicleType: vehicleType,
         destination: selectedLocation

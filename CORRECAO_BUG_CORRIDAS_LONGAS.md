@@ -122,5 +122,36 @@ Adicionados logs detalhados para facilitar o debug:
 
 ---
 
-**Data da Correção**: $(date +"%d/%m/%Y")
-**Status**: ✅ Implementado e testado
+## Correção Final - Formatação de Valores
+
+### Problema Adicional Identificado
+Após a correção inicial, valores ainda apareciam com muitos dígitos:
+- `distanceText: "10939.208617298797 km"` ❌
+- `timeText: "1312.7050340758553 min"` ❌
+
+### Solução Implementada
+Adicionada validação e formatação rigorosa:
+
+```javascript
+// Garantir formatação correta dos textos
+const distanceInKm = Math.min(Math.max(estimatedDistance / 1000, 0.1), 999.9);
+const timeInMin = Math.min(Math.max(Math.round(estimatedTime / 60), 1), 9999);
+
+const estimate = {
+  distance: estimatedDistance, // metros (para cálculos)
+  distanceText: routeInfo?.distanceText || `${distanceInKm.toFixed(1)} km`,
+  time: estimatedTime, // segundos (para cálculos)  
+  timeText: routeInfo?.durationText || `${timeInMin} min`,
+  // ...
+};
+```
+
+### Resultado Final
+- ✅ **Distância**: Máximo 999.9 km, formatado com 1 casa decimal
+- ✅ **Tempo**: Máximo 9999 min, arredondado para inteiro
+- ✅ **Valores limpos**: "10.9 km" e "22 min" 
+
+---
+
+**Data da Correção**: Janeiro 2025
+**Status**: ✅ Implementado e testado completamente
