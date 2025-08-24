@@ -1076,6 +1076,22 @@ export default function HomeScreen({ navigation, route }) {
         estimatedFare = vehicleType === 'privado' ? 800 : 500;
       }
       
+      // Validar valores antes de formatação
+      if (!estimatedDistance || isNaN(estimatedDistance) || estimatedDistance <= 0) {
+        console.warn('⚠️ estimatedDistance inválido:', estimatedDistance, '. Usando padrão.');
+        estimatedDistance = 5000; // 5km padrão
+      }
+      if (!estimatedTime || isNaN(estimatedTime) || estimatedTime <= 0) {
+        console.warn('⚠️ estimatedTime inválido:', estimatedTime, '. Usando padrão.');
+        estimatedTime = 900; // 15min padrão
+      }
+      if (!estimatedFare || isNaN(estimatedFare) || estimatedFare <= 0) {
+        console.warn('⚠️ estimatedFare inválido:', estimatedFare, '. Recalculando.');
+        const distanceInKm = estimatedDistance / 1000;
+        const timeInMinutes = estimatedTime / 60;
+        estimatedFare = apiService.calculateEstimatedFare(distanceInKm, timeInMinutes, vehicleType);
+      }
+      
       // Garantir formatação correta dos textos
       const distanceInKm = Math.min(Math.max(estimatedDistance / 1000, 0.1), 999.9);
       const timeInMin = Math.min(Math.max(Math.round(estimatedTime / 60), 1), 9999);
@@ -1356,6 +1372,22 @@ export default function HomeScreen({ navigation, route }) {
         console.log('💰 Tarifa calculada privado:', estimatedFare, 'AOA');
       }
       
+      // Validar valores antes de formatação
+      if (!estimatedDistance || isNaN(estimatedDistance) || estimatedDistance <= 0) {
+        console.warn('⚠️ estimatedDistance inválido:', estimatedDistance, '. Usando padrão.');
+        estimatedDistance = 5000; // 5km padrão
+      }
+      if (!estimatedTime || isNaN(estimatedTime) || estimatedTime <= 0) {
+        console.warn('⚠️ estimatedTime inválido:', estimatedTime, '. Usando padrão.');
+        estimatedTime = 900; // 15min padrão
+      }
+      if (!estimatedFare || isNaN(estimatedFare) || estimatedFare <= 0) {
+        console.warn('⚠️ estimatedFare inválido:', estimatedFare, '. Recalculando.');
+        const distanceInKm = estimatedDistance / 1000;
+        const timeInMinutes = estimatedTime / 60;
+        estimatedFare = apiService.calculateEstimatedFare(distanceInKm, timeInMinutes, vehicleType);
+      }
+      
       // Garantir formatação correta dos textos
       const distanceInKm = Math.min(Math.max(estimatedDistance / 1000, 0.1), 999.9);
       const timeInMin = Math.min(Math.max(Math.round(estimatedTime / 60), 1), 9999);
@@ -1365,6 +1397,7 @@ export default function HomeScreen({ navigation, route }) {
       console.log('📏 distanceInKm:', distanceInKm);
       console.log('⏱️ estimatedTime (segundos):', estimatedTime);
       console.log('⏱️ timeInMin:', timeInMin);
+      console.log('💰 estimatedFare:', estimatedFare);
       console.log('📄 routeInfo?.distanceText:', routeInfo?.distanceText);
       console.log('📄 routeInfo?.durationText:', routeInfo?.durationText);
       
@@ -1379,10 +1412,11 @@ export default function HomeScreen({ navigation, route }) {
       };
       
       console.log('📊 Estimativa calculada:', estimate);
-      console.log('🎭 Definindo rideEstimate e mostrando modal...');
-      setRideEstimate(estimate);
-      setShowConfirmationModal(true);
-      console.log('✅ Modal de confirmação deve estar visível agora!');
+                console.log('🎭 Definindo rideEstimate e mostrando modal...');
+          console.log('🔍 DEBUG - estimate final:', JSON.stringify(estimate, null, 2));
+          setRideEstimate(estimate);
+          setShowConfirmationModal(true);
+          console.log('✅ Modal de confirmação deve estar visível agora!');
       
           }
   };
@@ -1424,6 +1458,12 @@ export default function HomeScreen({ navigation, route }) {
             paymentMethod: passengerProfile.preferredPaymentMethod || 'cash',
             vehicleType: rideEstimate.vehicleType === 'privado' ? 'premium' : 'standard'
           };
+          
+          console.log('🔍 DEBUG - rideData enviado para API:', JSON.stringify(rideData, null, 2));
+          console.log('🔍 DEBUG - Valores específicos:');
+          console.log('   - estimatedFare:', rideEstimate.fare, typeof rideEstimate.fare);
+          console.log('   - estimatedDistance:', rideEstimate.distance, typeof rideEstimate.distance);
+          console.log('   - estimatedTime:', rideEstimate.time, typeof rideEstimate.time);
           
           const rideResponse = await apiService.createRideRequest(rideData);
           setCurrentRide(rideResponse.data.ride);
