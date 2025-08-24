@@ -88,6 +88,33 @@ export default function HomeScreen({ navigation, route }) {
     return R * c; // Distance in meters
   };
 
+  // Função de teste para simular o início da corrida (desenvolvimento)
+  const testRideStarted = () => {
+    console.log('🧪 TESTE: Simulando evento ride_started');
+    
+    const testData = {
+      rideId: 'test-ride-123',
+      driverId: 'test-driver-456',
+      ride: {
+        destination: selectedDestination || {
+          lat: -8.8284, // Centro de Luanda como fallback
+          lng: 13.2436,
+          name: 'Destino de Teste',
+          address: 'Local de teste - Centro de Luanda'
+        }
+      },
+      status: 'started',
+      timestamp: Date.now()
+    };
+    
+    // Simular o evento através do callback
+    if (apiService.eventCallbacks?.has('ride_started')) {
+      apiService.triggerCallbacks('ride_started', testData);
+    } else {
+      console.warn('⚠️ Callback ride_started não encontrado!');
+    }
+  };
+
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -360,10 +387,58 @@ export default function HomeScreen({ navigation, route }) {
             console.log('🚗 Corrida iniciada:', data);
             setRequestStatus('started');
             
+            // NOVA FUNCIONALIDADE: Quando motorista inicia a corrida (chegou no cliente), 
+            // mudar o mapa para mostrar rota do cliente ao destino
+            console.log('🎯 Corrida iniciada! Mudando para rota cliente->destino');
+            setDriverArrived(true);
+            
+            // Limpar timer de proximidade se existir
+            if (proximityTimerRef.current) {
+              clearTimeout(proximityTimerRef.current);
+              proximityTimerRef.current = null;
+            }
+            
+                      // Forçar atualização do mapa para mostrar rota ao destino
+          if (location && webViewRef.current) {
+            console.log('🗺️ Atualizando mapa para mostrar rota ao destino após início da corrida');
+            
+            // Limpar marcador do motorista
+            webViewRef.current.postMessage(JSON.stringify({
+              action: 'clearDriverMarker'
+            }));
+            
+            // Mostrar rota do cliente ao destino se há destino selecionado
+            if (selectedDestination) {
+              webViewRef.current.postMessage(JSON.stringify({
+                action: 'setDestination',
+                lat: selectedDestination.lat,
+                lng: selectedDestination.lng,
+                title: selectedDestination.name || selectedDestination.address
+              }));
+            } else if (data.ride?.destination) {
+              // Usar dados do ride se disponível
+              console.log('🎯 Usando destino dos dados da corrida:', data.ride.destination);
+              webViewRef.current.postMessage(JSON.stringify({
+                action: 'setDestination',
+                lat: data.ride.destination.lat,
+                lng: data.ride.destination.lng,
+                title: data.ride.destination.address || data.ride.destination.name
+              }));
+              
+              // Atualizar estado local do destino também
+              setSelectedDestination({
+                lat: data.ride.destination.lat,
+                lng: data.ride.destination.lng,
+                name: data.ride.destination.name,
+                address: data.ride.destination.address
+              });
+            }
+          }
+            
             Toast.show({
-              type: "info",
+              type: "success",
               text1: "Corrida Iniciada",
-              text2: "Sua viagem começou. Tenha uma boa viagem!",
+              text2: "Motorista chegou! Seguindo para o destino.",
               visibilityTime: 3000,
             });
           });
@@ -540,6 +615,137 @@ export default function HomeScreen({ navigation, route }) {
             text2: `${data.driver?.name || 'Motorista'} está a caminho - ${data.estimatedArrival || '5-10 min'}`,
             visibilityTime: 6000,
           });
+        });
+
+        // Handler para quando a corrida é iniciada (passageiro já registrado)
+        apiService.onEvent('ride_started', (data) => {
+          console.log('🚗 [PASSAGEIRO JÁ REGISTRADO] Corrida iniciada:', data);
+          setRequestStatus('started');
+          
+          // NOVA FUNCIONALIDADE: Quando motorista inicia a corrida (chegou no cliente), 
+          // mudar o mapa para mostrar rota do cliente ao destino
+          console.log('🎯 Corrida iniciada! Mudando para rota cliente->destino');
+          setDriverArrived(true);
+          
+          // Limpar timer de proximidade se existir
+          if (proximityTimerRef.current) {
+            clearTimeout(proximityTimerRef.current);
+            proximityTimerRef.current = null;
+          }
+          
+          // Forçar atualização do mapa para mostrar rota ao destino
+          if (location && webViewRef.current) {
+            console.log('🗺️ Atualizando mapa para mostrar rota ao destino após início da corrida');
+            
+            // Limpar marcador do motorista
+            webViewRef.current.postMessage(JSON.stringify({
+              action: 'clearDriverMarker'
+            }));
+            
+            // Mostrar rota do cliente ao destino se há destino selecionado
+            if (selectedDestination) {
+              webViewRef.current.postMessage(JSON.stringify({
+                action: 'setDestination',
+                lat: selectedDestination.lat,
+                lng: selectedDestination.lng,
+                title: selectedDestination.name || selectedDestination.address
+              }));
+            } else if (data.ride?.destination) {
+              // Usar dados do ride se disponível
+              console.log('🎯 Usando destino dos dados da corrida:', data.ride.destination);
+              webViewRef.current.postMessage(JSON.stringify({
+                action: 'setDestination',
+                lat: data.ride.destination.lat,
+                lng: data.ride.destination.lng,
+                title: data.ride.destination.address || data.ride.destination.name
+              }));
+              
+              // Atualizar estado local do destino também
+              setSelectedDestination({
+                lat: data.ride.destination.lat,
+                lng: data.ride.destination.lng,
+                name: data.ride.destination.name,
+                address: data.ride.destination.address
+              });
+            }
+          }
+          
+          Toast.show({
+            type: "success",
+            text1: "Corrida Iniciada",
+            text2: "Motorista chegou! Seguindo para o destino.",
+            visibilityTime: 3000,
+          });
+        });
+
+        // Handler para atualizações de localização do motorista (passageiro já registrado)  
+        apiService.onEvent('driver_location_update', (data) => {
+          console.log('📍 [PASSAGEIRO JÁ REGISTRADO] Atualização de localização do motorista:', data);
+          if (driverInfo && data.driverId === driverInfo.id) {
+            setDriverInfo(prev => ({
+              ...prev,
+              location: data.location,
+              estimatedArrival: data.estimatedArrival
+            }));
+            
+            // Update driver location for map
+            if (data.location) {
+              setDriverLocation(data.location);
+              
+              // Check if driver is nearby (within 100 meters) - same logic as for new users
+              if (location && location.coords) {
+                const distance = calculateDistance(
+                  location.coords.latitude,
+                  location.coords.longitude,
+                  data.location.latitude,
+                  data.location.longitude
+                );
+                
+                console.log(`📏 [PASSAGEIRO JÁ REGISTRADO] Distância até o motorista: ${Math.round(distance)}m`);
+                
+                // If driver is very close (within 50 meters) and wasn't nearby before
+                if (distance <= 50 && !isDriverNearby) {
+                  console.log('🚗 Motorista está muito perto! Iniciando timer de 5 segundos...');
+                  setIsDriverNearby(true);
+                  
+                  // Clear any existing timer
+                  if (proximityTimerRef.current) {
+                    clearTimeout(proximityTimerRef.current);
+                  }
+                  
+                  // Set timer for 5 seconds before switching to destination route
+                  proximityTimerRef.current = setTimeout(() => {
+                    console.log('⏰ 5 segundos passaram! Mudando para rota do destino...');
+                    setDriverArrived(true);
+                    setIsDriverNearby(false);
+                    
+                    Toast.show({
+                      type: "success",
+                      text1: "Motorista chegou!",
+                      text2: "Seguindo para o destino",
+                      visibilityTime: 3000,
+                    });
+                  }, 5000); // 5 seconds
+                  
+                  Toast.show({
+                    type: "info",
+                    text1: "Motorista próximo",
+                    text2: "Preparando para embarque...",
+                    visibilityTime: 3000,
+                  });
+                }
+                // If driver moves away, reset proximity
+                else if (distance > 100 && isDriverNearby) {
+                  console.log('📍 Motorista se afastou, cancelando timer...');
+                  setIsDriverNearby(false);
+                  if (proximityTimerRef.current) {
+                    clearTimeout(proximityTimerRef.current);
+                    proximityTimerRef.current = null;
+                  }
+                }
+              }
+            }
+          }
         });
         
         // Connect to socket AFTER configuring callbacks
@@ -2664,6 +2870,31 @@ export default function HomeScreen({ navigation, route }) {
           </View>
         </View>
       </Modal>
+
+      {/* Botão de teste - apenas para desenvolvimento */}
+      {__DEV__ && requestStatus === 'accepted' && driverInfo && !driverArrived && (
+        <TouchableOpacity 
+          style={{
+            position: 'absolute',
+            bottom: 120,
+            right: 20,
+            backgroundColor: '#FF6B35',
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: 20,
+            flexDirection: 'row',
+            alignItems: 'center',
+            zIndex: 1000,
+            elevation: 5,
+          }}
+          onPress={testRideStarted}
+        >
+          <MaterialIcons name="play-arrow" size={20} color="#ffffff" />
+          <Text style={{ color: '#ffffff', marginLeft: 4, fontWeight: '600', fontSize: 12 }}>
+            Testar Iniciar
+          </Text>
+        </TouchableOpacity>
+      )}
       </View>
     </KeyboardAvoidingView>
   );
