@@ -1825,7 +1825,10 @@ export default function HomeScreen({ navigation, route }) {
   // Animate dropdown when request is accepted or minimized
   useEffect(() => {
     if (requestStatus === 'accepted') {
-      const targetValue = isDropdownMinimized ? height * 0.65 : 0; // 65% hidden when minimized
+      // Ajustar valores para melhor visibilidade
+      const targetValue = isDropdownMinimized ? height - 120 : 0; // Deixar 120px visível quando minimizado
+      console.log('🎛️ Animando dropdown:', { isDropdownMinimized, targetValue, height });
+      
       Animated.spring(slideAnim, {
         toValue: targetValue,
         useNativeDriver: true,
@@ -1861,21 +1864,39 @@ export default function HomeScreen({ navigation, route }) {
   // Handle driver location and route display
   useEffect(() => {
     if (driverLocation && location && webViewRef.current && !driverArrived) {
-      // Show route to driver when driver hasn't arrived yet
-      webViewRef.current.postMessage(JSON.stringify({
-        action: 'addDriverMarker',
-        lat: driverLocation.latitude,
-        lng: driverLocation.longitude,
-        driverName: driverInfo?.name || 'Motorista'
-      }));
-
-      webViewRef.current.postMessage(JSON.stringify({
-        action: 'calculateRouteToDriver',
-        userLat: location.latitude,
-        userLng: location.longitude,
+      // Show route to driver when driver hasn't arrived yet - USE JAVASCRIPT INJECTION
+      console.log('🚗 Adicionando motorista ao mapa:', {
         driverLat: driverLocation.latitude,
-        driverLng: driverLocation.longitude
-      }));
+        driverLng: driverLocation.longitude,
+        driverName: driverInfo?.name,
+        userLat: location.latitude,
+        userLng: location.longitude
+      });
+      
+      const driverScript = `
+        console.log('🚗 Executando script para adicionar motorista ao mapa');
+        
+        // Add driver marker
+        if (typeof window.__addDriverMarker === 'function') {
+          console.log('📍 Adicionando marcador do motorista:', ${driverLocation.latitude}, ${driverLocation.longitude});
+          window.__addDriverMarker(${driverLocation.latitude}, ${driverLocation.longitude}, ${JSON.stringify(driverInfo?.name || 'Motorista')});
+          console.log('✅ Marcador do motorista adicionado');
+        } else {
+          console.error('❌ __addDriverMarker function not found');
+        }
+        
+        // Calculate route to driver
+        if (typeof window.__calculateRouteToDriver === 'function') {
+          console.log('🛣️ Calculando rota até o motorista');
+          window.__calculateRouteToDriver(${location.latitude}, ${location.longitude}, ${driverLocation.latitude}, ${driverLocation.longitude});
+          console.log('✅ Rota até o motorista calculada');
+        } else {
+          console.error('❌ __calculateRouteToDriver function not found');
+        }
+      `;
+      
+      console.log('🚀 Injetando script para mostrar motorista no mapa');
+      webViewRef.current.injectJavaScript(driverScript);
     } else if (driverArrived && selectedDestination && location && webViewRef.current) {
       // Switch to destination route when driver arrives
       console.log('🎯 Driver arrived, showing route to destination (useEffect)');
@@ -1901,10 +1922,15 @@ export default function HomeScreen({ navigation, route }) {
       console.log('🚀 Executing useEffect script for driver arrival');
       webViewRef.current.injectJavaScript(scriptToExecute);
     } else if (!driverLocation && webViewRef.current) {
-      // Clear driver marker when no driver
-      webViewRef.current.postMessage(JSON.stringify({
-        action: 'clearDriverMarker'
-      }));
+      // Clear driver marker when no driver - USE JAVASCRIPT INJECTION
+      console.log('🧹 Limpando marcador do motorista (sem driver location)');
+      const clearScript = `
+        if (typeof window.__clearDriverMarker === 'function') {
+          window.__clearDriverMarker();
+          console.log('✅ Driver marker cleared (no driver location)');
+        }
+      `;
+      webViewRef.current.injectJavaScript(clearScript);
     }
   }, [driverLocation, location, driverInfo, driverArrived, selectedDestination]);
 
@@ -2544,13 +2570,22 @@ export default function HomeScreen({ navigation, route }) {
         <Animated.View style={[styles.driverAcceptedDropdown, {
           transform: [{ translateY: slideAnim }]
         }]}>
-          {/* Handle Bar */}
+          {/* Handle Bar - Área clicável melhorada */}
           <TouchableOpacity 
-            style={styles.dropdownHandleContainer}
-            onPress={() => setIsDropdownMinimized(!isDropdownMinimized)}
+            style={[styles.dropdownHandleContainer, {
+              paddingVertical: isDropdownMinimized ? 20 : 8, // Área maior quando minimizado
+              backgroundColor: isDropdownMinimized ? 'rgba(66, 133, 244, 0.1)' : 'transparent'
+            }]}
+            onPress={() => {
+              console.log('🎛️ Alternando estado do dropdown:', !isDropdownMinimized);
+              setIsDropdownMinimized(!isDropdownMinimized);
+            }}
             activeOpacity={0.7}
           >
             <View style={styles.dropdownHandle} />
+            {isDropdownMinimized && (
+              <Text style={styles.expandHint}>Toque para expandir</Text>
+            )}
           </TouchableOpacity>
           
           {isDropdownMinimized ? (
@@ -3925,6 +3960,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  expandHint: {
+    fontSize: 12,
+    color: '#4285F4',
+    fontWeight: '500',
+    marginTop: 4,
+    textAlign: 'center',
   },
 
   statusIndicator: {
