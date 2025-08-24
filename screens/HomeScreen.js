@@ -119,7 +119,7 @@ export default function HomeScreen({ navigation, route }) {
     
     console.log('🎯 Dados do teste:', testData);
     
-    // Simular o evento através do callback
+    // MÉTODO 1: Simular o evento através do callback
     if (apiService.eventCallbacks?.has('ride_started')) {
       console.log('✅ Executando callbacks ride_started...');
       apiService.triggerCallbacks('ride_started', testData);
@@ -128,11 +128,40 @@ export default function HomeScreen({ navigation, route }) {
       console.log('📋 Eventos registrados:', Array.from(apiService.eventCallbacks?.keys() || []));
     }
     
-    // Também tentar via WebSocket se conectado
+    // MÉTODO 2: Forçar diretamente via JavaScript (backup)
+    if (webViewRef.current && location && selectedDestination) {
+      console.log('🔧 BACKUP: Forçando atualização direta do mapa...');
+      const forceScript = `
+        console.log('🔧 FORCE: Executando atualização forçada do mapa');
+        
+        // Clear driver marker
+        if (typeof window.__clearDriverMarker === 'function') {
+          window.__clearDriverMarker();
+          console.log('✅ FORCE: Driver marker cleared');
+        }
+        
+        // Set destination
+        if (typeof window.__setDestination === 'function') {
+          console.log('🎯 FORCE: Setting destination to ${selectedDestination.lat}, ${selectedDestination.lng}');
+          window.__setDestination(${selectedDestination.lat}, ${selectedDestination.lng}, ${JSON.stringify(selectedDestination.name || selectedDestination.address)});
+          console.log('✅ FORCE: Destination set and route calculated');
+        } else {
+          console.error('❌ FORCE: __setDestination function not found');
+        }
+      `;
+      
+      webViewRef.current.injectJavaScript(forceScript);
+    }
+    
+    // MÉTODO 3: Também tentar via WebSocket se conectado
     if (apiService.socket && apiService.isConnected) {
       console.log('📡 Enviando via WebSocket também...');
       apiService.socket.emit('ride_started_manual', testData);
     }
+    
+    // MÉTODO 4: Forçar mudança de estado diretamente
+    console.log('🎛️ Forçando mudança de estado driverArrived...');
+    setDriverArrived(true);
   };
 
   useEffect(() => {
@@ -422,36 +451,45 @@ export default function HomeScreen({ navigation, route }) {
           if (location && webViewRef.current) {
             console.log('🗺️ Atualizando mapa para mostrar rota ao destino após início da corrida');
             
-            // Limpar marcador do motorista
-            webViewRef.current.postMessage(JSON.stringify({
-              action: 'clearDriverMarker'
-            }));
+            // Limpar marcador do motorista usando JavaScript injection
+            const clearDriverScript = `
+              if (typeof window.__clearDriverMarker === 'function') {
+                window.__clearDriverMarker();
+                console.log('✅ Driver marker cleared');
+              }
+            `;
+            webViewRef.current.injectJavaScript(clearDriverScript);
             
-            // Mostrar rota do cliente ao destino se há destino selecionado
-            if (selectedDestination) {
-              webViewRef.current.postMessage(JSON.stringify({
-                action: 'setDestination',
-                lat: selectedDestination.lat,
-                lng: selectedDestination.lng,
-                title: selectedDestination.name || selectedDestination.address
-              }));
-            } else if (data.ride?.destination) {
-              // Usar dados do ride se disponível
-              console.log('🎯 Usando destino dos dados da corrida:', data.ride.destination);
-              webViewRef.current.postMessage(JSON.stringify({
-                action: 'setDestination',
+            // Determinar destino a usar
+            let destinationToUse = selectedDestination;
+            if (!destinationToUse && data.ride?.destination) {
+              destinationToUse = {
                 lat: data.ride.destination.lat,
                 lng: data.ride.destination.lng,
-                title: data.ride.destination.address || data.ride.destination.name
-              }));
+                name: data.ride.destination.address || data.ride.destination.name,
+                address: data.ride.destination.address
+              };
+              console.log('🎯 Usando destino dos dados da corrida:', destinationToUse);
               
               // Atualizar estado local do destino também
-              setSelectedDestination({
-                lat: data.ride.destination.lat,
-                lng: data.ride.destination.lng,
-                name: data.ride.destination.name,
-                address: data.ride.destination.address
-              });
+              setSelectedDestination(destinationToUse);
+            }
+            
+            // Mostrar rota do cliente ao destino usando JavaScript injection
+            if (destinationToUse) {
+              const destinationScript = `
+                if (typeof window.__setDestination === 'function') {
+                  console.log('🎯 Setting destination to:', ${destinationToUse.lat}, ${destinationToUse.lng});
+                  window.__setDestination(${destinationToUse.lat}, ${destinationToUse.lng}, ${JSON.stringify(destinationToUse.name)});
+                  console.log('✅ Destination set and route calculated');
+                } else {
+                  console.error('❌ __setDestination function not found');
+                }
+              `;
+              console.log('🚀 Injetando script para mostrar rota ao destino:', destinationScript);
+              webViewRef.current.injectJavaScript(destinationScript);
+            } else {
+              console.warn('⚠️ Nenhum destino disponível para mostrar rota');
             }
           }
             
@@ -657,36 +695,45 @@ export default function HomeScreen({ navigation, route }) {
           if (location && webViewRef.current) {
             console.log('🗺️ Atualizando mapa para mostrar rota ao destino após início da corrida');
             
-            // Limpar marcador do motorista
-            webViewRef.current.postMessage(JSON.stringify({
-              action: 'clearDriverMarker'
-            }));
+            // Limpar marcador do motorista usando JavaScript injection
+            const clearDriverScript = `
+              if (typeof window.__clearDriverMarker === 'function') {
+                window.__clearDriverMarker();
+                console.log('✅ Driver marker cleared');
+              }
+            `;
+            webViewRef.current.injectJavaScript(clearDriverScript);
             
-            // Mostrar rota do cliente ao destino se há destino selecionado
-            if (selectedDestination) {
-              webViewRef.current.postMessage(JSON.stringify({
-                action: 'setDestination',
-                lat: selectedDestination.lat,
-                lng: selectedDestination.lng,
-                title: selectedDestination.name || selectedDestination.address
-              }));
-            } else if (data.ride?.destination) {
-              // Usar dados do ride se disponível
-              console.log('🎯 Usando destino dos dados da corrida:', data.ride.destination);
-              webViewRef.current.postMessage(JSON.stringify({
-                action: 'setDestination',
+            // Determinar destino a usar
+            let destinationToUse = selectedDestination;
+            if (!destinationToUse && data.ride?.destination) {
+              destinationToUse = {
                 lat: data.ride.destination.lat,
                 lng: data.ride.destination.lng,
-                title: data.ride.destination.address || data.ride.destination.name
-              }));
+                name: data.ride.destination.address || data.ride.destination.name,
+                address: data.ride.destination.address
+              };
+              console.log('🎯 Usando destino dos dados da corrida:', destinationToUse);
               
               // Atualizar estado local do destino também
-              setSelectedDestination({
-                lat: data.ride.destination.lat,
-                lng: data.ride.destination.lng,
-                name: data.ride.destination.name,
-                address: data.ride.destination.address
-              });
+              setSelectedDestination(destinationToUse);
+            }
+            
+            // Mostrar rota do cliente ao destino usando JavaScript injection
+            if (destinationToUse) {
+              const destinationScript = `
+                if (typeof window.__setDestination === 'function') {
+                  console.log('🎯 Setting destination to:', ${destinationToUse.lat}, ${destinationToUse.lng});
+                  window.__setDestination(${destinationToUse.lat}, ${destinationToUse.lng}, ${JSON.stringify(destinationToUse.name)});
+                  console.log('✅ Destination set and route calculated');
+                } else {
+                  console.error('❌ __setDestination function not found');
+                }
+              `;
+              console.log('🚀 Injetando script para mostrar rota ao destino:', destinationScript);
+              webViewRef.current.injectJavaScript(destinationScript);
+            } else {
+              console.warn('⚠️ Nenhum destino disponível para mostrar rota');
             }
           }
           
@@ -1831,17 +1878,28 @@ export default function HomeScreen({ navigation, route }) {
       }));
     } else if (driverArrived && selectedDestination && location && webViewRef.current) {
       // Switch to destination route when driver arrives
-      console.log('🎯 Driver arrived, showing route to destination');
-      webViewRef.current.postMessage(JSON.stringify({
-        action: 'clearDriverMarker'
-      }));
+      console.log('🎯 Driver arrived, showing route to destination (useEffect)');
       
-      // Show route to final destination
-      if (webViewRef.current.injectJavaScript) {
-        webViewRef.current.injectJavaScript(`
-          calculateRoute(${location.latitude}, ${location.longitude}, ${selectedDestination.lat}, ${selectedDestination.lng});
-        `);
-      }
+      // Use proper JavaScript injection for clearing driver and setting destination
+      const scriptToExecute = `
+        // Clear driver marker first
+        if (typeof window.__clearDriverMarker === 'function') {
+          window.__clearDriverMarker();
+          console.log('✅ Driver marker cleared via useEffect');
+        }
+        
+        // Set destination and calculate route
+        if (typeof window.__setDestination === 'function') {
+          console.log('🎯 Setting destination via useEffect:', ${selectedDestination.lat}, ${selectedDestination.lng});
+          window.__setDestination(${selectedDestination.lat}, ${selectedDestination.lng}, ${JSON.stringify(selectedDestination.name || selectedDestination.address)});
+          console.log('✅ Destination set and route calculated via useEffect');
+        } else {
+          console.error('❌ __setDestination function not found in useEffect');
+        }
+      `;
+      
+      console.log('🚀 Executing useEffect script for driver arrival');
+      webViewRef.current.injectJavaScript(scriptToExecute);
     } else if (!driverLocation && webViewRef.current) {
       // Clear driver marker when no driver
       webViewRef.current.postMessage(JSON.stringify({
