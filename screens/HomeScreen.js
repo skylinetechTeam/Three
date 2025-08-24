@@ -1016,9 +1016,29 @@ export default function HomeScreen({ navigation, route }) {
         );
       }
       
-      // Usar dados da rota ou valores padrão
-      const estimatedDistance = routeData?.distance || 5000;
-      const estimatedTime = routeData?.duration || 900;
+      // Usar dados da rota ou calcular valores mais realistas
+      let estimatedDistance, estimatedTime;
+      
+      if (routeData?.distance && routeData?.duration) {
+        estimatedDistance = routeData.distance;
+        estimatedTime = routeData.duration;
+        console.log('✅ Usando dados da rota OSRM');
+      } else {
+        // Calcular distância em linha reta como fallback mais realista
+        const straightLineDistance = apiService.calculateDistance(
+          location?.coords?.latitude || -8.8390,
+          location?.coords?.longitude || 13.2894,
+          destination.lat,
+          destination.lng
+        );
+        estimatedDistance = straightLineDistance * 1000 * 1.4; // +40% para rotas reais
+        estimatedTime = (estimatedDistance / 1000) * 2.5 * 60; // 2.5 min por km em média
+        
+        console.log('⚠️ OSRM falhou, usando cálculo fallback:');
+        console.log(`📏 Distância em linha reta: ${straightLineDistance.toFixed(2)} km`);
+        console.log(`📏 Distância estimada: ${(estimatedDistance/1000).toFixed(2)} km`);
+        console.log(`⏱️ Tempo estimado: ${Math.round(estimatedTime/60)} min`);
+      }
       const vehicleType = selectedTaxiType === 'Privado' ? 'privado' : 'coletivo';
       console.log('🚗 [Favorito] selectedTaxiType:', selectedTaxiType);
       console.log('🎯 [Favorito] vehicleType mapeado:', vehicleType);
@@ -1072,11 +1092,28 @@ export default function HomeScreen({ navigation, route }) {
   const calculateRouteInfo = async (startLat, startLng, endLat, endLng) => {
     try {
       console.log('🛣️ Calculating route info from React Native...');
+      console.log(`📍 From: ${startLat}, ${startLng} To: ${endLat}, ${endLng}`);
       
       const routeUrl = `${OSRM_BASE_URL}/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`;
+      console.log('🌐 OSRM URL:', routeUrl);
       
-      const response = await fetch(routeUrl);
+      const response = await fetch(routeUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'TaxiApp/1.0'
+        },
+        timeout: 10000 // 10 segundos de timeout
+      });
+      
+      console.log('📡 Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('📊 OSRM Response:', JSON.stringify(data, null, 2));
       
       if (data.routes && data.routes?.length > 0) {
         const route = data.routes[0];
@@ -1090,9 +1127,37 @@ export default function HomeScreen({ navigation, route }) {
         console.log('✅ Route info calculated:', routeData);
         setRouteInfo(routeData);
         return routeData;
+      } else {
+        console.warn('⚠️ No routes found in OSRM response');
+        console.log('📄 Full response:', data);
       }
     } catch (error) {
       console.error('❌ Route calculation error:', error);
+      console.error('❌ Error details:', error.message);
+      
+      // Tentar calcular distância em linha reta como fallback
+      try {
+        const straightLineDistance = apiService.calculateDistance(startLat, startLng, endLat, endLng);
+        const estimatedDistance = straightLineDistance * 1000 * 1.3; // Adicionar 30% para ruas reais
+        const estimatedTime = (estimatedDistance / 1000) * 2 * 60; // 2 min por km em média
+        
+        console.log('🔄 Using fallback calculation:');
+        console.log(`📏 Straight line: ${straightLineDistance.toFixed(2)} km`);
+        console.log(`📏 Estimated route: ${(estimatedDistance/1000).toFixed(2)} km`);
+        console.log(`⏱️ Estimated time: ${Math.round(estimatedTime/60)} min`);
+        
+        const fallbackRouteData = {
+          distance: estimatedDistance,
+          duration: estimatedTime,
+          distanceText: `${(estimatedDistance / 1000).toFixed(1)} km`,
+          durationText: `${Math.round(estimatedTime / 60)} min`
+        };
+        
+        setRouteInfo(fallbackRouteData);
+        return fallbackRouteData;
+      } catch (fallbackError) {
+        console.error('❌ Fallback calculation also failed:', fallbackError);
+      }
     }
     return null;
   };
@@ -1205,8 +1270,29 @@ export default function HomeScreen({ navigation, route }) {
       // Calcular estimativa da corrida
       console.log('💰 Calculando estimativa da corrida...');
       console.log('📊 routeInfo disponível:', !!routeInfo, routeInfo);
-      const estimatedDistance = routeInfo?.distance || 5000; // metros
-      const estimatedTime = routeInfo?.duration || 900; // segundos
+      
+      let estimatedDistance, estimatedTime;
+      
+      if (routeInfo?.distance && routeInfo?.duration) {
+        estimatedDistance = routeInfo.distance;
+        estimatedTime = routeInfo.duration;
+        console.log('✅ Usando dados do routeInfo');
+      } else {
+        // Calcular distância em linha reta como fallback mais realista
+        const straightLineDistance = apiService.calculateDistance(
+          location?.coords?.latitude || -8.8390,
+          location?.coords?.longitude || 13.2894,
+          selectedLocation.lat,
+          selectedLocation.lng
+        );
+        estimatedDistance = straightLineDistance * 1000 * 1.4; // +40% para rotas reais
+        estimatedTime = (estimatedDistance / 1000) * 2.5 * 60; // 2.5 min por km em média
+        
+        console.log('⚠️ routeInfo indisponível, usando cálculo fallback:');
+        console.log(`📏 Distância em linha reta: ${straightLineDistance.toFixed(2)} km`);
+        console.log(`📏 Distância estimada: ${(estimatedDistance/1000).toFixed(2)} km`);
+        console.log(`⏱️ Tempo estimado: ${Math.round(estimatedTime/60)} min`);
+      }
       const vehicleType = selectedTaxiType === 'Privado' ? 'privado' : 'coletivo';
       console.log('🚗 selectedTaxiType:', selectedTaxiType);
       console.log('🎯 vehicleType mapeado:', vehicleType);

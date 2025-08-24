@@ -585,11 +585,28 @@ export default function HomeScreen({ navigation }) {
   const calculateRouteInfo = async (startLat, startLng, endLat, endLng) => {
     try {
       console.log('🛣️ Calculating route info from React Native...');
+      console.log(`📍 From: ${startLat}, ${startLng} To: ${endLat}, ${endLng}`);
       
       const routeUrl = `${OSRM_BASE_URL}/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`;
+      console.log('🌐 OSRM URL:', routeUrl);
       
-      const response = await fetch(routeUrl);
+      const response = await fetch(routeUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'TaxiApp/1.0'
+        },
+        timeout: 10000 // 10 segundos de timeout
+      });
+      
+      console.log('📡 Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('📊 OSRM Response:', JSON.stringify(data, null, 2));
       
       if (data.routes && data.routes.length > 0) {
         const route = data.routes[0];
@@ -603,9 +620,37 @@ export default function HomeScreen({ navigation }) {
         console.log('✅ Route info calculated:', routeData);
         setRouteInfo(routeData);
         return routeData;
+      } else {
+        console.warn('⚠️ No routes found in OSRM response');
+        console.log('📄 Full response:', data);
       }
     } catch (error) {
       console.error('❌ Route calculation error:', error);
+      console.error('❌ Error details:', error.message);
+      
+      // Tentar calcular distância em linha reta como fallback
+      try {
+        const straightLineDistance = apiService.calculateDistance(startLat, startLng, endLat, endLng);
+        const estimatedDistance = straightLineDistance * 1000 * 1.3; // Adicionar 30% para ruas reais
+        const estimatedTime = (estimatedDistance / 1000) * 2 * 60; // 2 min por km em média
+        
+        console.log('🔄 Using fallback calculation:');
+        console.log(`📏 Straight line: ${straightLineDistance.toFixed(2)} km`);
+        console.log(`📏 Estimated route: ${(estimatedDistance/1000).toFixed(2)} km`);
+        console.log(`⏱️ Estimated time: ${Math.round(estimatedTime/60)} min`);
+        
+        const fallbackRouteData = {
+          distance: estimatedDistance,
+          duration: estimatedTime,
+          distanceText: `${(estimatedDistance / 1000).toFixed(1)} km`,
+          durationText: `${Math.round(estimatedTime / 60)} min`
+        };
+        
+        setRouteInfo(fallbackRouteData);
+        return fallbackRouteData;
+      } catch (fallbackError) {
+        console.error('❌ Fallback calculation also failed:', fallbackError);
+      }
     }
     return null;
   };
@@ -684,8 +729,28 @@ export default function HomeScreen({ navigation }) {
       );
       
       // Show ride confirmation with details instead of immediately searching for drivers
-      const estimatedDistance = calculatedRoute?.distance || routeInfo?.distance || 5;
-      const estimatedTime = calculatedRoute?.duration || routeInfo?.duration || 15;
+      let estimatedDistance, estimatedTime;
+      
+      if ((calculatedRoute?.distance && calculatedRoute?.duration) || (routeInfo?.distance && routeInfo?.duration)) {
+        estimatedDistance = calculatedRoute?.distance || routeInfo?.distance;
+        estimatedTime = calculatedRoute?.duration || routeInfo?.duration;
+        console.log('✅ Usando dados de rota disponível');
+      } else {
+        // Calcular distância em linha reta como fallback mais realista
+        const straightLineDistance = apiService.calculateDistance(
+          location?.coords?.latitude || -8.8390,
+          location?.coords?.longitude || 13.2894,
+          selectedLocation.lat,
+          selectedLocation.lng
+        );
+        estimatedDistance = straightLineDistance * 1000 * 1.4; // +40% para rotas reais
+        estimatedTime = (estimatedDistance / 1000) * 2.5 * 60; // 2.5 min por km em média
+        
+        console.log('⚠️ Dados de rota indisponíveis, usando cálculo fallback:');
+        console.log(`📏 Distância em linha reta: ${straightLineDistance.toFixed(2)} km`);
+        console.log(`📏 Distância estimada: ${(estimatedDistance/1000).toFixed(2)} km`);
+        console.log(`⏱️ Tempo estimado: ${Math.round(estimatedTime/60)} min`);
+      }
       const estimatedFare = apiService.calculateEstimatedFare(estimatedDistance, estimatedTime);
       
       console.log('📊 Ride calculation:', {
