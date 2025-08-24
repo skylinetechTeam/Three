@@ -2140,12 +2140,12 @@ export default function DriverMapScreen({ navigation, route }) {
                   <View style={styles.detailCard}>
                     <MaterialIcons name="straighten" size={20} color="#6B7280" />
                     <Text style={styles.detailLabel}>Distância</Text>
-                    <Text style={styles.detailValue}>{currentRequest.estimatedDistance} km</Text>
+                    <Text style={styles.detailValue}>{(currentRequest.estimatedDistance / 1000).toFixed(1)} km</Text>
                   </View>
                   <View style={styles.detailCard}>
                     <MaterialIcons name="access-time" size={20} color="#6B7280" />
                     <Text style={styles.detailLabel}>Tempo</Text>
-                    <Text style={styles.detailValue}>{currentRequest.estimatedTime} min</Text>
+                    <Text style={styles.detailValue}>{Math.round(currentRequest.estimatedTime / 60)} min</Text>
                   </View>
                   <View style={styles.detailCard}>
                     <MaterialIcons name="attach-money" size={20} color="#6B7280" />

@@ -291,11 +291,11 @@ export default function DriverRequestsScreen({ navigation }) {
         <View style={styles.tripDetails}>
           <Text style={styles.tripDetail}>
             <MaterialIcons name="straighten" size={14} color="#6B7280" />
-            {' '}{item.distance} km
+            {' '}{(item.distance / 1000).toFixed(1)} km
           </Text>
           <Text style={styles.tripDetail}>
             <MaterialIcons name="access-time" size={14} color="#6B7280" />
-            {' '}{item.estimatedTime} min
+            {' '}{Math.round(item.estimatedTime / 60)} min
           </Text>
         </View>
         
@@ -437,12 +437,12 @@ export default function DriverRequestsScreen({ navigation }) {
                       <View style={styles.tripInfoItem}>
                         <MaterialIcons name="straighten" size={20} color="#6B7280" />
                         <Text style={styles.tripInfoLabel}>Distância</Text>
-                        <Text style={styles.tripInfoValue}>{selectedRequest.distance} km</Text>
+                        <Text style={styles.tripInfoValue}>{(selectedRequest.distance / 1000).toFixed(1)} km</Text>
                       </View>
                       <View style={styles.tripInfoItem}>
                         <MaterialIcons name="access-time" size={20} color="#6B7280" />
                         <Text style={styles.tripInfoLabel}>Tempo</Text>
-                        <Text style={styles.tripInfoValue}>{selectedRequest.estimatedTime} min</Text>
+                        <Text style={styles.tripInfoValue}>{Math.round(selectedRequest.estimatedTime / 60)} min</Text>
                       </View>
                     </View>
                     

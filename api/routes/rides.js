@@ -452,7 +452,7 @@ router.put('/:id/start', async (req, res) => {
             rideId: ride.id,
             ride: ride,
             message: 'Sua corrida foi iniciada!',
-            estimatedArrival: ride.estimatedTime + ' minutos',
+            estimatedArrival: Math.round(ride.estimatedTime / 60) + ' minutos',
             timestamp: new Date().toISOString()
           });
           passengerNotified = true;
@@ -468,7 +468,7 @@ router.put('/:id/start', async (req, res) => {
         rideId: ride.id,
         ride: ride,
         message: 'Sua corrida foi iniciada!',
-        estimatedArrival: ride.estimatedTime + ' minutos',
+        estimatedArrival: Math.round(ride.estimatedTime / 60) + ' minutos',
         timestamp: new Date().toISOString()
       });
     }

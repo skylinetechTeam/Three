@@ -61,7 +61,7 @@ class DriverSimulator {
       console.log(`📍 Origem: ${data.ride.pickup.address}`);
       console.log(`🎯 Destino: ${data.ride.destination.address}`);
       console.log(`💰 Tarifa estimada: ${data.ride.estimatedFare}`);
-      console.log(`⏱️ Tempo estimado: ${data.ride.estimatedTime} min`);
+      console.log(`⏱️ Tempo estimado: ${Math.round(data.ride.estimatedTime / 60)} min`);
       console.log(`👤 Passageiro: ${data.ride.passengerName}`);
       
       // Auto-accept or reject based on some logic (for testing)
