@@ -164,6 +164,56 @@ export default function HomeScreen({ navigation, route }) {
     setDriverArrived(true);
   };
 
+  // NOVA FUNÇÃO: Teste para simular motorista no mapa
+  const testDriverOnMap = () => {
+    console.log('🚗 TESTE: Simulando motorista no mapa');
+    
+    if (!location) {
+      console.error('❌ Localização do usuário não disponível');
+      return;
+    }
+    
+    // Simular localização do motorista perto do usuário
+    const driverLat = location.latitude + (Math.random() - 0.5) * 0.01; // ~500m de distância
+    const driverLng = location.longitude + (Math.random() - 0.5) * 0.01;
+    
+    console.log('🚗 Simulando motorista em:', { driverLat, driverLng });
+    console.log('👤 Cliente está em:', { userLat: location.latitude, userLng: location.longitude });
+    
+    // Atualizar estados
+    setDriverLocation({ latitude: driverLat, longitude: driverLng });
+    setDriverArrived(false); // Importante: garantir que não chegou ainda
+    setShowRouteToDriver(true);
+    
+    // Forçar atualização do mapa diretamente também
+    if (webViewRef.current) {
+      console.log('🔧 BACKUP: Forçando adição do motorista via JavaScript...');
+      const driverScript = `
+        console.log('🚗 FORCE: Adicionando motorista ao mapa');
+        
+        // Add driver marker
+        if (typeof window.__addDriverMarker === 'function') {
+          console.log('📍 FORCE: Adicionando marcador do motorista:', ${driverLat}, ${driverLng});
+          window.__addDriverMarker(${driverLat}, ${driverLng}, ${JSON.stringify(driverInfo?.name || 'Motorista Teste')});
+          console.log('✅ FORCE: Marcador do motorista adicionado');
+        } else {
+          console.error('❌ FORCE: __addDriverMarker function not found');
+        }
+        
+        // Calculate route to driver
+        if (typeof window.__calculateRouteToDriver === 'function') {
+          console.log('🛣️ FORCE: Calculando rota até o motorista');
+          window.__calculateRouteToDriver(${location.latitude}, ${location.longitude}, ${driverLat}, ${driverLng});
+          console.log('✅ FORCE: Rota até o motorista calculada');
+        } else {
+          console.error('❌ FORCE: __calculateRouteToDriver function not found');
+        }
+      `;
+      
+      webViewRef.current.injectJavaScript(driverScript);
+    }
+  };
+
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -2985,27 +3035,53 @@ export default function HomeScreen({ navigation, route }) {
       </Modal>
 
       {/* Botões de teste - apenas para desenvolvimento */}
-      {__DEV__ && requestStatus === 'accepted' && driverInfo && !driverArrived && (
+      {__DEV__ && requestStatus === 'accepted' && driverInfo && (
         <View style={{ position: 'absolute', bottom: 120, right: 20, zIndex: 1000 }}>
-          <TouchableOpacity 
-            style={{
-              backgroundColor: '#FF6B35',
-              paddingHorizontal: 16,
-              paddingVertical: 8,
-              borderRadius: 20,
-              flexDirection: 'row',
-              alignItems: 'center',
-              elevation: 5,
-              marginBottom: 8,
-            }}
-            onPress={testRideStarted}
-          >
-            <MaterialIcons name="play-arrow" size={20} color="#ffffff" />
-            <Text style={{ color: '#ffffff', marginLeft: 4, fontWeight: '600', fontSize: 12 }}>
-              Testar Iniciar
-            </Text>
-          </TouchableOpacity>
+          {/* Botão para simular motorista no mapa (se ainda não chegou) */}
+          {!driverArrived && (
+            <TouchableOpacity 
+              style={{
+                backgroundColor: '#10B981',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 20,
+                flexDirection: 'row',
+                alignItems: 'center',
+                elevation: 5,
+                marginBottom: 8,
+              }}
+              onPress={testDriverOnMap}
+            >
+              <MaterialIcons name="directions-car" size={20} color="#ffffff" />
+              <Text style={{ color: '#ffffff', marginLeft: 4, fontWeight: '600', fontSize: 12 }}>
+                Adicionar Motorista
+              </Text>
+            </TouchableOpacity>
+          )}
           
+          {/* Botão para iniciar corrida (se motorista já foi adicionado) */}
+          {!driverArrived && (
+            <TouchableOpacity 
+              style={{
+                backgroundColor: '#FF6B35',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 20,
+                flexDirection: 'row',
+                alignItems: 'center',
+                elevation: 5,
+                marginBottom: 8,
+              }}
+              onPress={testRideStarted}
+            >
+              <MaterialIcons name="play-arrow" size={20} color="#ffffff" />
+              <Text style={{ color: '#ffffff', marginLeft: 4, fontWeight: '600', fontSize: 12 }}>
+                Iniciar Corrida
+              </Text>
+            </TouchableOpacity>
+          )}
+          
+          {/* Botão de debug sempre visível */}
           <TouchableOpacity 
             style={{
               backgroundColor: '#8B5CF6',
@@ -3023,6 +3099,7 @@ export default function HomeScreen({ navigation, route }) {
                 selectedDestination,
                 currentRide,
                 driverArrived,
+                driverLocation,
                 location: location?.coords,
                 webViewRef: !!webViewRef.current,
                 apiCallbacks: Array.from(apiService.eventCallbacks?.keys() || []),
