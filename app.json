@@ -7,6 +7,12 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/5b82dbdf-d906-4f6e-91d0-3f7e3fb80d8f"
+    },
     "splash": {
       "backgroundColor": "#1737e8",
       "resizeMode": "contain",
@@ -42,7 +48,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Permitir $(PRODUCT_NAME) que use a sua localização."
         }
-      ]
+      ],
+      "expo-updates"
     ],
     "extra": {
       "eas": {

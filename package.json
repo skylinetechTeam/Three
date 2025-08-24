@@ -6,7 +6,10 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "update:dev": "eas update --branch development",
+    "update:preview": "eas update --branch preview",
+    "update:prod": "eas update --branch production"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",
@@ -22,6 +25,7 @@
     "expo-linear-gradient": "^14.0.2",
     "expo-location": "~18.1.6",
     "expo-status-bar": "~2.2.3",
+    "expo-updates": "^0.28.17",
     "node-fetch": "^3.3.2",
     "react": "19.0.0",
     "react-dom": "19.0.0",

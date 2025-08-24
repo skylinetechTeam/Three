@@ -3,8 +3,9 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import * as Updates from 'expo-updates';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -188,6 +189,7 @@ export default function App() {
 
   useEffect(() => {
     checkLoginStatus();
+    checkForUpdates();
   }, []);
 
   const checkLoginStatus = async () => {
@@ -200,6 +202,53 @@ export default function App() {
       console.error('Error checking login status:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const checkForUpdates = async () => {
+    try {
+      if (__DEV__) {
+        console.log('Skipping update check in development mode');
+        return;
+      }
+
+      const update = await Updates.checkForUpdateAsync();
+      
+      if (update.isAvailable) {
+        Alert.alert(
+          'Atualização Disponível',
+          'Uma nova versão do aplicativo está disponível. Deseja atualizar agora?',
+          [
+            {
+              text: 'Depois',
+              style: 'cancel',
+            },
+            {
+              text: 'Atualizar',
+              onPress: async () => {
+                try {
+                  await Updates.fetchUpdateAsync();
+                  Alert.alert(
+                    'Atualização Pronta',
+                    'A atualização foi baixada. O aplicativo será reiniciado.',
+                    [
+                      {
+                        text: 'Reiniciar',
+                        onPress: () => Updates.reloadAsync(),
+                      },
+                    ]
+                  );
+                } catch (error) {
+                  console.error('Error downloading update:', error);
+                  Alert.alert('Erro', 'Falha ao baixar a atualização. Tente novamente mais tarde.');
+                }
+              },
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error checking for updates:', error);
     }
   };
 
