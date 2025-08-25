@@ -14,27 +14,28 @@
       "url": "https://u.expo.dev/5b82dbdf-d906-4f6e-91d0-3f7e3fb80d8f"
     },
     "splash": {
-      "backgroundColor": "#1737e8",
+      "backgroundColor": "#FFFFFF",
       "resizeMode": "contain",
-      "image": "./assets/logo.png"
+      "image": "./assets/logo-branco.png"
     },
     "ios": {
       "supportsTablet": true,
       "splash": {
-        "backgroundColor": "#1737e8",
+        "backgroundColor": "#FFFFFF",
         "resizeMode": "contain",
-        "image": "./assets/logo.png"
+        "image": "./assets/logo-branco.png"
       }
     },
     "android": {
+      "icon": "./assets/icon.png",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#1737e8"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
       },
       "splash": {
-        "backgroundColor": "#1737e8",
+        "backgroundColor": "#FFFFFF",
         "resizeMode": "contain",
-        "image": "./assets/logo.png",
+        "image": "./assets/logo-branco.png",
         "imageWidth": 200,
         "imageHeight": 200
       }
