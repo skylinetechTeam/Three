@@ -18,18 +18,24 @@ import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
 import LocalDatabase from "../services/localDatabase";
 import apiService from "../services/apiService";
+import driverAuthService from "../services/driverAuthService";
 import { COLORS, SIZES, FONTS, SHADOWS, COMMON_STYLES } from "../config/theme";
 import * as ImagePicker from 'expo-image-picker';
 
 export default function DriverLoginScreen({ navigation }) {
-  const [emailOrPhone, setEmailOrPhone] = useState("912345678");
+  const [emailOrPhone, setEmailOrPhone] = useState("");
+  const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [isSettingPassword, setIsSettingPassword] = useState(false);
+  const [isEnteringPassword, setIsEnteringPassword] = useState(false);
   const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   const [driverPhoto, setDriverPhoto] = useState(null);
+  const [currentDriver, setCurrentDriver] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   // Tirar foto do motorista
   const takePhoto = async () => {
@@ -119,90 +125,180 @@ export default function DriverLoginScreen({ navigation }) {
     }
   };
 
-  // Verificar se o motorista existe e permitir definir nova senha
+  // NOVO FLUXO: Verificar se motorista existe no Supabase
   const handleDriverLogin = async () => {
-    if (!emailOrPhone) {
+    if (!emailOrPhone.trim()) {
       Toast.show({
         type: "error",
         text1: "Erro",
-        text2: "Por favor, insira seu email ou telefone cadastrado.",
+        text2: "Por favor, insira seu email ou telefone.",
       });
       return;
     }
 
+    setLoading(true);
+
     try {
-      const input = (emailOrPhone || '').trim();
+      const input = emailOrPhone.trim();
       
-      // Verificar se existe um perfil de motorista cadastrado localmente
-      let storedDriverProfile = await LocalDatabase.getDriverProfile();
+      // Verificar se motorista existe no banco de dados
+      const driverCheck = await driverAuthService.checkDriverExists(input);
       
-      if (!storedDriverProfile) {
-        // Criar um perfil padrão para demonstração (será registrado na API depois)
-        const defaultDriverProfile = {
-          nome: 'João Silva',
-          email: 'joao.motorista@email.com',
-          telefone: '912345678',
-          phone: '912345678', // Adicionar também como 'phone' para compatibilidade
-          veiculo: {
-            modelo: 'Toyota Corolla',
-            placa: 'LD-12-34-AB',
-            cor: 'Branco',
-            ano: 2020,
-          },
-          rating: 4.8,
-          totalTrips: 142,
-          joinDate: '2023-01-15',
-          isLoggedIn: false,
-          isOnline: false,
-          apiRegistered: false, // Flag para saber se já foi registrado na API
-        };
+      if (driverCheck.exists) {
+        // Motorista existe no banco
+        setCurrentDriver(driverCheck.driver);
         
-        await LocalDatabase.saveDriverProfile(defaultDriverProfile);
-        storedDriverProfile = defaultDriverProfile;
-        
-        Toast.show({
-          type: "info",
-          text1: "Perfil criado",
-          text2: "Perfil de demonstração criado com sucesso",
-        });
-      }
-
-      // Verificar se o input é o número padrão ou corresponde ao perfil
-      const isDefaultNumber = input === '912345678';
-      const emailMatch = (storedDriverProfile.email || '').toLowerCase() === input.toLowerCase();
-      const phoneMatch = (storedDriverProfile.telefone || storedDriverProfile.phone || '') === input;
-
-      if (!(emailMatch || phoneMatch || isDefaultNumber)) {
+        if (driverCheck.hasPassword) {
+          // Motorista já tem senha - ir para tela de inserir senha
+          setIsEnteringPassword(true);
+          Toast.show({
+            type: "success",
+            text1: "Motorista encontrado",
+            text2: `Olá ${driverCheck.driver.name}, digite sua senha.`,
+          });
+        } else {
+          // Motorista não tem senha - ir direto para tirar foto
+          setIsTakingPhoto(true);
+          Toast.show({
+            type: "info",
+            text1: "Bem-vindo!",
+            text2: `${driverCheck.driver.name}, tire uma foto para continuar.`,
+          });
+        }
+      } else {
+        // Motorista não existe no banco
         Toast.show({
           type: "error",
           text1: "Motorista não encontrado",
-          text2: "Email ou telefone não encontrado no sistema.",
-        });
-        return;
-      }
-
-      // Se for o número padrão, atualizar o perfil com esse número
-      if (isDefaultNumber && !phoneMatch) {
-        await LocalDatabase.updateDriverProfile({
-          telefone: '912345678'
-        });
-        Toast.show({
-          type: "info",
-          text1: "Telefone atualizado",
-          text2: "Número 912345678 configurado para teste",
+          text2: "Email ou telefone não cadastrado no sistema.",
         });
       }
-
-      // Ir para o step de tirar foto
-      setIsTakingPhoto(true);
 
     } catch (error) {
-      console.error('Driver login error:', error);
+      console.error('Erro no login:', error);
       Toast.show({
         type: "error",
         text1: "Erro",
-        text2: "Tente novamente.",
+        text2: "Erro ao verificar motorista. Tente novamente.",
       });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // NOVA FUNÇÃO: Verificar senha existente
+  const handlePasswordLogin = async () => {
+    if (!password.trim()) {
+      Toast.show({
+        type: "error",
+        text1: "Erro",
+        text2: "Por favor, digite sua senha.",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Verificar senha no banco
+      const isValidPassword = await driverAuthService.verifyDriverPassword(currentDriver.id, password);
+      
+      if (isValidPassword) {
+        // Senha correta - ir para tirar foto
+        setIsEnteringPassword(false);
+        setIsTakingPhoto(true);
+        Toast.show({
+          type: "success",
+          text1: "Senha correta!",
+          text2: "Agora tire uma foto para continuar.",
+        });
+      } else {
+        // Senha incorreta
+        Toast.show({
+          type: "error",
+          text1: "Senha incorreta",
+          text2: "Verifique sua senha e tente novamente.",
+        });
+      }
+
+    } catch (error) {
+      console.error('Erro ao verificar senha:', error);
+      Toast.show({
+        type: "error",
+        text1: "Erro",
+        text2: "Erro ao verificar senha. Tente novamente.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // NOVA FUNÇÃO: Finalizar login após tirar foto (quando já tem senha)
+  const handleFinishLogin = async () => {
+    if (!driverPhoto) {
+      Toast.show({
+        type: "error",
+        text1: "Foto obrigatória",
+        text2: "Você deve tirar uma foto para continuar.",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Salvar foto localmente
+      await driverAuthService.saveDriverPhoto(driverPhoto);
+      
+      // Salvar dados do motorista localmente
+      await driverAuthService.saveDriverLocally(currentDriver, driverPhoto);
+      
+      // Registrar motorista na API para WebSocket (se necessário)
+      try {
+        const driverData = {
+          name: currentDriver.name,
+          phone: currentDriver.phone,
+          email: currentDriver.email,
+          licenseNumber: currentDriver.license_number || 'CNH123456789',
+          vehicleInfo: {
+            make: currentDriver.vehicles?.[0]?.make || 'Toyota',
+            model: currentDriver.vehicles?.[0]?.model || 'Corolla',
+            year: currentDriver.vehicles?.[0]?.year || 2020,
+            color: currentDriver.vehicles?.[0]?.color || 'Branco',
+            plate: currentDriver.vehicles?.[0]?.license_plate || 'ABC-1234'
+          }
+        };
+
+        const apiResponse = await apiService.registerDriver(driverData);
+        
+        // Conectar ao socket
+        if (apiResponse?.data?.driverId) {
+          apiService.connectSocket('driver', apiResponse.data.driverId);
+        }
+        
+      } catch (apiError) {
+        console.warn('API registration failed, continuing with local login:', apiError);
+        // Continue mesmo se API falhar
+      }
+
+      Toast.show({
+        type: "success",
+        text1: "Login realizado!",
+        text2: `Bem-vindo de volta, ${currentDriver.name}!`,
+      });
+
+      // Navegar para a área do motorista
+      navigation.reset({ index: 0, routes: [{ name: "DriverTabs" }] });
+
+    } catch (error) {
+      console.error('Erro ao finalizar login:', error);
+      Toast.show({
+        type: "error",
+        text1: "Erro",
+        text2: "Erro ao finalizar login. Tente novamente.",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -228,7 +324,7 @@ export default function DriverLoginScreen({ navigation }) {
     console.log('Estados atualizados - isSettingPassword:', true, 'isTakingPhoto:', false);
   };
 
-  // Definir nova senha e fazer login
+  // NOVA FUNÇÃO: Definir nova senha e finalizar login
   const handleSetNewPassword = async () => {
     if (!newPassword || !confirmPassword) {
       Toast.show({
@@ -257,69 +353,52 @@ export default function DriverLoginScreen({ navigation }) {
       return;
     }
 
-    try {
-      const input = (emailOrPhone || '').trim();
-      const driverProfile = await LocalDatabase.getDriverProfile();
-      
-      // Registrar motorista na API se ainda não foi registrado
-      let apiDriverId = driverProfile?.apiDriverId;
-      
-      if (!driverProfile?.apiRegistered) {
-        try {
-          const driverData = {
-            name: driverProfile.nome || 'João Silva',
-            phone: input,
-            email: driverProfile.email,
-            licenseNumber: driverProfile.licenseNumber || 'CNH123456789',
-            vehicleInfo: {
-              make: driverProfile.veiculo?.marca || 'Toyota',
-              model: driverProfile.veiculo?.modelo || 'Corolla',
-              year: driverProfile.veiculo?.ano || 2020,
-              color: driverProfile.veiculo?.cor || 'Branco',
-              plate: driverProfile.veiculo?.placa || 'LD-12-34-AB'
-            }
-          };
+    setLoading(true);
 
-          const apiResponse = await apiService.registerDriver(driverData);
-          apiDriverId = apiResponse.data.driverId;
-          
-          Toast.show({
-            type: "success",
-            text1: "Registrado na API!",
-            text2: "Motorista registrado com sucesso no servidor",
-          });
-        } catch (apiError) {
-          console.warn('API registration failed, continuing with local:', apiError);
-          // Continue with local login even if API fails
-        }
+    try {
+      // Definir senha no banco de dados
+      await driverAuthService.setDriverPassword(currentDriver.id, newPassword);
+      
+      // Salvar foto localmente
+      if (driverPhoto) {
+        await driverAuthService.saveDriverPhoto(driverPhoto);
       }
       
-      // Atualizar a senha do motorista e garantir que o telefone esteja correto
-      await LocalDatabase.updateDriverProfile({
-        password: newPassword,
-        telefone: input,
-        photo: driverPhoto,
-        isLoggedIn: true,
-        lastLogin: new Date().toISOString(),
-        apiRegistered: true,
-        apiDriverId: apiDriverId,
-      });
+      // Salvar dados do motorista localmente
+      await driverAuthService.saveDriverLocally(currentDriver, driverPhoto);
+      
+      // Registrar motorista na API para WebSocket (se necessário)
+      try {
+        const driverData = {
+          name: currentDriver.name,
+          phone: currentDriver.phone,
+          email: currentDriver.email,
+          licenseNumber: currentDriver.license_number || 'CNH123456789',
+          vehicleInfo: {
+            make: currentDriver.vehicles?.[0]?.make || 'Toyota',
+            model: currentDriver.vehicles?.[0]?.model || 'Corolla',
+            year: currentDriver.vehicles?.[0]?.year || 2020,
+            color: currentDriver.vehicles?.[0]?.color || 'Branco',
+            plate: currentDriver.vehicles?.[0]?.license_plate || 'ABC-1234'
+          }
+        };
 
-      const updatedProfile = await LocalDatabase.getDriverProfile();
-
-      // Conectar ao socket se temos ID da API
-      if (apiDriverId) {
-        try {
-          apiService.connectSocket('driver', apiDriverId);
-        } catch (socketError) {
-          console.warn('Socket connection failed:', socketError);
+        const apiResponse = await apiService.registerDriver(driverData);
+        
+        // Conectar ao socket
+        if (apiResponse?.data?.driverId) {
+          apiService.connectSocket('driver', apiResponse.data.driverId);
         }
+        
+      } catch (apiError) {
+        console.warn('API registration failed, continuing with local login:', apiError);
+        // Continue mesmo se API falhar
       }
 
       Toast.show({
         type: "success",
-        text1: "Bem-vindo!",
-        text2: `Olá, ${updatedProfile.nome || updatedProfile.fullName || updatedProfile.email}!`,
+        text1: "Login realizado!",
+        text2: `Bem-vindo, ${currentDriver.name}!`,
       });
 
       // Navegar para a área do motorista
@@ -337,10 +416,10 @@ export default function DriverLoginScreen({ navigation }) {
 
   // Renderizar o step atual
   const renderCurrentStep = () => {
-    console.log('Renderizando step - isTakingPhoto:', isTakingPhoto, 'isSettingPassword:', isSettingPassword);
+    console.log('Renderizando step - isEnteringPassword:', isEnteringPassword, 'isTakingPhoto:', isTakingPhoto, 'isSettingPassword:', isSettingPassword);
     
-    // Step 1: Login
-    if (!isTakingPhoto && !isSettingPassword) {
+    // Step 1: Email/Telefone inicial
+    if (!isEnteringPassword && !isTakingPhoto && !isSettingPassword) {
       return (
         <>
           {/* Email/Phone Input */}
@@ -361,15 +440,68 @@ export default function DriverLoginScreen({ navigation }) {
           </View>
 
           {/* Login Button */}
-          <TouchableOpacity style={styles.loginButton} onPress={handleDriverLogin}>
-            <Text style={styles.loginButtonText}>Continuar</Text>
-            <Ionicons name="arrow-forward" size={20} color={COLORS.white} style={styles.buttonIcon} />
+          <TouchableOpacity 
+            style={[styles.loginButton, loading && styles.buttonDisabled]} 
+            onPress={handleDriverLogin}
+            disabled={loading}
+          >
+            <Text style={styles.loginButtonText}>
+              {loading ? "Verificando..." : "Continuar"}
+            </Text>
+            {!loading && <Ionicons name="arrow-forward" size={20} color={COLORS.white} style={styles.buttonIcon} />}
           </TouchableOpacity>
         </>
       );
     }
     
-    // Step 2: Foto
+    // Step 2: Inserir senha (se motorista já tem senha)
+    if (isEnteringPassword) {
+      return (
+        <>
+          <View style={styles.welcomeContainer}>
+            <Text style={styles.welcomeText}>Olá, {currentDriver?.name}!</Text>
+            <Text style={styles.welcomeSubtext}>Digite sua senha para continuar</Text>
+          </View>
+
+          {/* Password Input */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Senha</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="lock-closed-outline" size={20} color={COLORS.gray} />
+              <TextInput
+                style={styles.input}
+                placeholder="Digite sua senha"
+                placeholderTextColor={COLORS.gray}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Ionicons 
+                  name={showPassword ? "eye-outline" : "eye-off-outline"} 
+                  size={20} 
+                  color={COLORS.gray} 
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Continue Button */}
+          <TouchableOpacity 
+            style={[styles.loginButton, loading && styles.buttonDisabled]} 
+            onPress={handlePasswordLogin}
+            disabled={loading}
+          >
+            <Text style={styles.loginButtonText}>
+              {loading ? "Verificando..." : "Entrar"}
+            </Text>
+            {!loading && <Ionicons name="arrow-forward" size={20} color={COLORS.white} style={styles.buttonIcon} />}
+          </TouchableOpacity>
+        </>
+      );
+    }
+    
+    // Step 3: Foto
     if (isTakingPhoto) {
       return (
         <>
@@ -411,9 +543,15 @@ export default function DriverLoginScreen({ navigation }) {
 
           {/* Continue Button */}
           {driverPhoto && (
-            <TouchableOpacity style={styles.loginButton} onPress={handleContinueToPassword}>
-              <Text style={styles.loginButtonText}>Continuar</Text>
-              <Ionicons name="arrow-forward" size={20} color={COLORS.white} style={styles.buttonIcon} />
+            <TouchableOpacity 
+              style={[styles.loginButton, loading && styles.buttonDisabled]} 
+              onPress={currentDriver?.password_hash ? handleFinishLogin : handleContinueToPassword}
+              disabled={loading}
+            >
+              <Text style={styles.loginButtonText}>
+                {loading ? "Entrando..." : (currentDriver?.password_hash ? "Entrar" : "Definir Senha")}
+              </Text>
+              {!loading && <Ionicons name="arrow-forward" size={20} color={COLORS.white} style={styles.buttonIcon} />}
             </TouchableOpacity>
           )}
         </>
