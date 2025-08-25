@@ -21,11 +21,21 @@ class DriverAuthService {
       // Limpar e validar entrada
       const input = emailOrPhone.trim().toLowerCase();
       
+      if (!input) {
+        throw new Error('Email ou telefone é obrigatório');
+      }
+      
       // Verificar se é email ou telefone
       const isEmail = input.includes('@');
       
       let query;
       if (isEmail) {
+        // Validar formato básico do email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(input)) {
+          throw new Error('Formato de email inválido');
+        }
+        
         query = supabase
           .from('drivers')
           .select('*')
@@ -34,6 +44,11 @@ class DriverAuthService {
       } else {
         // Normalizar telefone (remover espaços, traços, etc)
         const normalizedPhone = input.replace(/\D/g, '');
+        
+        if (normalizedPhone.length < 8) {
+          throw new Error('Número de telefone muito curto');
+        }
+        
         query = supabase
           .from('drivers')
           .select('*')
@@ -45,7 +60,15 @@ class DriverAuthService {
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = não encontrado
         console.error('❌ Erro ao verificar motorista:', error);
-        throw error;
+        
+        // Tratar diferentes tipos de erro
+        if (error.message?.includes('network') || error.message?.includes('fetch')) {
+          throw new Error('Erro de conexão. Verifique sua internet e tente novamente.');
+        } else if (error.message?.includes('timeout')) {
+          throw new Error('Tempo limite esgotado. Tente novamente.');
+        } else {
+          throw new Error('Erro no servidor. Tente novamente em alguns minutos.');
+        }
       }
 
       if (data) {
@@ -66,7 +89,14 @@ class DriverAuthService {
 
     } catch (error) {
       console.error('❌ Erro ao verificar motorista:', error);
-      throw error;
+      
+      // Se o erro já tem uma mensagem personalizada, mantê-la
+      if (error.message && !error.message.includes('supabase')) {
+        throw error;
+      }
+      
+      // Caso contrário, criar uma mensagem mais amigável
+      throw new Error('Erro ao verificar motorista. Verifique sua conexão e tente novamente.');
     }
   }
 
@@ -75,6 +105,10 @@ class DriverAuthService {
     try {
       console.log('🔐 Verificando senha do motorista:', driverId);
       
+      if (!driverId || !password) {
+        throw new Error('ID do motorista e senha são obrigatórios');
+      }
+
       const { data, error } = await supabase
         .from('drivers')
         .select('password_hash')
@@ -83,7 +117,14 @@ class DriverAuthService {
 
       if (error) {
         console.error('❌ Erro ao buscar senha:', error);
-        throw error;
+        
+        if (error.message?.includes('network') || error.message?.includes('fetch')) {
+          throw new Error('Erro de conexão. Verifique sua internet e tente novamente.');
+        } else if (error.code === 'PGRST116') {
+          throw new Error('Motorista não encontrado.');
+        } else {
+          throw new Error('Erro no servidor. Tente novamente.');
+        }
       }
 
       // Por simplicidade, vamos comparar diretamente (em produção use bcrypt)
@@ -94,7 +135,12 @@ class DriverAuthService {
 
     } catch (error) {
       console.error('❌ Erro ao verificar senha:', error);
-      throw error;
+      
+      if (error.message && !error.message.includes('supabase')) {
+        throw error;
+      }
+      
+      throw new Error('Erro ao verificar senha. Tente novamente.');
     }
   }
 

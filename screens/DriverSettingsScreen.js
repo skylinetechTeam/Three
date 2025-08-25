@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import LocalDatabase from '../services/localDatabase';
+import driverAuthService from '../services/driverAuthService';
 import Toast from 'react-native-toast-message';
 
 export default function DriverSettingsScreen({ navigation }) {
@@ -102,6 +103,48 @@ export default function DriverSettingsScreen({ navigation }) {
                 type: "error",
                 text1: "Erro",
                 text2: "Não foi possível limpar os dados",
+              });
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Sair da conta",
+      "Tem certeza que deseja sair? Você precisará fazer login novamente.",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel"
+        },
+        {
+          text: "Sair",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await driverAuthService.logoutDriver();
+              
+              Toast.show({
+                type: "success",
+                text1: "Logout realizado",
+                text2: "Você foi desconectado com sucesso",
+              });
+
+              // Navegar para tela de login
+              navigation.reset({
+                index: 0,
+                routes: [{ name: "DriverLogin" }],
+              });
+
+            } catch (error) {
+              console.error('Error during logout:', error);
+              Toast.show({
+                type: "error",
+                text1: "Erro",
+                text2: "Não foi possível fazer logout",
               });
             }
           },
@@ -314,6 +357,31 @@ export default function DriverSettingsScreen({ navigation }) {
                 <View style={styles.settingText}>
                   <Text style={styles.settingTitle}>Contato</Text>
                   <Text style={styles.settingSubtitle}>Fale conosco</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Account Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Conta</Text>
+          
+          <View style={styles.settingCard}>
+            <TouchableOpacity 
+              style={styles.settingItem}
+              onPress={handleLogout}
+            >
+              <View style={styles.settingContent}>
+                <MaterialIcons name="logout" size={24} color="#EF4444" />
+                <View style={styles.settingText}>
+                  <Text style={[styles.settingTitle, { color: '#EF4444' }]}>
+                    Sair da Conta
+                  </Text>
+                  <Text style={styles.settingSubtitle}>
+                    Desconectar e voltar para tela de login
+                  </Text>
                 </View>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />

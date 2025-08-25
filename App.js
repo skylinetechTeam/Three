@@ -31,6 +31,7 @@ import DriverSettingsScreen from './screens/DriverSettingsScreen';
 import Toast from 'react-native-toast-message';
 import SplashScreen from './components/SplashScreen';
 import LocalDatabase from './services/localDatabase';
+import driverAuthService from './services/driverAuthService';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -186,6 +187,8 @@ function DriverTabs() {
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isDriverLoggedIn, setIsDriverLoggedIn] = useState(false);
+  const [userType, setUserType] = useState(null); // 'passenger' ou 'driver'
 
   useEffect(() => {
     checkLoginStatus();
@@ -194,12 +197,32 @@ export default function App() {
 
   const checkLoginStatus = async () => {
     try {
+      console.log('🔍 Verificando status de login...');
+      
+      // Verificar login de passageiro
       const userProfile = await LocalDatabase.getUserProfile();
-      if (userProfile && userProfile.isLoggedIn) {
+      const isPassengerLoggedIn = userProfile && userProfile.isLoggedIn;
+      
+      // Verificar login de motorista
+      const isDriverLoggedInStatus = await driverAuthService.isDriverLoggedIn();
+      
+      console.log('👤 Passageiro logado:', isPassengerLoggedIn);
+      console.log('🚗 Motorista logado:', isDriverLoggedInStatus);
+      
+      if (isDriverLoggedInStatus) {
+        setIsDriverLoggedIn(true);
+        setUserType('driver');
+        console.log('✅ Redirecionando para área do motorista');
+      } else if (isPassengerLoggedIn) {
         setIsLoggedIn(true);
+        setUserType('passenger');
+        console.log('✅ Redirecionando para área do passageiro');
+      } else {
+        console.log('❌ Nenhum usuário logado');
       }
+      
     } catch (error) {
-      console.error('Error checking login status:', error);
+      console.error('❌ Erro ao verificar status de login:', error);
     } finally {
       setIsLoading(false);
     }
@@ -256,10 +279,17 @@ export default function App() {
     return <SplashScreen onFinish={() => setIsLoading(false)} />;
   }
 
+  // Determinar tela inicial baseada no tipo de usuário logado
+  const getInitialRoute = () => {
+    if (isDriverLoggedIn) return "DriverTabs";
+    if (isLoggedIn) return "HomeTabs";
+    return "Login";
+  };
+
   return (
     <SafeAreaProvider>
       <NavigationContainer>
-        <Stack.Navigator initialRouteName={isLoggedIn ? "HomeTabs" : "Login"}>
+        <Stack.Navigator initialRouteName={getInitialRoute()}>
           <Stack.Screen
             name="Login"
             component={LoginScreen}

@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import LocalDatabase from '../services/localDatabase';
+import driverAuthService from '../services/driverAuthService';
 import Toast from 'react-native-toast-message';
 
 const { height } = Dimensions.get('window');
@@ -33,30 +34,60 @@ export default function DriverProfileScreen({ navigation }) {
 
   const loadDriverProfile = async () => {
     try {
-      const profile = await LocalDatabase.getDriverProfile();
-      const onlineStatus = await LocalDatabase.getDriverOnlineStatus();
+      // Primeiro, tentar carregar dados locais
+      const localData = await driverAuthService.getLocalDriverData();
       
-      if (profile) {
-        setDriverProfile(profile);
-        setIsOnline(onlineStatus);
+      if (localData) {
+        setDriverProfile(localData);
+        setIsOnline(localData.isOnline || false);
+        
+        // Tentar buscar dados atualizados do Supabase em background
+        try {
+          const updatedData = await driverAuthService.getDriverFullData(localData.id);
+          if (updatedData) {
+            // Mesclar dados do Supabase com dados locais (foto)
+            const mergedData = {
+              ...updatedData,
+              photo: localData.photo, // Manter foto local
+              isOnline: localData.isOnline || false,
+              isLoggedIn: localData.isLoggedIn || false
+            };
+            
+            setDriverProfile(mergedData);
+            
+            // Atualizar dados locais com informações mais recentes
+            await driverAuthService.saveDriverLocally(updatedData, localData.photo);
+          }
+        } catch (supabaseError) {
+          console.warn('⚠️ Não foi possível buscar dados atualizados do Supabase:', supabaseError);
+          // Continuar com dados locais
+        }
       } else {
-        // Create a default driver profile for demo
-        const defaultProfile = {
-          nome: 'João Silva',
-          email: 'joao.motorista@email.com',
-          telefone: '912345678',
-          phone: '912345678', // Adicionar também como 'phone' para compatibilidade
-          veiculo: {
-            modelo: 'Toyota Corolla',
-            placa: 'LD-12-34-AB',
-            cor: 'Branco',
-            ano: 2020,
-          },
-          rating: 4.8,
-          totalTrips: 142,
-          joinDate: '2023-01-15',
-          isLoggedIn: true,
-        };
+        // Fallback para dados locais antigos se necessário
+        const profile = await LocalDatabase.getDriverProfile();
+        const onlineStatus = await LocalDatabase.getDriverOnlineStatus();
+        
+        if (profile) {
+          setDriverProfile(profile);
+          setIsOnline(onlineStatus);
+        } else {
+          // Create a default driver profile for demo
+          const defaultProfile = {
+            name: 'João Silva',
+            email: 'joao.motorista@email.com',
+            phone: '912345678',
+            vehicles: [{
+              make: 'Toyota',
+              model: 'Corolla',
+              license_plate: 'LD-12-34-AB',
+              color: 'Branco',
+              year: 2020,
+            }],
+            rating: 4.8,
+            total_trips: 142,
+            created_at: '2023-01-15',
+            isLoggedIn: true,
+          };
         await LocalDatabase.saveDriverProfile(defaultProfile);
         setDriverProfile(defaultProfile);
       }
@@ -124,7 +155,7 @@ export default function DriverProfileScreen({ navigation }) {
   const handleLogout = () => {
     Alert.alert(
       'Sair da conta',
-      'Tem certeza que deseja sair?',
+      'Tem certeza que deseja sair? Você precisará fazer login novamente.',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -132,23 +163,27 @@ export default function DriverProfileScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await LocalDatabase.updateDriverProfile({ 
-                isLoggedIn: false,
-                isOnline: false 
-              });
+              // Usar o novo serviço de autenticação
+              await driverAuthService.logoutDriver();
               
               Toast.show({
                 type: "success",
                 text1: "Logout realizado",
-                text2: "Até logo!",
+                text2: "Você foi desconectado com sucesso",
               });
 
+              // Navegar para tela de login do motorista
               navigation.reset({
                 index: 0,
-                routes: [{ name: 'Login' }],
+                routes: [{ name: 'DriverLogin' }],
               });
             } catch (error) {
               console.error('Error logging out:', error);
+              Toast.show({
+                type: "error",
+                text1: "Erro",
+                text2: "Não foi possível fazer logout",
+              });
             }
           },
         },
@@ -219,7 +254,7 @@ export default function DriverProfileScreen({ navigation }) {
             ) : (
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
-                  {driverProfile.nome?.charAt(0).toUpperCase() || 'M'}
+                  {(driverProfile.name || driverProfile.nome)?.charAt(0).toUpperCase() || 'M'}
                 </Text>
               </View>
             )}
@@ -227,7 +262,7 @@ export default function DriverProfileScreen({ navigation }) {
           </View>
           
           <View style={styles.profileInfo}>
-            <Text style={styles.driverName}>{driverProfile.nome}</Text>
+            <Text style={styles.driverName}>{driverProfile.name || driverProfile.nome}</Text>
             <Text style={styles.driverStatus}>
               {isOnline ? 'Online - Disponível' : 'Offline'}
             </Text>
@@ -240,7 +275,7 @@ export default function DriverProfileScreen({ navigation }) {
               </View>
               <View style={styles.statCard}>
                 <MaterialIcons name="local-taxi" size={20} color="#2563EB" />
-                <Text style={styles.statValue}>{driverProfile.totalTrips || '142'}</Text>
+                <Text style={styles.statValue}>{driverProfile.total_trips || driverProfile.totalTrips || '142'}</Text>
                 <Text style={styles.statLabel}>Corridas</Text>
               </View>
             </View>
@@ -348,12 +383,12 @@ export default function DriverProfileScreen({ navigation }) {
             </View>
             <View style={styles.infoRow}>
               <MaterialIcons name="phone" size={20} color="#6B7280" />
-              <Text style={styles.infoText}>{driverProfile.telefone}</Text>
+              <Text style={styles.infoText}>{driverProfile.phone || driverProfile.telefone}</Text>
             </View>
             <View style={styles.infoRow}>
               <MaterialIcons name="calendar-today" size={20} color="#6B7280" />
               <Text style={styles.infoText}>
-                Motorista desde {formatDate(driverProfile.joinDate || '2023-01-15')}
+                Motorista desde {formatDate(driverProfile.created_at || driverProfile.joinDate || '2023-01-15')}
               </Text>
             </View>
           </View>
