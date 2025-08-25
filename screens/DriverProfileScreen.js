@@ -88,8 +88,9 @@ export default function DriverProfileScreen({ navigation }) {
             created_at: '2023-01-15',
             isLoggedIn: true,
           };
-        await LocalDatabase.saveDriverProfile(defaultProfile);
-        setDriverProfile(defaultProfile);
+          await LocalDatabase.saveDriverProfile(defaultProfile);
+          setDriverProfile(defaultProfile);
+        }
       }
     } catch (error) {
       console.error('Error loading driver profile:', error);
