@@ -17,6 +17,7 @@ import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import LocalDatabase from '../services/localDatabase';
 import apiService from '../services/apiService';
+import driverAuthService from '../services/driverAuthService';
 import Toast from 'react-native-toast-message';
 
 const { width, height } = Dimensions.get('window');
@@ -61,13 +62,15 @@ export default function DriverMapScreen({ navigation, route }) {
 
   // Effect para gerenciar conexão WebSocket quando status online muda
   useEffect(() => {
-    if (isOnline && driverProfile?.apiDriverId && location) {
+    const driverId = driverProfile?.id || driverProfile?.apiDriverId;
+    
+    if (isOnline && driverId && location && !socketRef.current) {
       connectWebSocket();
       // Só iniciar polling se não tiver corrida ativa
       if (!activeRide) {
         startRequestPolling();
       }
-    } else {
+    } else if (!isOnline) {
       disconnectWebSocket();
       stopRequestPolling();
     }
@@ -96,17 +99,34 @@ export default function DriverMapScreen({ navigation, route }) {
 
   const initializeDriver = async () => {
     try {
-      const profile = await LocalDatabase.getDriverProfile();
-      const onlineStatus = await LocalDatabase.getDriverOnlineStatus();
+      // Tentar carregar dados autenticados primeiro
+      const authData = await driverAuthService.getLocalDriverData();
       
-      if (profile) {
-        setDriverProfile(profile);
-        setIsOnline(onlineStatus);
+      if (authData) {
+        setDriverProfile(authData);
+        setIsOnline(authData.isOnline || false);
+      } else {
+        // Tentar backup do LocalDatabase
+        const profile = await LocalDatabase.getDriverProfile();
+        const onlineStatus = await LocalDatabase.getDriverOnlineStatus();
         
-        // WebSocket será conectado quando motorista ficar online
+        if (profile) {
+          setDriverProfile(profile);
+          setIsOnline(onlineStatus);
+        } else {
+          // Redirecionar para login se não houver dados
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'DriverLogin' }],
+          });
+        }
       }
     } catch (error) {
-      console.error('Error initializing driver:', error);
+      // Em caso de erro, redirecionar para login
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'DriverLogin' }],
+      });
     }
   };
 
@@ -117,16 +137,22 @@ export default function DriverMapScreen({ navigation, route }) {
         socketRef.current.disconnect();
       }
 
-      console.log('🔌 Conectando ao WebSocket...');
+      const driverId = driverProfile?.id || driverProfile?.apiDriverId;
+      if (!driverId) {
+        console.error('ID do motorista não encontrado');
+        return;
+      }
+
+      console.log('🔌 Conectando ao WebSocket com ID:', driverId);
       
       // Usar o novo método com verificação prévia
-      const socket = await apiService.connectSocketWithCheck('driver', driverProfile.apiDriverId);
+      const socket = await apiService.connectSocketWithCheck('driver', driverId);
       
       if (socket) {
         socketRef.current = socket;
         
         socket.on('connect', () => {
-          console.log('✅ WebSocket conectado');
+          console.log('✅ WebSocket conectado com ID:', driverId);
           setSocketConnected(true);
           
           Toast.show({
@@ -285,34 +311,25 @@ export default function DriverMapScreen({ navigation, route }) {
   const fetchPendingRequests = async () => {
     try {
       if (!location?.coords || !driverProfile?.apiDriverId) {
-        console.log('⚠️ Não é possível buscar solicitações: falta localização ou ID do motorista');
         return;
       }
 
       // Se o motorista já tem uma corrida ativa, não buscar novas solicitações
       if (activeRide) {
-        console.log('🚗 Motorista já tem corrida ativa, parando busca de novas solicitações');
         return;
       }
-
-      console.log('🔍 Buscando solicitações pendentes...');
-      console.log('📍 Localização:', location.coords);
-      console.log('👤 Driver ID:', driverProfile.apiDriverId);
 
       const response = await apiService.getPendingRides(location.coords, 10);
       
       if (response.data && Array.isArray(response.data)) {
-        console.log(`✅ Encontradas ${response.data.length} solicitações pendentes`);
         setPendingRequests(response.data);
         
         // Se não há solicitação sendo exibida e há solicitações disponíveis
         if (!currentRequest && !showRequestModal && response.data.length > 0) {
-          console.log('📱 Mostrando primeira solicitação:', response.data[0]);
           setCurrentRequest(response.data[0]);
           setShowRequestModal(true);
         }
       } else {
-        console.log('ℹ️ Nenhuma solicitação pendente encontrada');
         setPendingRequests([]);
       }
     } catch (error) {
@@ -341,62 +358,7 @@ export default function DriverMapScreen({ navigation, route }) {
     }
   };
 
-  // Função de debug para testar conexão
-  const testConnection = async () => {
-    console.log('🔍 === TESTE DE CONEXÃO INICIADO ===');
-    
-    try {
-      // Testar API
-      console.log('🌐 Testando API...');
-      const apiTest = await apiService.testApiConnection();
-      
-      if (apiTest.success) {
-        console.log('✅ API funcionando:', apiTest.data);
-        
-        Toast.show({
-          type: "success",
-          text1: "API OK",
-          text2: "Servidor está respondendo",
-        });
-        
-        // Testar WebSocket
-        if (driverProfile?.apiDriverId) {
-          console.log('🔌 Testando WebSocket...');
-          disconnectWebSocket();
-          await connectWebSocket();
-        }
-        
-      } else {
-        console.error('❌ API com problema:', apiTest.error);
-        
-        Toast.show({
-          type: "error",
-          text1: "API com problema",
-          text2: apiTest.error,
-        });
-      }
-      
-      // Mostrar status atual
-      console.log('📊 Status atual:', {
-        isOnline,
-        socketConnected,
-        location: location ? 'OK' : 'Sem localização',
-        driverProfile: driverProfile?.apiDriverId ? 'OK' : 'Sem ID',
-        pendingRequests: pendingRequests.length
-      });
-      
-    } catch (error) {
-      console.error('💥 Erro no teste:', error);
-      
-      Toast.show({
-        type: "error",
-        text1: "Erro no teste",
-        text2: error.message,
-      });
-    }
-    
-    console.log('🔍 === TESTE DE CONEXÃO FINALIZADO ===');
-  };
+
 
   const requestLocationPermission = async () => {
     try {
@@ -425,7 +387,7 @@ export default function DriverMapScreen({ navigation, route }) {
           updateMapLocation(newLocation);
           
           // Update driver location in API if online and registered
-          if (driverProfile?.apiDriverId && isOnline) {
+          if ((driverProfile?.apiDriverId || driverProfile?.id) && isOnline) {
             try {
               // Convert location format from {latitude, longitude} to {lat, lng}
               const locationData = {
@@ -434,14 +396,14 @@ export default function DriverMapScreen({ navigation, route }) {
                 speed: newLocation.coords.speed || 0,
                 heading: newLocation.coords.heading || 0
               };
-              apiService.updateDriverLocation(driverProfile.apiDriverId, locationData);
+              apiService.updateDriverLocation(driverProfile.apiDriverId || driverProfile.id, locationData);
             } catch (error) {
               console.warn('Failed to update location in API:', error);
             }
           }
           
           // Update ride location if in active ride
-          if (activeRide?.id && driverProfile?.apiDriverId) {
+          if (activeRide?.id && (driverProfile?.apiDriverId || driverProfile?.id)) {
             try {
               // Convert location format from {latitude, longitude} to {lat, lng}
               const locationData = {
@@ -450,7 +412,7 @@ export default function DriverMapScreen({ navigation, route }) {
                 speed: newLocation.coords.speed || 0,
                 heading: newLocation.coords.heading || 0
               };
-              apiService.updateRideLocation(activeRide.id, driverProfile.apiDriverId, locationData);
+              apiService.updateRideLocation(activeRide.id, driverProfile.apiDriverId || driverProfile.id, locationData);
             } catch (error) {
               console.warn('Failed to update ride location:', error);
             }
@@ -477,11 +439,12 @@ export default function DriverMapScreen({ navigation, route }) {
   const toggleOnlineStatus = async () => {
     try {
       const newStatus = !isOnline;
+      const driverId = driverProfile?.id || driverProfile?.apiDriverId;
       
       // Update status in API if driver is registered
-      if (driverProfile?.apiDriverId) {
+      if (driverId) {
         try {
-          await apiService.updateDriverStatus(driverProfile.apiDriverId, newStatus, location?.coords);
+          await apiService.updateDriverStatus(driverId, newStatus, location?.coords);
         } catch (apiError) {
           console.warn('API status update failed:', apiError);
         }
@@ -1872,9 +1835,9 @@ export default function DriverMapScreen({ navigation, route }) {
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerLeft}>
           <View style={styles.driverInfo}>
-            <Text style={styles.headerTitle}>Motorista</Text>
+            <Text style={styles.headerTitle}>{driverProfile?.nome || 'Motorista'}</Text>
             <Text style={styles.headerSubtitle}>
-              {driverProfile?.nome || 'Carregando...'}
+              {driverProfile?.telefone || driverProfile?.phone || 'Carregando...'}
             </Text>
           </View>
         </View>
@@ -1891,16 +1854,6 @@ export default function DriverMapScreen({ navigation, route }) {
                 {socketConnected ? 'Conectado' : 'Reconectando...'}
               </Text>
             </View>
-          )}
-          
-          {/* Botão de debug - apenas em desenvolvimento */}
-          {__DEV__ && (
-            <TouchableOpacity 
-              style={styles.debugButton}
-              onPress={testConnection}
-            >
-              <MaterialIcons name="bug-report" size={16} color="#ffffff" />
-            </TouchableOpacity>
           )}
           
           <TouchableOpacity 
@@ -1955,22 +1908,15 @@ export default function DriverMapScreen({ navigation, route }) {
           scrollEnabled={false}
           onError={(error) => console.error('WebView error:', error)}
           onLoad={() => {
-            console.log('🌐 WebView loaded successfully');
-            
             // Initialize location and check if we need to start navigation
-            setTimeout(() => {
-              if (location) {
-                updateMapLocation(location);
-              }
-              
-              // If we have an active ride, try to start navigation
-              if (activeRide && navigationMode) {
-                console.log('🎯 WebView loaded with active ride - starting navigation...');
-                setTimeout(() => {
-                  startNavigationToDestination();
-                }, 1000);
-              }
-            }, 2000);
+            if (location) {
+              updateMapLocation(location);
+            }
+            
+            // If we have an active ride, try to start navigation
+            if (activeRide && navigationMode) {
+              startNavigationToDestination();
+            }
           }}
           onMessage={(event) => {
             try {
@@ -2016,72 +1962,6 @@ export default function DriverMapScreen({ navigation, route }) {
       >
         <MaterialIcons name="my-location" size={24} color="#ffffff" />
       </TouchableOpacity>
-
-      {/* Test Navigation Button - Only in development */}
-      {__DEV__ && !navigationMode && (
-        <TouchableOpacity 
-          style={[styles.testNavigationButton, { bottom: insets.bottom + 160 }]}
-                      onPress={() => {
-              if (webViewRef.current && location && activeRide) {
-                console.log('🧪 Testing navigation with actual ride data...');
-                const destination = ridePhase === 'pickup' ? activeRide.pickup : activeRide.destination;
-                const script = `
-                  (function() {
-                    console.log('🧪 === MANUAL NAVIGATION TEST ===');
-                    console.log('📍 Testing with actual ride destination:', ${destination.lat}, ${destination.lng});
-                    
-                    // Force navigation with current ride data
-                    if (typeof startNavigation === 'function') {
-                      console.log('✅ Forcing navigation with ride data...');
-                      startNavigation(${destination.lat}, ${destination.lng}, '${activeRide.passengerName}', '${ridePhase}');
-                      return true;
-                    } else if (typeof testCreateLine === 'function') {
-                      console.log('🔄 Using test line as fallback...');
-                      testCreateLine();
-                      return true;
-                    } else {
-                      console.error('❌ No navigation functions available');
-                      alert('Nenhuma função de navegação disponível');
-                      return false;
-                    }
-                  })();
-                `;
-                
-                try {
-                  webViewRef.current.injectJavaScript(script);
-                  console.log('💉 Test script injected directly');
-                } catch (error) {
-                  console.error('❌ Failed to inject test script:', error);
-                  webViewRef.current.postMessage(script);
-                }
-              } else if (webViewRef.current && location) {
-                console.log('🧪 Testing basic line creation...');
-                const script = `
-                  (function() {
-                    console.log('🧪 === BASIC LINE TEST ===');
-                    if (typeof testCreateLine === 'function') {
-                      testCreateLine();
-                      return true;
-                    } else {
-                      console.error('❌ testCreateLine function not found');
-                      alert('Função de teste não encontrada');
-                      return false;
-                    }
-                  })();
-                `;
-                
-                try {
-                  webViewRef.current.injectJavaScript(script);
-                  console.log('💉 Basic test script injected');
-                } catch (error) {
-                  webViewRef.current.postMessage(script);
-                }
-              }
-            }}
-        >
-          <MaterialIcons name="route" size={20} color="#ffffff" />
-        </TouchableOpacity>
-      )}
 
      
 
@@ -2385,42 +2265,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 8,
   },
-  testNavigationButton: {
-    position: 'absolute',
-    right: 20,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F59E0B',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  debugButton: {
-    position: 'absolute',
-    right: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#8B5CF6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 6,
-  },
+
   navigationControls: {
     position: 'absolute',
     left: 20,

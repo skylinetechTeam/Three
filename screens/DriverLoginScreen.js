@@ -609,9 +609,14 @@ export default function DriverLoginScreen({ navigation }) {
           </View>
 
           {/* Set Password Button */}
-          <TouchableOpacity style={styles.loginButton} onPress={handleSetNewPassword}>
-            <Text style={styles.loginButtonText}>Definir Senha e Entrar</Text>
-            <Ionicons name="checkmark-circle" size={20} color={COLORS.white} style={styles.buttonIcon} />
+          <TouchableOpacity 
+            style={[styles.loginButton, loading && styles.buttonDisabled]} 
+            onPress={handleSetNewPassword}
+            disabled={loading}>
+            <Text style={styles.loginButtonText}>
+              {loading ? "Definindo senha..." : "Definir Senha e Entrar"}
+            </Text>
+            {!loading && <Ionicons name="checkmark-circle" size={20} color={COLORS.white} style={styles.buttonIcon} />}
           </TouchableOpacity>
 
           {/* Back Button */}
@@ -828,6 +833,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 6,
+  },
+  buttonDisabled: {
+    backgroundColor: COLORS.gray,
+    shadowOpacity: 0.1,
   },
   loginButtonText: {
     ...FONTS.h3,

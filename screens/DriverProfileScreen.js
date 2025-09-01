@@ -71,25 +71,11 @@ export default function DriverProfileScreen({ navigation }) {
           setDriverProfile(profile);
           setIsOnline(onlineStatus);
         } else {
-          // Create a default driver profile for demo
-          const defaultProfile = {
-            name: 'João Silva',
-            email: 'joao.motorista@email.com',
-            phone: '912345678',
-            vehicles: [{
-              make: 'Toyota',
-              model: 'Corolla',
-              license_plate: 'LD-12-34-AB',
-              color: 'Branco',
-              year: 2020,
-            }],
-            rating: 4.8,
-            total_trips: 142,
-            created_at: '2023-01-15',
-            isLoggedIn: true,
-          };
-          await LocalDatabase.saveDriverProfile(defaultProfile);
-          setDriverProfile(defaultProfile);
+          // Se não houver perfil, redirecionar para login
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'DriverLogin' }],
+          });
         }
       }
     } catch (error) {

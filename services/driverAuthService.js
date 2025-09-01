@@ -100,73 +100,55 @@ class DriverAuthService {
     }
   }
 
-  // Verificar senha do motorista
+  // Verificar senha do motorista (localmente)
   async verifyDriverPassword(driverId, password) {
     try {
-      console.log('🔐 Verificando senha do motorista:', driverId);
+      console.log('🔐 Verificando senha do motorista localmente:', driverId);
       
       if (!driverId || !password) {
         throw new Error('ID do motorista e senha são obrigatórios');
       }
 
-      const { data, error } = await supabase
-        .from('drivers')
-        .select('password_hash')
-        .eq('id', driverId)
-        .single();
-
-      if (error) {
-        console.error('❌ Erro ao buscar senha:', error);
-        
-        if (error.message?.includes('network') || error.message?.includes('fetch')) {
-          throw new Error('Erro de conexão. Verifique sua internet e tente novamente.');
-        } else if (error.code === 'PGRST116') {
-          throw new Error('Motorista não encontrado.');
-        } else {
-          throw new Error('Erro no servidor. Tente novamente.');
-        }
+      const localData = await this.getLocalDriverData();
+      
+      if (!localData) {
+        throw new Error('Dados do motorista não encontrados localmente');
       }
 
-      // Por simplicidade, vamos comparar diretamente (em produção use bcrypt)
-      const isValid = data.password_hash === password;
+      // Comparar senha armazenada localmente
+      const isValid = localData.password === password;
       
       console.log(isValid ? '✅ Senha válida' : '❌ Senha inválida');
       return isValid;
 
     } catch (error) {
       console.error('❌ Erro ao verificar senha:', error);
-      
-      if (error.message && !error.message.includes('supabase')) {
-        throw error;
-      }
-      
       throw new Error('Erro ao verificar senha. Tente novamente.');
     }
   }
 
-  // Definir nova senha para motorista
+  // Definir nova senha para motorista (apenas localmente)
   async setDriverPassword(driverId, password) {
     try {
-      console.log('🔐 Definindo nova senha para motorista:', driverId);
+      console.log('🔐 Definindo nova senha localmente para motorista:', driverId);
       
-      const { error } = await supabase
-        .from('drivers')
-        .update({ 
-          password_hash: password, // Em produção, use bcrypt para hash
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', driverId);
-
-      if (error) {
-        console.error('❌ Erro ao definir senha:', error);
-        throw error;
-      }
-
-      console.log('✅ Senha definida com sucesso');
+      const currentData = await this.getLocalDriverData() || {};
+      
+      // Atualizar com a nova senha
+      const updatedData = {
+        ...currentData,
+        password: password, // Salvando senha apenas localmente
+        updated_at: new Date().toISOString()
+      };
+      
+      // Salvar no AsyncStorage
+      await AsyncStorage.setItem(STORAGE_KEYS.DRIVER_AUTH, JSON.stringify(updatedData));
+      
+      console.log('✅ Senha definida com sucesso localmente');
       return true;
 
     } catch (error) {
-      console.error('❌ Erro ao definir senha:', error);
+      console.error('❌ Erro ao definir senha localmente:', error);
       throw error;
     }
   }

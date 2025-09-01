@@ -44,7 +44,7 @@ const PrivacyScreen = ({ navigation }) => {
           </View>
           <View style={styles.listItem}>
             <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-            <Text style={styles.listText}>Localização durante o uso do app</Text>
+            <Text style={styles.listText}>Localização em tempo real para funcionamento do serviço</Text>
           </View>
           <View style={styles.listItem}>
             <Ionicons name="checkmark-circle" size={20} color="#10B981" />
@@ -52,7 +52,15 @@ const PrivacyScreen = ({ navigation }) => {
           </View>
           <View style={styles.listItem}>
             <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-            <Text style={styles.listText}>Dados de dispositivo e uso</Text>
+            <Text style={styles.listText}>Dados de dispositivo e uso do aplicativo</Text>
+          </View>
+          <View style={styles.listItem}>
+            <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+            <Text style={styles.listText}>Fotos e arquivos (para foto de perfil e documentos)</Text>
+          </View>
+          <View style={styles.listItem}>
+            <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+            <Text style={styles.listText}>Informações de pagamento (processadas de forma segura)</Text>
           </View>
         </View>
 
@@ -80,13 +88,36 @@ const PrivacyScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Permissões do Aplicativo</Text>
+          <Text style={styles.sectionText}>
+            Para fornecer nossos serviços, solicitamos as seguintes permissões:
+          </Text>
+          <View style={styles.listItem}>
+            <Ionicons name="location" size={20} color="#3B82F6" />
+            <Text style={styles.listText}>Localização: necessária para encontrar motoristas e mostrar sua posição no mapa</Text>
+          </View>
+          <View style={styles.listItem}>
+            <Ionicons name="camera" size={20} color="#3B82F6" />
+            <Text style={styles.listText}>Câmera e Fotos: para foto de perfil e envio de documentos</Text>
+          </View>
+          <View style={styles.listItem}>
+            <Ionicons name="notifications" size={20} color="#3B82F6" />
+            <Text style={styles.listText}>Notificações: para atualizações de viagem e mensagens importantes</Text>
+          </View>
+          <View style={styles.listItem}>
+            <Ionicons name="phone-portrait" size={20} color="#3B82F6" />
+            <Text style={styles.listText}>Estado do dispositivo: para otimização do serviço</Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Proteção de Dados</Text>
           <Text style={styles.sectionText}>
             Implementamos medidas de segurança rigorosas para proteger suas informações:
           </Text>
           <View style={styles.listItem}>
             <Ionicons name="shield-checkmark" size={20} color="#3B82F6" />
-            <Text style={styles.listText}>Criptografia de dados em trânsito</Text>
+            <Text style={styles.listText}>Criptografia de dados em trânsito e armazenamento</Text>
           </View>
           <View style={styles.listItem}>
             <Ionicons name="shield-checkmark" size={20} color="#3B82F6" />
@@ -95,6 +126,10 @@ const PrivacyScreen = ({ navigation }) => {
           <View style={styles.listItem}>
             <Ionicons name="shield-checkmark" size={20} color="#3B82F6" />
             <Text style={styles.listText}>Monitoramento contínuo de segurança</Text>
+          </View>
+          <View style={styles.listItem}>
+            <Ionicons name="shield-checkmark" size={20} color="#3B82F6" />
+            <Text style={styles.listText}>Backups regulares e proteção contra perdas</Text>
           </View>
         </View>
 
@@ -147,13 +182,70 @@ const PrivacyScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Retenção de Dados</Text>
+          <Text style={styles.sectionText}>
+            Mantemos seus dados apenas pelo tempo necessário para:
+          </Text>
+          <View style={styles.listItem}>
+            <Ionicons name="time" size={20} color="#6B7280" />
+            <Text style={styles.listText}>Cumprir obrigações legais e regulatórias</Text>
+          </View>
+          <View style={styles.listItem}>
+            <Ionicons name="time" size={20} color="#6B7280" />
+            <Text style={styles.listText}>Resolver disputas e prevenir fraudes</Text>
+          </View>
+          <View style={styles.listItem}>
+            <Ionicons name="time" size={20} color="#6B7280" />
+            <Text style={styles.listText}>Manter registros de transações conforme exigido por lei</Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Privacidade de Crianças</Text>
+          <Text style={styles.sectionText}>
+            Nossos serviços não são direcionados a menores de 18 anos. Não coletamos 
+            intencionalmente informações pessoais de crianças. Se você acredita que 
+            coletamos dados de um menor, entre em contato conosco imediatamente.
+          </Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Serviços de Terceiros</Text>
+          <Text style={styles.sectionText}>
+            Utilizamos serviços de terceiros confiáveis para:
+          </Text>
+          <View style={styles.listItem}>
+            <Ionicons name="link" size={20} color="#8B5CF6" />
+            <Text style={styles.listText}>Processamento seguro de pagamentos</Text>
+          </View>
+          <View style={styles.listItem}>
+            <Ionicons name="link" size={20} color="#8B5CF6" />
+            <Text style={styles.listText}>Serviços de mapas e localização</Text>
+          </View>
+          <View style={styles.listItem}>
+            <Ionicons name="link" size={20} color="#8B5CF6" />
+            <Text style={styles.listText}>Análise de uso do aplicativo</Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Transferências Internacionais</Text>
+          <Text style={styles.sectionText}>
+            Seus dados podem ser processados em servidores localizados fora do seu país. 
+            Garantimos que essas transferências sejam realizadas com medidas de segurança 
+            adequadas e em conformidade com as leis de proteção de dados aplicáveis.
+          </Text>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Atualizações</Text>
           <Text style={styles.sectionText}>
             Esta política pode ser atualizada periodicamente. Notificaremos sobre 
-            mudanças significativas através do app ou por email.
+            mudanças significativas através do app ou por email. Ao continuar usando 
+            nossos serviços após as alterações, você concorda com a política atualizada.
           </Text>
           <Text style={styles.lastUpdated}>
-            Última atualização: Janeiro 2024
+            Última atualização: Setembro 2025
           </Text>
         </View>
       </ScrollView>
