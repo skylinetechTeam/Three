@@ -27,7 +27,11 @@ const TermsScreen = ({ navigation }) => {
         <View style={styles.placeholder} />
       </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Aceitação dos Termos</Text>
           <Text style={styles.sectionText}>
@@ -53,7 +57,7 @@ const TermsScreen = ({ navigation }) => {
           </View>
           <View style={styles.listItem}>
             <Ionicons name="car-outline" size={20} color="#10B981" />
-            <Text style={styles.listText}>Histórico de viagens</Text>
+            <Text style={styles.listText}>Reserva de viagens</Text>
           </View>
           <View style={styles.listItem}>
             <Ionicons name="car-outline" size={20} color="#10B981" />
@@ -229,6 +233,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 30,
   },
   header: {
     flexDirection: 'row',

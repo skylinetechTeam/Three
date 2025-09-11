@@ -1346,7 +1346,7 @@ export default function HomeScreen({ navigation, route }) {
         }
       } catch (error) {
         console.error('❌ Erro ao calcular tarifa:', error);
-        estimatedFare = vehicleType === 'privado' ? 800 : 500;
+        estimatedFare = vehicleType === 'privado' ? 1000 : 500;
       }
       
       // Garantir formatação correta dos textos

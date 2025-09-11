@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   SafeAreaView,
+  ActivityIndicator,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,8 +21,11 @@ export default function SetPasswordScreen({ navigation, route = {} }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleContinue = async () => {
+    if (isLoading) return;
+    
     if (!password || !confirmPassword) {
       Toast.show({
         type: "error",
@@ -49,66 +53,30 @@ export default function SetPasswordScreen({ navigation, route = {} }) {
       return;
     }
 
+    setIsLoading(true);
+    
     try {
       const userData = route?.params?.userData || {};
-      const profileToSave = {
-        ...userData,
-        password,
-        isLoggedIn: true,
-        createdAt: userData?.createdAt || new Date().toISOString(),
-        apiRegistered: false,
-      };
-
-      const LocalDatabase = (await import('../services/localDatabase')).default;
-      
-      // Save locally first
-      await LocalDatabase.saveUserProfile(profileToSave);
-      
-      // Also save as passenger profile
-      const passengerProfile = {
-        name: userData.nome,
-        phone: userData.telefone,
+      // Registra o usuário usando o authService
+      const { user } = await authService.register({
+        nome: userData.nome,
         email: userData.email,
-        preferredPaymentMethod: 'cash',
-        password: password,
-        isLoggedIn: true,
-        apiRegistered: false,
-      };
-      
-      await LocalDatabase.savePassengerProfile(passengerProfile);
-      
-      // Register with API
+        telefone: userData.telefone,
+        senha: password
+      });
+
+      // Conecta ao socket da API
       try {
-        const passengerData = {
-          name: userData.nome,
-          phone: userData.telefone,
-          email: userData.email,
-          preferredPaymentMethod: 'cash'
-        };
-        
-        const apiResponse = await apiService.registerPassenger(passengerData);
-        const passengerId = apiResponse.data.passengerId;
-        
-        // Update with API ID
-        await LocalDatabase.updatePassengerProfile({
-          apiPassengerId: passengerId,
-          apiRegistered: true
-        });
-        
-        Toast.show({
-          type: "success",
-          text1: "Conta criada",
-          text2: "Registrado com sucesso no servidor!",
-        });
-        
-      } catch (apiError) {
-        console.warn('API registration failed:', apiError);
-        Toast.show({
-          type: "success",
-          text1: "Conta criada",
-          text2: "Bem-vindo! (modo offline)",
-        });
+        apiService.connectSocket('passenger', user.id);
+      } catch (socketError) {
+        console.warn('Socket connection failed:', socketError);
       }
+
+      Toast.show({
+        type: "success",
+        text1: "Conta criada",
+        text2: "Registrado com sucesso!",
+      });
 
       navigation.reset({
         index: 0,
@@ -121,6 +89,8 @@ export default function SetPasswordScreen({ navigation, route = {} }) {
         text1: 'Erro',
         text2: 'Não foi possível finalizar o registro.',
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -202,8 +172,16 @@ export default function SetPasswordScreen({ navigation, route = {} }) {
             </Text>
 
             {/* Continue Button */}
-            <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-              <Text style={styles.continueButtonText}>Continuar</Text>
+            <TouchableOpacity 
+              style={[styles.continueButton, isLoading && styles.buttonDisabled]}
+              onPress={handleContinue}
+              disabled={isLoading || !password || !confirmPassword}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.continueButtonText}>Continuar</Text>
+              )}
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -285,5 +263,9 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  buttonDisabled: {
+    backgroundColor: '#93C5FD',
+    opacity: 0.7,
   },
 });

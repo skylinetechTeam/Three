@@ -10,6 +10,7 @@ import {
   ScrollView,
   Image,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import LocalDatabase from '../services/localDatabase';
@@ -18,6 +19,48 @@ export default function ProfileScreen({ navigation }) {
   const [userProfile, setUserProfile] = useState(null);
   const [tripCount, setTripCount] = useState(0);
   const [favoriteCount, setFavoriteCount] = useState(0);
+  
+  // Obter dimensões da tela para responsividade
+  const { width } = useWindowDimensions();
+  
+  // Definir estilos responsivos com base na largura da tela
+  const getResponsiveStyles = () => {
+    // Definir breakpoints
+    const isSmallScreen = width < 360;
+    const isMediumScreen = width >= 360 && width < 480;
+    const isLargeScreen = width >= 480 && width < 768;
+    const isExtraLargeScreen = width >= 768;
+    
+    // Definir multiplicadores baseados no tamanho da tela
+    const fontMultiplier = isSmallScreen ? 0.85 : isMediumScreen ? 1 : isLargeScreen ? 1.15 : 1.3;
+    const paddingMultiplier = isSmallScreen ? 0.85 : isMediumScreen ? 1 : isLargeScreen ? 1.2 : 1.5;
+    
+    return {
+      fontSize: {
+        header: 20 * fontMultiplier,
+        userName: 24 * fontMultiplier,
+        userInfo: 16 * fontMultiplier,
+        button: 14 * fontMultiplier,
+        stat: 24 * fontMultiplier,
+        statLabel: 14 * fontMultiplier,
+        section: 18 * fontMultiplier,
+        menuItem: 16 * fontMultiplier,
+        version: 14 * fontMultiplier,
+      },
+      padding: {
+        container: 20 * paddingMultiplier,
+        card: 24 * paddingMultiplier,
+        menuItem: 16 * paddingMultiplier,
+      },
+      layout: {
+        maxWidth: isExtraLargeScreen ? 700 : '100%',
+        centerContent: isExtraLargeScreen,
+        alignSelf: isExtraLargeScreen ? 'center' : 'stretch',
+      }
+    };
+  };
+  
+  const responsiveStyles = getResponsiveStyles();
 
   useEffect(() => {
     loadUserData();
@@ -120,17 +163,20 @@ export default function ProfileScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       
-      <ScrollView style={styles.scrollView}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={responsiveStyles.layout.centerContent ? {alignItems: 'center'} : null}
+      >
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Meu Perfil</Text>
+        <View style={[styles.header, {width: '100%'}]}>
+          <Text style={[styles.headerTitle, {fontSize: responsiveStyles.fontSize.header}]}>Meu Perfil</Text>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
             <MaterialIcons name="logout" size={24} color="#EF4444" />
           </TouchableOpacity>
         </View>
 
         {/* Profile Card */}
-        <View style={styles.profileCard}>
+        <View style={[styles.profileCard, {width: '100%', maxWidth: responsiveStyles.layout.maxWidth, padding: responsiveStyles.padding.card}]}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
@@ -143,97 +189,97 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </View>
 
-          <Text style={styles.userName}>{userProfile.nome || userProfile.fullName || 'Usuário'}</Text>
-          <Text style={styles.userEmail}>{userProfile.email}</Text>
-          <Text style={styles.userPhone}>{userProfile.telefone || userProfile.phone || ''}</Text>
+          <Text style={[styles.userName, {fontSize: responsiveStyles.fontSize.userName}]}>{userProfile.nome || userProfile.fullName || 'Usuário'}</Text>
+          <Text style={[styles.userEmail, {fontSize: responsiveStyles.fontSize.userInfo}]}>{userProfile.email}</Text>
+          <Text style={[styles.userPhone, {fontSize: responsiveStyles.fontSize.userInfo}]}>{userProfile.telefone || userProfile.phone || ''}</Text>
           
-          <TouchableOpacity onPress={handleEditProfile} style={styles.editButton}>
+          <TouchableOpacity onPress={handleEditProfile} style={[styles.editButton, {paddingVertical: responsiveStyles.padding.menuItem / 2}]}>
             <MaterialIcons name="edit" size={16} color="#2563EB" />
-            <Text style={styles.editButtonText}>Editar Perfil</Text>
+            <Text style={[styles.editButtonText, {fontSize: responsiveStyles.fontSize.button}]}>Editar Perfil</Text>
           </TouchableOpacity>
         </View>
 
         {/* Stats */}
-        <View style={styles.statsContainer}>
+        <View style={[styles.statsContainer, {width: '100%', maxWidth: responsiveStyles.layout.maxWidth}]}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{tripCount}</Text>
-            <Text style={styles.statLabel}>Viagens</Text>
+            <Text style={[styles.statNumber, {fontSize: responsiveStyles.fontSize.stat}]}>{tripCount}</Text>
+            <Text style={[styles.statLabel, {fontSize: responsiveStyles.fontSize.statLabel}]}>Viagens</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{favoriteCount}</Text>
-            <Text style={styles.statLabel}>Favoritos</Text>
+            <Text style={[styles.statNumber, {fontSize: responsiveStyles.fontSize.stat}]}>{favoriteCount}</Text>
+            <Text style={[styles.statLabel, {fontSize: responsiveStyles.fontSize.statLabel}]}>Favoritos</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>
+            <Text style={[styles.statNumber, {fontSize: responsiveStyles.fontSize.stat}]}>
               {userProfile.createdAt ? 
                 new Date(userProfile.createdAt).getFullYear() : 
                 new Date().getFullYear()
               }
             </Text>
-            <Text style={styles.statLabel}>Membro desde</Text>
+            <Text style={[styles.statLabel, {fontSize: responsiveStyles.fontSize.statLabel}]}>Membro desde</Text>
           </View>
         </View>
 
         {/* Menu Items */}
-        <View style={styles.menuSection}>
-          <Text style={styles.sectionTitle}>Minhas Viagens</Text>
+        <View style={[styles.menuSection, {width: '100%', maxWidth: responsiveStyles.layout.maxWidth}]}>
+          <Text style={[styles.sectionTitle, {fontSize: responsiveStyles.fontSize.section}]}>Minhas Viagens</Text>
           
-          <TouchableOpacity onPress={handleViewTrips} style={styles.menuItem}>
+          <TouchableOpacity onPress={handleViewTrips} style={[styles.menuItem, {paddingVertical: responsiveStyles.padding.menuItem}]}>
             <MaterialIcons name="history" size={24} color="#2563EB" />
-            <Text style={styles.menuItemText}>Histórico de Viagens</Text>
+            <Text style={[styles.menuItemText, {fontSize: responsiveStyles.fontSize.menuItem}]}>Reservas de Viagens</Text>
             <MaterialIcons name="chevron-right" size={24} color="#9CA3AF" />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={handleViewFavorites} style={styles.menuItem}>
+          <TouchableOpacity onPress={handleViewFavorites} style={[styles.menuItem, {paddingVertical: responsiveStyles.padding.menuItem}]}>
             <MaterialIcons name="favorite" size={24} color="#EF4444" />
-            <Text style={styles.menuItemText}>Destinos Favoritos</Text>
+            <Text style={[styles.menuItemText, {fontSize: responsiveStyles.fontSize.menuItem}]}>Destinos Favoritos</Text>
             <MaterialIcons name="chevron-right" size={24} color="#9CA3AF" />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.menuSection}>
-          <Text style={styles.sectionTitle}>Configurações</Text>
+        <View style={[styles.menuSection, {width: '100%', maxWidth: responsiveStyles.layout.maxWidth}]}>
+          <Text style={[styles.sectionTitle, {fontSize: responsiveStyles.fontSize.section}]}>Configurações</Text>
           
-          <TouchableOpacity onPress={handleSettings} style={styles.menuItem}>
+          <TouchableOpacity onPress={handleSettings} style={[styles.menuItem, {paddingVertical: responsiveStyles.padding.menuItem}]}>
             <MaterialIcons name="settings" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>Configurações</Text>
+            <Text style={[styles.menuItemText, {fontSize: responsiveStyles.fontSize.menuItem}]}>Configurações</Text>
             <MaterialIcons name="chevron-right" size={24} color="#9CA3AF" />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={handleHelp} style={styles.menuItem}>
+          <TouchableOpacity onPress={handleHelp} style={[styles.menuItem, {paddingVertical: responsiveStyles.padding.menuItem}]}>
             <MaterialIcons name="help" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>Central de Ajuda</Text>
+            <Text style={[styles.menuItemText, {fontSize: responsiveStyles.fontSize.menuItem}]}>Central de Ajuda</Text>
             <MaterialIcons name="chevron-right" size={24} color="#9CA3AF" />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.menuSection}>
-          <Text style={styles.sectionTitle}>Legal</Text>
+        <View style={[styles.menuSection, {width: '100%', maxWidth: responsiveStyles.layout.maxWidth}]}>
+          <Text style={[styles.sectionTitle, {fontSize: responsiveStyles.fontSize.section}]}>Legal</Text>
           
-          <TouchableOpacity onPress={handlePrivacy} style={styles.menuItem}>
+          <TouchableOpacity onPress={handlePrivacy} style={[styles.menuItem, {paddingVertical: responsiveStyles.padding.menuItem}]}>
             <MaterialIcons name="privacy-tip" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>Política de Privacidade</Text>
+            <Text style={[styles.menuItemText, {fontSize: responsiveStyles.fontSize.menuItem}]}>Política de Privacidade</Text>
             <MaterialIcons name="chevron-right" size={24} color="#9CA3AF" />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={handleTerms} style={styles.menuItem}>
+          <TouchableOpacity onPress={handleTerms} style={[styles.menuItem, {paddingVertical: responsiveStyles.padding.menuItem}]}>
             <MaterialIcons name="description" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>Termos de Uso</Text>
+            <Text style={[styles.menuItemText, {fontSize: responsiveStyles.fontSize.menuItem}]}>Termos de Uso</Text>
             <MaterialIcons name="chevron-right" size={24} color="#9CA3AF" />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={handleAbout} style={styles.menuItem}>
+          <TouchableOpacity onPress={handleAbout} style={[styles.menuItem, {paddingVertical: responsiveStyles.padding.menuItem}]}>
             <MaterialIcons name="info" size={24} color="#6B7280" />
-            <Text style={styles.menuItemText}>Sobre o App</Text>
+            <Text style={[styles.menuItemText, {fontSize: responsiveStyles.fontSize.menuItem}]}>Sobre o App</Text>
             <MaterialIcons name="chevron-right" size={24} color="#9CA3AF" />
           </TouchableOpacity>
         </View>
 
         {/* App Version */}
-        <View style={styles.versionContainer}>
-          <Text style={styles.versionText}>Three v1.0.0</Text>
+        <View style={[styles.versionContainer, {width: '100%', maxWidth: responsiveStyles.layout.maxWidth}]}>
+          <Text style={[styles.versionText, {fontSize: responsiveStyles.fontSize.version}]}>Three v1.0.0</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

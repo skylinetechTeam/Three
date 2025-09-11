@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
   StatusBar,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -17,6 +18,44 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 const SettingsScreen = ({ navigation }) => {
   const [notifications, setNotifications] = useState(true);
   const [locationServices, setLocationServices] = useState(true);
+  
+  // Obter dimensões da tela para responsividade
+  const { width } = useWindowDimensions();
+  
+  // Definir estilos responsivos com base na largura da tela
+  const getResponsiveStyles = () => {
+    // Definir breakpoints
+    const isSmallScreen = width < 360;
+    const isMediumScreen = width >= 360 && width < 480;
+    const isLargeScreen = width >= 480 && width < 768;
+    const isExtraLargeScreen = width >= 768;
+    
+    // Definir multiplicadores baseados no tamanho da tela
+    const fontMultiplier = isSmallScreen ? 0.85 : isMediumScreen ? 1 : isLargeScreen ? 1.15 : 1.3;
+    const paddingMultiplier = isSmallScreen ? 0.85 : isMediumScreen ? 1 : isLargeScreen ? 1.2 : 1.5;
+    
+    return {
+      fontSize: {
+        title: 20 * fontMultiplier,
+        section: 18 * fontMultiplier,
+        item: 16 * fontMultiplier,
+        subtitle: 14 * fontMultiplier,
+        button: 16 * fontMultiplier,
+      },
+      padding: {
+        container: 20 * paddingMultiplier,
+        section: 16 * paddingMultiplier,
+        item: 20 * paddingMultiplier,
+      },
+      layout: {
+        maxWidth: isExtraLargeScreen ? 700 : '100%',
+        centerContent: isExtraLargeScreen,
+        alignSelf: isExtraLargeScreen ? 'center' : 'stretch',
+      }
+    };
+  };
+  
+  const responsiveStyles = getResponsiveStyles();
 
   const handleLogout = () => {
     Alert.alert(
@@ -172,7 +211,7 @@ const SettingsScreen = ({ navigation }) => {
     return (
       <TouchableOpacity
         key={item.id}
-        style={styles.settingItem}
+        style={[styles.settingItem, {padding: responsiveStyles.padding.item}]}
         onPress={() => {
           if (item.action === 'navigate') {
             // Navegar para a tela específica
@@ -203,8 +242,8 @@ const SettingsScreen = ({ navigation }) => {
           <Ionicons name={item.icon} size={24} color="#6B7280" />
         </View>
         <View style={styles.settingInfo}>
-          <Text style={styles.settingTitle}>{item.title}</Text>
-          <Text style={styles.settingSubtitle}>{item.subtitle}</Text>
+          <Text style={[styles.settingTitle, {fontSize: responsiveStyles.fontSize.item}]}>{item.title}</Text>
+          <Text style={[styles.settingSubtitle, {fontSize: responsiveStyles.fontSize.subtitle}]}>{item.subtitle}</Text>
         </View>
         {item.action === 'switch' ? (
           <Switch
@@ -232,14 +271,18 @@ const SettingsScreen = ({ navigation }) => {
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Configurações</Text>
+        <Text style={[styles.headerTitle, {fontSize: responsiveStyles.fontSize.title}]}>Configurações</Text>
         <View style={styles.placeholder} />
       </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content}
+        contentContainerStyle={[styles.scrollContent, {maxWidth: responsiveStyles.layout.maxWidth, alignSelf: responsiveStyles.layout.alignSelf}]}
+        showsVerticalScrollIndicator={false}
+      >
         {settingsSections.map((section) => (
-          <View key={section.title} style={styles.section}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
+          <View key={section.title} style={[styles.section, {padding: responsiveStyles.layout.centerContent ? responsiveStyles.padding.container : 0}]}>
+            <Text style={[styles.sectionTitle, {fontSize: responsiveStyles.fontSize.section}]}>{section.title}</Text>
             <View style={styles.sectionContent}>
               {section.items.map(renderSettingItem)}
             </View>
@@ -249,19 +292,19 @@ const SettingsScreen = ({ navigation }) => {
         {/* Botões de Ação */}
         <View style={styles.actionButtons}>
           <TouchableOpacity
-            style={styles.logoutButton}
+            style={[styles.logoutButton, {padding: responsiveStyles.padding.item}]}
             onPress={handleLogout}
           >
             <Ionicons name="log-out-outline" size={20} color="#EF4444" />
-            <Text style={styles.logoutText}>Sair da Conta</Text>
+            <Text style={[styles.logoutText, {fontSize: responsiveStyles.fontSize.button}]}>Sair da Conta</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.deleteButton}
+            style={[styles.deleteButton, {padding: responsiveStyles.padding.item}]}
             onPress={handleDeleteAccount}
           >
             <Ionicons name="trash-outline" size={20} color="#EF4444" />
-            <Text style={styles.deleteText}>Excluir Conta</Text>
+            <Text style={[styles.deleteText, {fontSize: responsiveStyles.fontSize.button}]}>Excluir Conta</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -273,6 +316,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 30,
   },
   header: {
     flexDirection: 'row',

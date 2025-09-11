@@ -10,10 +10,11 @@ import {
   Platform,
   ScrollView,
   SafeAreaView,
+  ActivityIndicator,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
-import LocalDatabase from "../services/localDatabase";
+import authService from "../services/authService";
 import apiService from "../services/apiService";
 import { COLORS, SIZES, FONTS, SHADOWS, COMMON_STYLES } from "../config/theme";
 
@@ -22,89 +23,60 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Login usando dados salvos no dispositivo
+  const [isLoading, setIsLoading] = useState(false);
+
   const handleLogin = async () => {
+    if (isLoading) return;
+    
     if (!emailOrPhone || !password) {
-       Toast.show({
-          type: "error",
-          text1: "Erro ao iniciar sessão",
-          text2: "Por favor, preencha todos os campos.",
-        });
+      Toast.show({
+        type: "error",
+        text1: "Erro ao iniciar sessão",
+        text2: "Por favor, preencha todos os campos.",
+      });
       return;
     }
 
+    setIsLoading(true);
+
     try {
-      const input = (emailOrPhone || '').trim();
-      const typedPassword = (password || '').trim();
-
-      const storedProfile = await LocalDatabase.getUserProfile();
-
-      if (!storedProfile) {
-        Toast.show({
-          type: "error",
-          text1: "Conta não encontrada",
-          text2: "Crie uma conta primeiro.",
-        });
-        return;
-      }
-
-      const emailMatch = (storedProfile.email || '').toLowerCase() === input.toLowerCase();
-      const phoneMatch = (storedProfile.telefone || storedProfile.phone || '') === input;
-      const passwordMatch = (storedProfile.password || '') === typedPassword;
-
-      if (!passwordMatch || !(emailMatch || phoneMatch)) {
-        Toast.show({
-          type: "error",
-          text1: "Erro ao iniciar sessão",
-          text2: "Email/telefone ou senha incorretos.",
-        });
-        return;
-      }
-
-      await LocalDatabase.updateUserProfile({
-        isLoggedIn: true,
-        lastLogin: new Date().toISOString(),
-      });
+      const input = emailOrPhone.trim();
+      const isEmail = input.includes('@');
       
-      // Get or create passenger profile and connect to API
-      let passengerProfile = await LocalDatabase.getPassengerProfile();
-      
-      if (!passengerProfile) {
-        passengerProfile = {
-          name: storedProfile.nome,
-          phone: storedProfile.telefone,
-          email: storedProfile.email,
-          preferredPaymentMethod: 'cash',
-          password: storedProfile.password,
-          isLoggedIn: true,
-          apiRegistered: false,
-        };
-        await LocalDatabase.savePassengerProfile(passengerProfile);
-      }
-      
-      // Connect to API socket if registered
-      if (passengerProfile.apiPassengerId) {
-        try {
-          apiService.connectSocket('passenger', passengerProfile.apiPassengerId);
-        } catch (socketError) {
-          console.warn('Socket connection failed:', socketError);
-        }
+      const loginData = {
+        [isEmail ? 'email' : 'telefone']: input,
+        senha: password
+      };
+
+      const { user } = await authService.login(loginData);
+
+      // Connect to API socket
+      try {
+        apiService.connectSocket('passenger', user.id);
+      } catch (socketError) {
+        console.warn('Socket connection failed:', socketError);
       }
 
       Toast.show({
         type: "success",
         text1: "Bem-vindo!",
-        text2: `Olá, ${storedProfile.nome || storedProfile.fullName || storedProfile.email}!`,
+        text2: `Olá, ${user.nome}!`,
       });
 
-      navigation.reset({ index: 0, routes: [{ name: "HomeTabs" }] });
+      navigation.reset({ 
+        index: 0, 
+        routes: [{ name: "HomeTabs" }] 
+      });
+      
     } catch (error) {
       console.error('Login error:', error);
       Toast.show({
         type: "error",
         text1: "Erro ao iniciar sessão",
-        text2: "Tente novamente.",
+        text2: error.message || "Email/telefone ou senha incorretos.",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -165,8 +137,16 @@ export default function LoginScreen({ navigation }) {
             </TouchableOpacity>
 
             {/* Login Button */}
-            <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-              <Text style={styles.loginButtonText}>Entrar</Text>
+            <TouchableOpacity 
+              style={[styles.loginButton, isLoading && styles.buttonDisabled]} 
+              onPress={handleLogin}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.loginButtonText}>Entrar</Text>
+              )}
             </TouchableOpacity>
 
             {/* Divider */}
@@ -271,6 +251,10 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  buttonDisabled: {
+    backgroundColor: '#93C5FD',
+    opacity: 0.7,
   },
   dividerContainer: {
     flexDirection: 'row',

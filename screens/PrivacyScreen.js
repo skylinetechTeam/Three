@@ -27,7 +27,11 @@ const PrivacyScreen = ({ navigation }) => {
         <View style={styles.placeholder} />
       </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Como Protegemos Seus Dados</Text>
           <Text style={styles.sectionText}>
@@ -173,11 +177,11 @@ const PrivacyScreen = ({ navigation }) => {
           </Text>
           <View style={styles.contactItem}>
             <Ionicons name="mail-outline" size={20} color="#6B7280" />
-            <Text style={styles.contactText}>privacy@threeapp.com</Text>
+            <Text style={styles.contactText}>threecompanyofangola@gmail.com</Text>
           </View>
           <View style={styles.contactItem}>
             <Ionicons name="call-outline" size={20} color="#6B7280" />
-            <Text style={styles.contactText}>+244 123 456 789</Text>
+            <Text style={styles.contactText}>+244 975651828</Text>
           </View>
         </View>
 
@@ -257,6 +261,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 30,
   },
   header: {
     flexDirection: 'row',

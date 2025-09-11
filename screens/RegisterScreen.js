@@ -10,12 +10,14 @@ import {
   Platform,
   ScrollView,
   SafeAreaView,
+  ActivityIndicator,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { FontAwesome, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { COLORS, SIZES, FONTS, COMMON_STYLES } from "../config/theme";
-import LocalDatabase from "../services/localDatabase";
+import authService from "../services/authService";
 import apiService from "../services/apiService";
+import { supabase } from '../supabaseClient';
 
 export default function RegisterScreen({ navigation }) {
   const [nome, setNome] = useState("");
@@ -23,14 +25,17 @@ export default function RegisterScreen({ navigation }) {
   const [telefone, setTelefone] = useState("");
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [countryCode, setCountryCode] = useState("+244");
+  const [isLoading, setIsLoading] = useState(false);
 
   // Função para registrar um novo usuário e seguir para definir senha
   const handleRegister = async () => {
-    if (!nome || !email || !telefone) {
+    if (isLoading) return;
+
+    if (!nome || !telefone) {
       Toast.show({
         type: "error",
         text1: "Erro ao registrar",
-        text2: "Por favor, preencha todos os campos.",
+        text2: "Nome e telefone são obrigatórios.",
       });
       return;
     }
@@ -44,25 +49,57 @@ export default function RegisterScreen({ navigation }) {
       return;
     }
 
-    // Simular validação de dados
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        Toast.show({
+          type: "error",
+          text1: "Erro ao registrar",
+          text2: "Por favor, insira um email válido.",
+        });
+        return;
+      }
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Verifica se já existe usuário com este email ou telefone
+      const completePhone = countryCode + telefone;
+      
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('*')
+        .or(`email.eq.${email},telefone.eq.${completePhone}`)
+        .single();
+
+      if (existingUser) {
+        Toast.show({
+          type: "error",
+          text1: "Erro ao registrar",
+          text2: "Email ou telefone já cadastrado.",
+        });
+        return;
+      }
+
+      // vai para a tela de definir senha com os dados preenchidos
+      navigation.navigate("SetPassword", {
+        userData: {
+          nome,
+          email,
+          telefone: completePhone,
+        },
+      });
+    } catch (error) {
+      console.error('Erro ao verificar usuário:', error);
       Toast.show({
         type: "error",
         text1: "Erro ao registrar",
-        text2: "Por favor, insira um email válido.",
+        text2: "Ocorreu um erro. Tente novamente.",
       });
-      return;
+    } finally {
+      setIsLoading(false);
     }
-
-    // vai para a tela de definir senha com os dados preenchidos
-    navigation.navigate("SetPassword", {
-      userData: {
-        nome,
-        email,
-        telefone: countryCode + telefone,
-      },
-    });
   };
 
   return (
@@ -151,8 +188,16 @@ export default function RegisterScreen({ navigation }) {
             </TouchableOpacity>
 
             {/* Create Account Button */}
-            <TouchableOpacity style={styles.createButton} onPress={handleRegister}>
-              <Text style={styles.createButtonText}>Criar conta</Text>
+            <TouchableOpacity 
+              style={[styles.createButton, isLoading && styles.buttonDisabled]}
+              onPress={handleRegister}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.createButtonText}>Criar conta</Text>
+              )}
             </TouchableOpacity>
 
             {/* Divider */}
@@ -317,6 +362,10 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  buttonDisabled: {
+    backgroundColor: '#93C5FD',
+    opacity: 0.7,
   },
   dividerContainer: {
     flexDirection: 'row',

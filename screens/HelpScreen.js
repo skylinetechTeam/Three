@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   SafeAreaView,
   TextInput,
+  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -14,6 +16,12 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 const HelpScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedFAQ, setExpandedFAQ] = useState(null);
+  
+  // Obter dimensões da tela para responsividade
+  const { width, height } = useWindowDimensions();
+  
+  // Obter estilos responsivos baseados na largura atual da tela
+  const responsiveStyles = getResponsiveStyles(width);
 
   const faqCategories = [
     {
@@ -98,36 +106,7 @@ const HelpScreen = ({ navigation }) => {
     },
   ];
 
-  const tutorials = [
-    {
-      id: '1',
-      title: 'Primeiros Passos',
-      subtitle: 'Aprenda a usar o app em 5 minutos',
-      icon: 'play-circle-outline',
-      duration: '5 min',
-    },
-    {
-      id: '2',
-      title: 'Solicitando Corridas',
-      subtitle: 'Como pedir transporte de forma eficiente',
-      icon: 'car-sport-outline',
-      duration: '3 min',
-    },
-    {
-      id: '3',
-      title: 'Configurando Pagamentos',
-      subtitle: 'Adicione seus métodos de pagamento',
-      icon: 'wallet-outline',
-      duration: '4 min',
-    },
-    {
-      id: '4',
-      title: 'Usando Recursos de Segurança',
-      subtitle: 'Proteja-se durante suas viagens',
-      icon: 'shield-outline',
-      duration: '6 min',
-    },
-  ];
+  // Tutoriais em vídeo removidos conforme solicitado
 
   const filteredFAQs = faqCategories.map(category => ({
     ...category,
@@ -146,10 +125,7 @@ const HelpScreen = ({ navigation }) => {
     console.log('Navegando para suporte');
   };
 
-  const handleTutorial = (tutorialId) => {
-    // Aqui você abriria o tutorial
-    console.log('Abrindo tutorial:', tutorialId);
-  };
+  // Função de tutorial removida conforme solicitado
 
   return (
     <SafeAreaView style={styles.container}>
@@ -163,13 +139,17 @@ const HelpScreen = ({ navigation }) => {
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Central de Ajuda</Text>
+        <Text style={[styles.headerTitle, {fontSize: responsiveStyles.fontSize.title}]}>Central de Ajuda</Text>
         <View style={styles.placeholder} />
       </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, {maxWidth: responsiveStyles.layout.maxWidth}]}
+      >
         {/* Barra de Pesquisa */}
-        <View style={styles.searchContainer}>
+        <View style={[styles.searchContainer, {width: '100%', maxWidth: responsiveStyles.layout.maxWidth}]}>
           <View style={styles.searchInputContainer}>
             <Ionicons name="search-outline" size={20} color="#9CA3AF" />
             <TextInput
@@ -187,37 +167,11 @@ const HelpScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Tutoriais */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tutoriais em Vídeo</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.tutorialsScroll}
-          >
-            {tutorials.map((tutorial) => (
-              <TouchableOpacity
-                key={tutorial.id}
-                style={styles.tutorialCard}
-                onPress={() => handleTutorial(tutorial.id)}
-              >
-                <View style={styles.tutorialIcon}>
-                  <Ionicons name={tutorial.icon} size={32} color="#1737e8" />
-                </View>
-                <Text style={styles.tutorialTitle}>{tutorial.title}</Text>
-                <Text style={styles.tutorialSubtitle}>{tutorial.subtitle}</Text>
-                <View style={styles.tutorialDuration}>
-                  <Ionicons name="time-outline" size={14} color="#6B7280" />
-                  <Text style={styles.durationText}>{tutorial.duration}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+        {/* Seção de Tutoriais em Vídeo removida */}
 
         {/* Perguntas Frequentes */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Perguntas Frequentes</Text>
+        <View style={[styles.section, {padding: responsiveStyles.layout.centerContent ? responsiveStyles.padding.container : 0}]}>
+          <Text style={[styles.sectionTitle, {fontSize: responsiveStyles.fontSize.section}]}>Perguntas Frequentes</Text>
           
           {filteredFAQs.map((category) => (
             <View key={category.id} style={styles.categoryContainer}>
@@ -225,7 +179,7 @@ const HelpScreen = ({ navigation }) => {
                 <View style={[styles.categoryIcon, { backgroundColor: category.color + '20' }]}>
                   <Ionicons name={category.icon} size={24} color={category.color} />
                 </View>
-                <Text style={styles.categoryTitle}>{category.title}</Text>
+                <Text style={[styles.categoryTitle, {fontSize: responsiveStyles.fontSize.category}]}>{category.title}</Text>
               </View>
               
               {category.faqs.map((faq, index) => (
@@ -235,7 +189,7 @@ const HelpScreen = ({ navigation }) => {
                   onPress={() => toggleFAQ(`${category.id}-${index}`)}
                 >
                   <View style={styles.faqHeader}>
-                    <Text style={styles.faqQuestion}>{faq.question}</Text>
+                    <Text style={[styles.faqQuestion, {fontSize: responsiveStyles.fontSize.question}]}>{faq.question}</Text>
                     <Ionicons
                       name={expandedFAQ === `${category.id}-${index}` ? 'chevron-up' : 'chevron-down'}
                       size={20}
@@ -243,7 +197,7 @@ const HelpScreen = ({ navigation }) => {
                     />
                   </View>
                   {expandedFAQ === `${category.id}-${index}` && (
-                    <Text style={styles.faqAnswer}>{faq.answer}</Text>
+                    <Text style={[styles.faqAnswer, {fontSize: responsiveStyles.fontSize.answer}]}>{faq.answer}</Text>
                   )}
                 </TouchableOpacity>
               ))}
@@ -252,13 +206,13 @@ const HelpScreen = ({ navigation }) => {
         </View>
 
         {/* Contato de Suporte */}
-        <View style={styles.supportSection}>
-          <View style={styles.supportCard}>
+        <View style={[styles.supportSection, {width: '100%', maxWidth: responsiveStyles.layout.maxWidth}]}>
+          <View style={[styles.supportCard, {padding: responsiveStyles.padding.section}]}>
             <View style={styles.supportIcon}>
               <Ionicons name="chatbubble-ellipses-outline" size={32} color="#1737e8" />
             </View>
-            <Text style={styles.supportTitle}>Precisa de mais ajuda?</Text>
-            <Text style={styles.supportSubtitle}>
+            <Text style={[styles.supportTitle, {fontSize: responsiveStyles.fontSize.support}]}>Precisa de mais ajuda?</Text>
+            <Text style={[styles.supportSubtitle, {fontSize: responsiveStyles.fontSize.supportSub}]}>
               Nossa equipe está disponível 24/7 para ajudar você
             </Text>
             <TouchableOpacity
@@ -269,7 +223,7 @@ const HelpScreen = ({ navigation }) => {
                 colors={['#1737e8', '#1e4fd8']}
                 style={styles.supportButtonGradient}
               >
-                <Text style={styles.supportButtonText}>Falar com Suporte</Text>
+                <Text style={[styles.supportButtonText, {fontSize: responsiveStyles.fontSize.button}]}>Falar com Suporte</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -279,10 +233,50 @@ const HelpScreen = ({ navigation }) => {
   );
 };
 
+// Função para calcular estilos responsivos baseados na largura da tela
+const getResponsiveStyles = (width) => {
+  // Definir breakpoints
+  const isSmallDevice = width < 375;
+  const isMediumDevice = width >= 375 && width < 768;
+  const isLargeDevice = width >= 768;
+  
+  // Ajustar tamanhos baseados no dispositivo
+  const fontSizeMultiplier = isSmallDevice ? 0.9 : isMediumDevice ? 1 : 1.2;
+  const paddingMultiplier = isSmallDevice ? 0.8 : isMediumDevice ? 1 : 1.5;
+  
+  return {
+    fontSize: {
+      title: 20 * fontSizeMultiplier,
+      section: 20 * fontSizeMultiplier,
+      category: 18 * fontSizeMultiplier,
+      question: 16 * fontSizeMultiplier,
+      answer: 14 * fontSizeMultiplier,
+      support: 18 * fontSizeMultiplier,
+      supportSub: 14 * fontSizeMultiplier,
+      button: 16 * fontSizeMultiplier,
+    },
+    padding: {
+      container: 20 * paddingMultiplier,
+      section: 20 * paddingMultiplier,
+      item: 16 * paddingMultiplier,
+    },
+    layout: {
+      sectionWidth: isLargeDevice ? '80%' : '100%',
+      maxWidth: isLargeDevice ? 800 : '100%',
+      centerContent: isLargeDevice,
+    }
+  };
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 30,
+    alignItems: 'center', // Centralizar conteúdo em telas maiores
   },
   header: {
     flexDirection: 'row',
@@ -306,6 +300,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+    width: '100%',
   },
   searchContainer: {
     marginBottom: 24,
@@ -334,6 +329,9 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 32,
+    width: '100%',
+    maxWidth: 800, // Limitar largura em telas grandes
+    alignSelf: 'center', // Centralizar em telas grandes
   },
   sectionTitle: {
     fontSize: 20,
@@ -341,59 +339,15 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     marginBottom: 20,
   },
-  tutorialsScroll: {
-    paddingRight: 20,
-  },
-  tutorialCard: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    marginRight: 16,
-    width: 200,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  tutorialIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  tutorialTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  tutorialSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  tutorialDuration: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  durationText: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
+  // Estilos dos tutoriais removidos
   categoryContainer: {
     backgroundColor: 'white',
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
+    width: '100%',
+    maxWidth: 800, // Limitar largura em telas grandes
+    alignSelf: 'center', // Centralizar em telas grandes
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -453,6 +407,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
+    width: '100%',
+    maxWidth: 800, // Limitar largura em telas grandes
+    alignSelf: 'center', // Centralizar em telas grandes
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
