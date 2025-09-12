@@ -3,133 +3,400 @@ import { Dimensions, Easing } from 'react-native';
 const { width, height } = Dimensions.get('window');
 
 export const COLORS = {
-  primary: '#2563eb', // Azul mais suave
-  secondary: '#4b5563',
+  // Cores principais
+  primary: '#2563eb',
+  primaryLight: '#3b82f6',
+  primaryDark: '#1d4ed8',
+  secondary: '#64748b',
+  secondaryLight: '#94a3b8',
+  secondaryDark: '#475569',
+  
+  // Cores de fundo
   background: '#ffffff',
+  backgroundSecondary: '#f8fafc',
+  backgroundTertiary: '#f1f5f9',
   card: '#ffffff',
-  white: '#ffffff', // Add white color explicitly
-  gray: '#6b7280', // Adicionando cor gray
+  white: '#ffffff',
+  
+  // Cores de texto
   text: {
-    primary: '#1f2937',
-    secondary: '#6b7280',
-    light: '#9ca3af'
+    primary: '#0f172a',
+    secondary: '#475569',
+    tertiary: '#64748b',
+    light: '#94a3b8',
+    inverse: '#ffffff'
   },
+  
+  // Cores de input
   input: {
-    background: '#f9fafb',
-    placeholder: '#9ca3af'
+    background: '#ffffff',
+    backgroundFocused: '#f8fafc',
+    placeholder: '#94a3b8',
+    border: '#e2e8f0',
+    borderFocused: '#2563eb',
+    error: '#ef4444'
   },
-  border: '#e5e7eb',
-  notification: '#ef4444',
+  
+  // Cores de status
   success: '#10b981',
+  successLight: '#34d399',
+  successDark: '#059669',
+  warning: '#f59e0b',
+  warningLight: '#fbbf24',
+  warningDark: '#d97706',
+  error: '#ef4444',
+  errorLight: '#f87171',
+  errorDark: '#dc2626',
+  info: '#3b82f6',
+  infoLight: '#60a5fa',
+  infoDark: '#2563eb',
+  
+  // Cores de estado
+  online: '#10b981',
+  offline: '#ef4444',
+  pending: '#f59e0b',
+  
+  // Cores de interface
+  border: '#e2e8f0',
+  borderLight: '#f1f5f9',
+  borderDark: '#cbd5e1',
+  divider: '#e2e8f0',
+  overlay: 'rgba(0, 0, 0, 0.5)',
+  shadow: 'rgba(0, 0, 0, 0.1)',
+  
+  // Cores do mapa
   map: {
     route: '#2563eb',
+    routeShadow: '#1d4ed8',
     marker: '#2563eb',
-    userMarker: '#2563eb'
+    userMarker: '#10b981',
+    pickupMarker: '#2563eb',
+    destinationMarker: '#ef4444'
+  },
+  
+  // Cores de gradiente
+  gradient: {
+    primary: ['#2563eb', '#3b82f6'],
+    success: ['#10b981', '#34d399'],
+    warning: ['#f59e0b', '#fbbf24'],
+    error: ['#ef4444', '#f87171']
   }
 };
 
 export const SIZES = {
   // Tamanhos globais
   base: 8,
-  small: 12,
-  font: 14,
-  medium: 16,
-  large: 18,
-  xlarge: 24,
-  xxlarge: 32,
+  xs: 4,
+  small: 8,
+  medium: 12,
+  large: 16,
+  xl: 20,
+  xxl: 24,
+  xxxl: 32,
   
-  // Dimensões
+  // Dimensões da tela
   width,
   height,
+  screenWidth: width,
+  screenHeight: height,
   
-  // Raios
-  radiusSmall: 8,
-  radiusMedium: 12,
-  radiusLarge: 20,
+  // Raios de borda
+  radius: {
+    xs: 4,
+    small: 8,
+    medium: 12,
+    large: 16,
+    xl: 20,
+    xxl: 24,
+    full: 9999
+  },
   
   // Espaçamentos
-  padding: {
-    small: 10,
-    medium: 15,
-    large: 20,
-    xlarge: 30,
+  spacing: {
+    xs: 4,
+    small: 8,
+    medium: 12,
+    large: 16,
+    xl: 20,
+    xxl: 24,
+    xxxl: 32,
+    xxxxl: 40
   },
   
-  // Altura de botões/inputs
-  buttonHeight: 55,
-  inputHeight: 55,
+  // Padding
+  padding: {
+    xs: 4,
+    small: 8,
+    medium: 12,
+    large: 16,
+    xl: 20,
+    xxl: 24,
+    xxxl: 32
+  },
+  
+  // Margin
+  margin: {
+    xs: 4,
+    small: 8,
+    medium: 12,
+    large: 16,
+    xl: 20,
+    xxl: 24,
+    xxxl: 32
+  },
+  
+  // Altura de componentes
+  height: {
+    input: 56,
+    button: 56,
+    buttonSmall: 44,
+    buttonLarge: 64,
+    header: 60,
+    tabBar: 80
+  },
+  
+  // Largura de componentes
+  width: {
+    button: '100%',
+    buttonSmall: 120,
+    buttonMedium: 160,
+    buttonLarge: 200,
+    card: '100%',
+    modal: width * 0.9
+  },
   
   // Tamanhos de ícones
-  iconSmall: 16,
-  iconMedium: 20,
-  iconLarge: 24,
-};
-
-export const FONTS = {
-  regular: {
-    fontWeight: 'normal',
-  },
-  medium: {
-    fontWeight: '500',
-  },
-  semiBold: {
-    fontWeight: '600',
-  },
-  bold: {
-    fontWeight: 'bold',
+  icon: {
+    xs: 12,
+    small: 16,
+    medium: 20,
+    large: 24,
+    xl: 28,
+    xxl: 32,
+    xxxl: 40
   },
   
   // Tamanhos de fonte
+  fontSize: {
+    xs: 12,
+    small: 14,
+    medium: 16,
+    large: 18,
+    xl: 20,
+    xxl: 24,
+    xxxl: 28,
+    xxxxl: 32
+  },
+  
+  // Altura de linha
+  lineHeight: {
+    xs: 16,
+    small: 20,
+    medium: 24,
+    large: 28,
+    xl: 32,
+    xxl: 36,
+    xxxl: 40
+  }
+};
+
+export const FONTS = {
+  // Pesos de fonte
+  weights: {
+    light: '300',
+    regular: '400',
+    medium: '500',
+    semiBold: '600',
+    bold: '700',
+    extraBold: '800'
+  },
+  
+  // Títulos
   h1: {
-    fontSize: SIZES.xxlarge,
-    fontWeight: 'bold',
+    fontSize: SIZES.fontSize.xxxxl,
+    fontWeight: '700',
+    lineHeight: SIZES.lineHeight.xxxl,
     color: COLORS.text.primary,
   },
   h2: {
-    fontSize: SIZES.xlarge,
-    fontWeight: 'bold',
+    fontSize: SIZES.fontSize.xxxl,
+    fontWeight: '700',
+    lineHeight: SIZES.lineHeight.xxl,
     color: COLORS.text.primary,
   },
   h3: {
-    fontSize: SIZES.large,
+    fontSize: SIZES.fontSize.xxl,
     fontWeight: '600',
+    lineHeight: SIZES.lineHeight.xl,
     color: COLORS.text.primary,
   },
+  h4: {
+    fontSize: SIZES.fontSize.xl,
+    fontWeight: '600',
+    lineHeight: SIZES.lineHeight.large,
+    color: COLORS.text.primary,
+  },
+  h5: {
+    fontSize: SIZES.fontSize.large,
+    fontWeight: '600',
+    lineHeight: SIZES.lineHeight.medium,
+    color: COLORS.text.primary,
+  },
+  h6: {
+    fontSize: SIZES.fontSize.medium,
+    fontWeight: '600',
+    lineHeight: SIZES.lineHeight.small,
+    color: COLORS.text.primary,
+  },
+  
+  // Texto do corpo
   body1: {
-    fontSize: SIZES.medium,
+    fontSize: SIZES.fontSize.medium,
+    fontWeight: '400',
+    lineHeight: SIZES.lineHeight.medium,
     color: COLORS.text.primary,
   },
   body2: {
-    fontSize: SIZES.font,
+    fontSize: SIZES.fontSize.small,
+    fontWeight: '400',
+    lineHeight: SIZES.lineHeight.small,
     color: COLORS.text.secondary,
   },
-  small: {
-    fontSize: SIZES.small,
+  body3: {
+    fontSize: SIZES.fontSize.xs,
+    fontWeight: '400',
+    lineHeight: SIZES.lineHeight.xs,
     color: COLORS.text.tertiary,
   },
+  
+  // Texto pequeno
+  caption: {
+    fontSize: SIZES.fontSize.xs,
+    fontWeight: '400',
+    lineHeight: SIZES.lineHeight.xs,
+    color: COLORS.text.light,
+  },
+  overline: {
+    fontSize: SIZES.fontSize.xs,
+    fontWeight: '600',
+    lineHeight: SIZES.lineHeight.xs,
+    color: COLORS.text.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  
+  // Botões
+  button: {
+    fontSize: SIZES.fontSize.medium,
+    fontWeight: '600',
+    lineHeight: SIZES.lineHeight.medium,
+  },
+  buttonSmall: {
+    fontSize: SIZES.fontSize.small,
+    fontWeight: '600',
+    lineHeight: SIZES.lineHeight.small,
+  },
+  buttonLarge: {
+    fontSize: SIZES.fontSize.large,
+    fontWeight: '600',
+    lineHeight: SIZES.lineHeight.large,
+  },
+  
+  // Labels
+  label: {
+    fontSize: SIZES.fontSize.small,
+    fontWeight: '500',
+    lineHeight: SIZES.lineHeight.small,
+    color: COLORS.text.primary,
+  },
+  labelSmall: {
+    fontSize: SIZES.fontSize.xs,
+    fontWeight: '500',
+    lineHeight: SIZES.lineHeight.xs,
+    color: COLORS.text.secondary,
+  },
+  
+  // Status
+  status: {
+    fontSize: SIZES.fontSize.xs,
+    fontWeight: '600',
+    lineHeight: SIZES.lineHeight.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  }
 };
 
 export const SHADOWS = {
-  small: {
-    shadowColor: '#000',
+  none: {
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0
+  },
+  xs: {
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 2,
+    elevation: 1
+  },
+  small: {
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 2
   },
   medium: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4
   },
   large: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
     elevation: 8
+  },
+  xl: {
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 12
+  },
+  // Sombras coloridas
+  primary: {
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4
+  },
+  success: {
+    shadowColor: COLORS.success,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4
+  },
+  error: {
+    shadowColor: COLORS.error,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4
+  },
+  warning: {
+    shadowColor: COLORS.warning,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4
   }
 };
 
