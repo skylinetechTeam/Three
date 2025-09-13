@@ -536,8 +536,8 @@ export default function DriverLoginScreen({ navigation }) {
             </TouchableOpacity>
 
             <TouchableOpacity style={[styles.photoButton, styles.galleryButton]} onPress={selectPhoto}>
-              <Ionicons name="images" size={24} color={COLORS.primary} />
-              <Text style={[styles.photoButtonText, { color: COLORS.primary }]}>Galeria</Text>
+              <Ionicons name="images" size={24} color={COLORS.primary[500]} />
+              <Text style={[styles.photoButtonText, { color: COLORS.primary[500] }]}>Galeria</Text>
             </TouchableOpacity>
           </View>
 
@@ -627,7 +627,7 @@ export default function DriverLoginScreen({ navigation }) {
               setIsTakingPhoto(true);
             }}
           >
-            <Ionicons name="arrow-back" size={16} color={COLORS.primary} />
+            <Ionicons name="arrow-back" size={16} color={COLORS.primary[500]} />
             <Text style={styles.backToEmailText}>Voltar</Text>
           </TouchableOpacity>
         </>
@@ -639,7 +639,7 @@ export default function DriverLoginScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary[500]} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
@@ -715,28 +715,31 @@ export default function DriverLoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
   },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: SIZES.padding.large,
+    paddingTop: 20, // Add proper top padding
   },
   header: {
-    paddingTop: SIZES.padding.large,
+    paddingTop: 40, // Ensure back button is accessible
     marginBottom: SIZES.padding.xlarge,
     alignItems: 'center',
+    minHeight: 140, // Ensure enough space for the header
   },
   backButton: {
     position: 'absolute',
-    top: 0,
+    top: 40, // Move down to be accessible
     left: 0,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
     ...SHADOWS.medium,
+    zIndex: 999, // Ensure it's above other elements
   },
   logoContainer: {
     marginTop: SIZES.padding.large,
@@ -818,7 +821,7 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
   },
   loginButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
     borderRadius: 16,
     paddingVertical: SIZES.padding.large,
     alignItems: 'center',
@@ -830,18 +833,20 @@ const styles = StyleSheet.create({
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    minHeight: 56, // Ensure button is touchable
   },
   buttonDisabled: {
-    backgroundColor: COLORS.gray,
+    backgroundColor: COLORS.text.disabled,
     shadowOpacity: 0.1,
   },
   loginButtonText: {
     ...FONTS.h3,
     color: COLORS.white,
     fontWeight: '600',
+    fontSize: 16,
   },
   buttonIcon: {
     marginLeft: SIZES.padding.small,
@@ -852,10 +857,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: SIZES.padding.large,
     paddingVertical: SIZES.padding.medium,
+    borderRadius: 12,
+    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+    minHeight: 48, // Ensure button is touchable
   },
   backToEmailText: {
     ...FONTS.body1,
-    color: COLORS.primary,
+    color: COLORS.primary[500],
     fontWeight: '600',
     marginLeft: SIZES.padding.small,
   },
@@ -910,16 +918,26 @@ const styles = StyleSheet.create({
   retakeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
     paddingHorizontal: SIZES.padding.medium,
-    paddingVertical: SIZES.padding.small,
+    paddingVertical: SIZES.padding.medium,
     borderRadius: SIZES.radiusMedium,
+    minHeight: 44, // Ensure button is touchable
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   retakeButtonText: {
     ...FONTS.body2,
     color: COLORS.white,
     marginLeft: SIZES.padding.small,
     fontWeight: '600',
+    fontSize: 13,
   },
   photoActions: {
     flexDirection: 'row',
@@ -932,7 +950,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
     paddingVertical: SIZES.padding.large,
     borderRadius: 16,
     shadowColor: '#000',
@@ -940,19 +958,46 @@ const styles = StyleSheet.create({
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    minHeight: 56, // Ensure button is touchable
   },
   galleryButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: COLORS.white,
     borderWidth: 2,
-    borderColor: COLORS.primary,
+    borderColor: COLORS.primary[500],
+    shadowColor: COLORS.primary[500],
   },
   photoButtonText: {
     ...FONTS.body1,
     color: COLORS.white,
     fontWeight: '600',
     marginLeft: SIZES.padding.small,
+    fontSize: 14,
+  },
+  
+  // Welcome styles for password step
+  welcomeContainer: {
+    alignItems: 'center',
+    marginBottom: SIZES.padding.xlarge,
+    paddingVertical: SIZES.padding.medium,
+    backgroundColor: 'rgba(37, 99, 235, 0.05)',
+    borderRadius: 16,
+    marginHorizontal: 4,
+  },
+  welcomeText: {
+    ...FONTS.h2,
+    color: COLORS.text.primary,
+    textAlign: 'center',
+    marginBottom: SIZES.padding.small,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  welcomeSubtext: {
+    ...FONTS.body1,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    fontSize: 14,
   },
 });

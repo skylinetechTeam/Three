@@ -15,6 +15,8 @@ import {
 import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
 import apiService from "../services/apiService";
+import authService from "../services/authService";
+import LocalDatabase from "../services/localDatabase";
 
 export default function SetPasswordScreen({ navigation, route = {} }) {
   const [password, setPassword] = useState("");
@@ -63,6 +65,13 @@ export default function SetPasswordScreen({ navigation, route = {} }) {
         email: userData.email,
         telefone: userData.telefone,
         senha: password
+      });
+
+      // Save user data to local storage
+      await LocalDatabase.saveUserProfile({
+        ...user,
+        isLoggedIn: true,
+        lastLogin: new Date().toISOString()
       });
 
       // Conecta ao socket da API

@@ -477,7 +477,7 @@ const FavoritosScreen = () => {
       <View style={styles.cardBody}>
         <View style={styles.tagsContainer}>
           <View style={styles.typeTag}>
-            <Ionicons name="location-outline" size={12} color={COLORS.primary} />
+            <Ionicons name="location-outline" size={12} color={COLORS.primary[500]} />
             <Text style={styles.tagText}>{item.tipo}</Text>
           </View>
           <View style={styles.frequencyTag}>
@@ -583,7 +583,7 @@ const FavoritosScreen = () => {
                     }
                   }}
                 >
-                  <Ionicons name="location" size={20} color={COLORS.primary} />
+                  <Ionicons name="location" size={20} color={COLORS.primary[500]} />
                 </TouchableOpacity>
               </View>
               {formErrors.endereco && (
@@ -920,13 +920,13 @@ const FavoritosScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface.background,
   },
   header: {
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 20,
     paddingHorizontal: 20,
     paddingBottom: 10,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface.background,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
     flexDirection: 'row',
@@ -957,7 +957,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface.background,
   },
   searchBar: {
     flexDirection: 'row',
@@ -986,7 +986,7 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'android' ? 100 : 80, // Margem extra para botões de navegação
   },
   favoritoCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface.card,
     borderRadius: 12,
     marginBottom: 12,
     ...SHADOWS.small,
@@ -1231,15 +1231,15 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   typeButtonSelected: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
+    borderColor: COLORS.primary[500],
   },
   typeButtonText: {
     fontSize: 14,
     color: COLORS.text.secondary,
   },
   typeButtonTextSelected: {
-    color: COLORS.white,
+    color: COLORS.text.inverse,
   },
   frequencyButtons: {
     flexDirection: 'row',
@@ -1254,15 +1254,15 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   frequencyButtonSelected: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
+    borderColor: COLORS.primary[500],
   },
   frequencyButtonText: {
     fontSize: 14,
     color: COLORS.text.secondary,
   },
   frequencyButtonTextSelected: {
-    color: COLORS.white,
+    color: COLORS.text.inverse,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -1611,14 +1611,16 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: Platform.OS === 'android' ? 30 : 20, // Margem extra para botões de navegação
+    bottom: Platform.OS === 'android' ? 100 : 90, // Higher position to avoid tab bar
     right: 20,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
     borderRadius: 30,
     width: 60,
     height: 60,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1000,
+    elevation: 8,
     ...SHADOWS.medium,
   },
   quickLocationButton: {
@@ -1687,7 +1689,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   nextButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 32,
@@ -1704,7 +1706,7 @@ const styles = StyleSheet.create({
   nextButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.white,
+    color: COLORS.text.inverse,
     textAlign: 'center',
   },
   backButton: {

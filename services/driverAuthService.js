@@ -325,6 +325,52 @@ class DriverAuthService {
       return null;
     }
   }
+
+  // Alterar senha do motorista
+  async changeDriverPassword(currentPassword, newPassword) {
+    try {
+      console.log('🔐 Iniciando alteração de senha do motorista');
+      
+      if (!currentPassword || !newPassword) {
+        throw new Error('Senha atual e nova senha são obrigatórias');
+      }
+
+      if (currentPassword === newPassword) {
+        throw new Error('Nova senha deve ser diferente da senha atual');
+      }
+
+      if (newPassword.length < 6) {
+        throw new Error('Nova senha deve ter pelo menos 6 caracteres');
+      }
+
+      // Obter dados locais do motorista
+      const driverData = await this.getLocalDriverData();
+      
+      if (!driverData) {
+        throw new Error('Dados do motorista não encontrados');
+      }
+
+      // Verificar senha atual
+      const isCurrentValid = await this.verifyDriverPassword(driverData.id, currentPassword);
+      
+      if (!isCurrentValid) {
+        throw new Error('Senha atual incorreta');
+      }
+
+      // Atualizar senha
+      await this.setDriverPassword(driverData.id, newPassword);
+      
+      console.log('✅ Senha alterada com sucesso');
+      return {
+        success: true,
+        message: 'Senha alterada com sucesso'
+      };
+
+    } catch (error) {
+      console.error('❌ Erro ao alterar senha:', error);
+      throw error;
+    }
+  }
 }
 
 export default new DriverAuthService();

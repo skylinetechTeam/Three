@@ -1,6 +1,8 @@
 // Serviço para integração com a API Node.js
 import io from 'socket.io-client';
 import { API_CONFIG, ENDPOINTS } from '../config/api';
+import debugLogger from '../utils/DebugLogger';
+import { normalizeId } from '../utils/idNormalizer';
 
 const API_BASE_URL = API_CONFIG.API_BASE_URL;
 const SOCKET_URL = API_CONFIG.SOCKET_URL;
@@ -14,18 +16,22 @@ class ApiService {
 
   // Conectar ao WebSocket
   connectSocket(userType, userId) {
+    const perfKey = debugLogger.performance.measureStart('websocket_connection');
+    
     try {
-      console.log(`🔌 Tentando conectar WebSocket: ${SOCKET_URL}`);
-      console.log(`👤 Usuário: ${userType} - ID: ${userId}`);
+      debugLogger.websocket.connecting(SOCKET_URL, { userType, userId });
+      
+      // Armazenar informações do usuário para reconexão
+      this.userType = userType;
+      this.userId = normalizeId(userId);
 
       // Desconectar socket existente
       if (this.socket) {
-        console.log('🔄 Desconectando socket anterior...');
-        this.socket.disconnect();
-        this.socket = null;
+        debugLogger.debug('websocket', 'Desconectando socket anterior...');
+        this.disconnectSocket();
       }
 
-      // Configurações do Socket.IO com fallback
+      // Configurações do Socket.IO com fallback melhorado
       const socketOptions = {
         transports: ['websocket', 'polling'], // Tentar WebSocket primeiro, depois polling
         timeout: 10000,
@@ -41,45 +47,61 @@ class ApiService {
         }
       };
 
-      console.log('🔧 Configurações do Socket:', socketOptions);
+      debugLogger.debug('websocket', 'Configurações do Socket', socketOptions);
 
       this.socket = io(SOCKET_URL, socketOptions);
 
       // Event listeners
       this.socket.on('connect', () => {
-        console.log('✅ Socket conectado com sucesso!');
-        console.log('🆔 Socket ID:', this.socket.id);
+        debugLogger.websocket.connected(this.socket.id, userType, userId);
+        debugLogger.performance.measureEnd(perfKey, 'websocket_connection', {
+          socketId: this.socket.id,
+          transport: this.socket.io?.engine?.transport?.name
+        });
+        
         this.isConnected = true;
         
-        // Registrar usuário
-        console.log('📝 Registrando usuário...', { userType, userId });
-        this.socket.emit('register', {
+        // REGISTRO IMEDIATO após conexão
+        console.log('🔌 [ApiService] Socket conectado, registrando usuário IMEDIATAMENTE');
+        const registrationData = {
           userType: userType, // 'driver' ou 'passenger'
-          userId: userId
+          userId: normalizeId(userId) // Garantir que sempre seja string normalizada
+        };
+        
+        console.log('📋 [ApiService] Dados de registro:', registrationData);
+        this.socket.emit('register', registrationData);
+        
+        // Aguardar confirmação de registro
+        this.socket.once('registration_confirmed', (confirmData) => {
+          console.log('✅ [ApiService] Registro confirmado pelo servidor:', confirmData);
         });
+        
+        // Timeout para caso não receba confirmação
+        setTimeout(() => {
+          console.log('⚠️ [ApiService] Verificando se registro foi bem-sucedido...');
+          // Re-registrar se necessário após 1 segundo
+          this.socket.emit('register', registrationData);
+        }, 1000);
 
         // Configurar listeners de eventos de corrida
         this.setupRideEventListeners();
+        
+        // CRÍTICO: Registrar callbacks pendentes após conexão
+        this.registerPendingCallbacks();
       });
 
       this.socket.on('disconnect', (reason) => {
-        console.log('❌ Socket desconectado. Motivo:', reason);
+        debugLogger.websocket.disconnected(reason, true);
         this.isConnected = false;
       });
 
       this.socket.on('connect_error', (error) => {
-        console.error('❌ Erro de conexão Socket:', error.message);
-        console.error('📍 URL tentada:', SOCKET_URL);
-        console.error('🔧 Tipo do erro:', error.type);
+        debugLogger.websocket.error(error, {
+          url: SOCKET_URL,
+          userType,
+          userId
+        });
         this.isConnected = false;
-        
-        // Log detalhado do erro
-        if (error.description) {
-          console.error('📝 Descrição:', error.description);
-        }
-        if (error.context) {
-          console.error('🔍 Contexto:', error.context);
-        }
       });
 
       this.socket.on('reconnect', (attemptNumber) => {
@@ -131,18 +153,36 @@ class ApiService {
     if (!this.eventCallbacks.has(eventName)) {
       this.eventCallbacks.set(eventName, []);
     }
-    this.eventCallbacks.get(eventName).push(callback);
     
-    const totalCallbacks = this.eventCallbacks.get(eventName).length;
-    console.log(`✅ [ApiService] Callback registrado. Total para ${eventName}: ${totalCallbacks}`);
-    
-    // Se o socket já existe, adicionar o listener imediatamente
-    if (this.socket) {
-      console.log(`🔌 [ApiService] Socket existe, adicionando listener direto para: ${eventName}`);
-      this.socket.on(eventName, callback);
+    // Verificar se callback já existe para evitar duplicatas
+    const existingCallbacks = this.eventCallbacks.get(eventName);
+    if (!existingCallbacks.includes(callback)) {
+      existingCallbacks.push(callback);
+      console.log(`✅ [ApiService] Callback registrado. Total para ${eventName}: ${existingCallbacks.length}`);
     } else {
-      console.log(`⚠️ [ApiService] Socket não existe ainda, callback será adicionado quando conectar`);
+      console.warn(`⚠️ [ApiService] Callback já existe para ${eventName}, ignorando duplicata`);
     }
+    
+    // Se o socket já existe e está conectado, adicionar o listener imediatamente
+    if (this.socket && this.socket.connected) {
+      console.log(`🔌 [ApiService] Socket conectado, adicionando listener direto para: ${eventName}`);
+      
+      // Verificar se já existe listener para evitar duplicatas
+      const hasListener = this.socket.hasListeners && this.socket.hasListeners(eventName);
+      if (!hasListener) {
+        this.socket.on(eventName, callback);
+        console.log(`✅ [ApiService] Listener adicionado diretamente para: ${eventName}`);
+      } else {
+        console.log(`ℹ️ [ApiService] Listener já existe para: ${eventName}`);
+      }
+    } else {
+      console.log(`⚠️ [ApiService] Socket não conectado, callback será adicionado quando conectar`);
+    }
+    
+    // Retornar função para remover callback
+    return () => {
+      this.offEvent(eventName, callback);
+    };
   }
 
   // Remover callback de evento
@@ -160,9 +200,39 @@ class ApiService {
     }
   }
 
+  // Registrar callbacks pendentes após conexão
+  registerPendingCallbacks() {
+    console.log('🔄 [ApiService] Registrando callbacks pendentes...');
+    
+    if (!this.socket || !this.socket.connected) {
+      console.warn('⚠️ [ApiService] Socket não está conectado, abortando registro de callbacks pendentes');
+      return;
+    }
+    
+    // Registrar todos os callbacks que foram adicionados antes da conexão
+    for (const [eventName, callbacks] of this.eventCallbacks.entries()) {
+      console.log(`🎯 [ApiService] Registrando ${callbacks.length} callbacks pendentes para: ${eventName}`);
+      
+      callbacks.forEach((callback, index) => {
+        // Verificar se já existe listener para evitar duplicatas
+        if (!this.socket.listeners(eventName).includes(callback)) {
+          this.socket.on(eventName, callback);
+          console.log(`✅ [ApiService] Callback ${index + 1} registrado para: ${eventName}`);
+        } else {
+          console.log(`ℹ️ [ApiService] Callback ${index + 1} já registrado para: ${eventName}`);
+        }
+      });
+    }
+    
+    console.log('✅ [ApiService] Todos os callbacks pendentes foram registrados');
+  }
+
   // Configurar listeners para eventos de corrida
   setupRideEventListeners() {
-    if (!this.socket) return;
+    if (!this.socket) {
+      console.warn('⚠️ [setupRideEventListeners] Socket não existe, abortando configuração');
+      return;
+    }
 
     console.log('🎯 Configurando listeners de eventos de corrida...');
     console.log('📊 [ApiService] Callbacks registrados até agora:', Array.from(this.eventCallbacks.keys()));
@@ -170,63 +240,108 @@ class ApiService {
     // Configurar callbacks já registrados
     this.eventCallbacks.forEach((callbacks, eventName) => {
       console.log(`🔄 [ApiService] Configurando ${callbacks.length} callbacks para evento: ${eventName}`);
+      
+      // Remover listeners existentes para evitar duplicatas
+      this.socket.removeAllListeners(eventName);
+      
       callbacks.forEach((callback, index) => {
         console.log(`➕ [ApiService] Adicionando callback ${index + 1} para: ${eventName}`);
         this.socket.on(eventName, callback);
       });
     });
 
-    // Setup ride event listeners
-    this.socket.on('ride_accepted', (data) => {
-      console.log('🎉 [ApiService] ride_accepted recebido:', data);
-      console.log('🔍 [ApiService] Socket ID que recebeu:', this.socket.id);
-      console.log('🎯 [ApiService] Dados do evento:', JSON.stringify(data, null, 2));
-      this.triggerCallbacks('ride_accepted', data);
+    // Setup ride event listeners com melhor tratamento de erros
+    const setupEventListener = (eventName, handler) => {
+      // Remover listener existente se houver
+      this.socket.removeAllListeners(eventName);
+      
+      this.socket.on(eventName, (data) => {
+        try {
+          console.log(`🎉 [ApiService] ${eventName} recebido:`, data);
+          console.log(`🔍 [ApiService] Socket ID que recebeu: ${this.socket.id}`);
+          
+          // Chamar handler customizado
+          handler(data);
+          
+          // Disparar callbacks registrados
+          this.triggerCallbacks(eventName, data);
+          
+        } catch (error) {
+          console.error(`❌ [ApiService] Erro ao processar evento ${eventName}:`, error);
+        }
+      });
+      
+      console.log(`✅ [ApiService] Listener configurado para: ${eventName}`);
+    };
+
+    // Configurar listeners para eventos principais
+    setupEventListener('ride_accepted', (data) => {
+      console.log('🎉 [ApiService] RIDE_ACCEPTED - Processamento iniciado');
+      
+      // Validar dados essenciais
+      if (!data.rideId) {
+        console.warn('⚠️ [ApiService] ride_accepted sem rideId');
+      }
+      if (!data.driver) {
+        console.warn('⚠️ [ApiService] ride_accepted sem dados do motorista');
+      }
+      
+      console.log('📊 [ApiService] Dados validados do ride_accepted:', {
+        hasRideId: !!data.rideId,
+        hasDriver: !!data.driver,
+        driverName: data.driver?.name,
+        estimatedArrival: data.estimatedArrival
+      });
     });
 
-    this.socket.on('ride_rejected', (data) => {
-      console.log('❌ [ApiService] ride_rejected recebido:', data);
-      this.triggerCallbacks('ride_rejected', data);
+    setupEventListener('ride_rejected', (data) => {
+      console.log('❌ [ApiService] RIDE_REJECTED - Motivo:', data.reason);
     });
 
-    this.socket.on('ride_started', (data) => {
-      console.log('🚗 [ApiService] ride_started recebido:', data);
+    setupEventListener('ride_started', (data) => {
+      console.log('🚗 [ApiService] RIDE_STARTED - Corrida iniciada');
+      console.log('📍 [ApiService] Destino da corrida:', data.ride?.destination);
+    });
+
+    setupEventListener('ride_started_manual', (data) => {
+      console.log('🚗 [ApiService] RIDE_STARTED_MANUAL - Evento manual recebido');
+      // Redirecionar para o handler de ride_started
       this.triggerCallbacks('ride_started', data);
     });
 
-    // Handler para evento manual do motorista
-    this.socket.on('ride_started_manual', (data) => {
-      console.log('🚗 [ApiService] ride_started_manual recebido:', data);
-      this.triggerCallbacks('ride_started', data);
+    setupEventListener('ride_completed', (data) => {
+      console.log('✅ [ApiService] RIDE_COMPLETED - Corrida finalizada');
     });
 
-    this.socket.on('ride_completed', (data) => {
-      console.log('✅ [ApiService] ride_completed recebido:', data);
-      this.triggerCallbacks('ride_completed', data);
+    setupEventListener('ride_cancelled', (data) => {
+      console.log('❌ [ApiService] RIDE_CANCELLED - Corrida cancelada por:', data.cancelledBy);
     });
 
-    this.socket.on('ride_cancelled', (data) => {
-      console.log('❌ [ApiService] ride_cancelled recebido:', data);
-      this.triggerCallbacks('ride_cancelled', data);
+    setupEventListener('no_drivers_available', (data) => {
+      console.log('🚫 [ApiService] NO_DRIVERS_AVAILABLE - Nenhum motorista disponível');
     });
 
-    this.socket.on('no_drivers_available', (data) => {
-      console.log('🚫 [ApiService] no_drivers_available recebido:', data);
-      this.triggerCallbacks('no_drivers_available', data);
-    });
-
-    this.socket.on('driver_location_update', (data) => {
-      console.log('📍 [ApiService] driver_location_update recebido:', data);
-      this.triggerCallbacks('driver_location_update', data);
+    setupEventListener('driver_location_update', (data) => {
+      // Log menos verboso para updates frequentes de localização
+      if (Math.random() < 0.1) { // Log apenas 10% das atualizações
+        console.log('📍 [ApiService] DRIVER_LOCATION_UPDATE - Localização atualizada');
+      }
     });
     
-    // DEBUG: Listener global para capturar TODOS os eventos
-    const originalEmit = this.socket.emit;
-    const originalOn = this.socket.on;
+    // Listener global para capturar TODOS os eventos (debugging)
+    if (this.socket.onAny) {
+      this.socket.onAny((eventName, ...args) => {
+        // Filtrar eventos muito frequentes
+        if (!['driver_location_update', 'ping', 'pong'].includes(eventName)) {
+          console.log(`🌐 [DEBUG] Evento global capturado: ${eventName}`, args);
+        }
+      });
+    }
     
-    this.socket.onAny((eventName, ...args) => {
-      console.log(`🌐 [DEBUG] Evento recebido: ${eventName}`, args);
-    });
+    // Configurar heartbeat para manter conexão ativa
+    this.setupHeartbeat();
+    
+    console.log('✅ [ApiService] Todos os listeners de eventos configurados com sucesso');
   }
 
   // Trigger callbacks for a specific event
@@ -237,27 +352,199 @@ class ApiService {
     
     if (callbacks && callbacks.length > 0) {
       console.log(`▶️ [ApiService] Executando ${callbacks.length} callbacks para ${eventName}`);
+      
+      let successCount = 0;
+      let errorCount = 0;
+      
       callbacks.forEach((callback, index) => {
         try {
           console.log(`🎯 [ApiService] Executando callback ${index + 1}/${callbacks.length} para ${eventName}`);
+          
+          // Verificar se callback é função válida
+          if (typeof callback !== 'function') {
+            console.error(`❌ [ApiService] Callback ${index + 1} não é uma função:`, typeof callback);
+            errorCount++;
+            return;
+          }
+          
+          // Executar callback com timeout de segurança
+          const timeoutId = setTimeout(() => {
+            console.warn(`⚠️ [ApiService] Callback ${index + 1} para ${eventName} demorou mais de 5s`);
+          }, 5000);
+          
           callback(data);
+          clearTimeout(timeoutId);
+          
           console.log(`✅ [ApiService] Callback ${index + 1} executado com sucesso`);
+          successCount++;
+          
         } catch (error) {
-          console.error(`❌ Erro ao executar callback ${index + 1} para ${eventName}:`, error);
+          console.error(`❌ [ApiService] Erro ao executar callback ${index + 1} para ${eventName}:`, error);
+          console.error(`🔍 [ApiService] Stack trace:`, error.stack);
+          errorCount++;
         }
       });
+      
+      console.log(`📊 [ApiService] Execução completa para ${eventName}: ${successCount} sucessos, ${errorCount} erros`);
+      
+      // Se todos falharam, algo está muito errado
+      if (errorCount > 0 && successCount === 0) {
+        console.error(`🚨 [ApiService] TODOS os callbacks falharam para ${eventName}! Possível problema crítico.`);
+      }
+      
     } else {
       console.warn(`⚠️ [ApiService] Nenhum callback registrado para evento: ${eventName}`);
-      console.log(`📊 [ApiService] Eventos registrados:`, Array.from(this.eventCallbacks.keys()));
+      console.log(`📊 [ApiService] Eventos com callbacks registrados:`, Array.from(this.eventCallbacks.keys()));
+      
+      // Sugestão de debugging
+      if (this.eventCallbacks.size === 0) {
+        console.warn(`🔍 [ApiService] DEBUGGING: Nenhum callback registrado em absoluto. Verifique se onEvent() foi chamado.`);
+      }
     }
   }
 
   // Desconectar WebSocket
   disconnectSocket() {
     if (this.socket) {
+      console.log('🔌 [ApiService] Desconectando socket...');
+      
+      // Limpar heartbeat
+      this.clearHeartbeat();
+      
+      // Limpar todos os listeners
+      this.socket.removeAllListeners();
+      
+      // Desconectar
       this.socket.disconnect();
       this.socket = null;
       this.isConnected = false;
+      
+      console.log('✅ [ApiService] Socket desconectado com sucesso');
+    }
+  }
+  
+  // Configurar heartbeat para manter conexão ativa
+  setupHeartbeat() {
+    // Limpar heartbeat existente
+    this.clearHeartbeat();
+    
+    console.log('💓 [ApiService] Configurando heartbeat melhorado...');
+    
+    // Enviar ping a cada 5 segundos para deteção rápida de problemas
+    this.heartbeatInterval = setInterval(() => {
+      if (this.socket && this.socket.connected) {
+        console.log('🏓 [ApiService] Enviando ping para manter conexão');
+        this.socket.emit('ping', { 
+          timestamp: Date.now(),
+          userType: this.userType,
+          userId: this.userId 
+        });
+      } else {
+        console.warn('⚠️ [ApiService] Socket desconectado durante heartbeat - tentando reconectar');
+        this.clearHeartbeat();
+        
+        // Tentar reconexão automática
+        if (this.userType && this.userId) {
+          console.log('🔄 [ApiService] Iniciando reconexão automática...');
+          setTimeout(() => {
+            this.autoReconnect();
+          }, 2000);
+        }
+      }
+    }, 5000); // 5 segundos para deteção mais rápida
+    
+    // Listener para resposta pong com timeout de detecção
+    if (this.socket) {
+      this.socket.on('pong', (data) => {
+        const latency = Date.now() - (data.timestamp || 0);
+        console.log(`🏓 [ApiService] Pong recebido - Latência: ${latency}ms`);
+        
+        // Se latência muito alta, avisar
+        if (latency > 5000) {
+          console.warn(`⚠️ [ApiService] Latência alta detectada: ${latency}ms - conexão pode estar instável`);
+        }
+      });
+      
+      // Detector de desconexão silenciosa
+      this.connectionCheckInterval = setInterval(() => {
+        if (this.socket && !this.socket.connected && this.isConnected) {
+          console.error('🚨 [ApiService] Desconexão silenciosa detectada!');
+          this.isConnected = false;
+          this.autoReconnect();
+        }
+      }, 10000); // Verificar a cada 10 segundos
+    }
+  }
+  
+  // Limpar heartbeat
+  clearHeartbeat() {
+    if (this.heartbeatInterval) {
+      console.log('🗑️ [ApiService] Limpando heartbeat interval');
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    
+    if (this.connectionCheckInterval) {
+      console.log('🗑️ [ApiService] Limpando connection check interval');
+      clearInterval(this.connectionCheckInterval);
+      this.connectionCheckInterval = null;
+    }
+  }
+  
+  // Reconectar automaticamente
+  async autoReconnect() {
+    if (this.isConnected || !this.userType || !this.userId || this.isReconnecting) {
+      return;
+    }
+    
+    this.isReconnecting = true;
+    console.log('🔄 [ApiService] Tentando reconexão automática...');
+    
+    // Limpar recursos existentes
+    this.clearHeartbeat();
+    
+    try {
+      // Aguardar um pouco antes de tentar reconectar
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Verificar conectividade da API primeiro
+      const apiTest = await this.testApiConnection();
+      if (!apiTest.success) {
+        console.error('❌ [ApiService] API não está disponível para reconexão:', apiTest.error);
+        this.isReconnecting = false;
+        
+        // Tentar novamente em 10 segundos
+        setTimeout(() => {
+          this.autoReconnect();
+        }, 10000);
+        return;
+      }
+      
+      console.log('✅ [ApiService] API disponível, reconectando WebSocket...');
+      
+      // Tentar reconectar
+      const socket = this.connectSocket(this.userType, this.userId);
+      
+      if (socket) {
+        console.log('✅ [ApiService] Reconexão bem-sucedida!');
+      } else {
+        console.error('❌ [ApiService] Falha na reconexão');
+        
+        // Tentar novamente em 5 segundos
+        setTimeout(() => {
+          this.autoReconnect();
+        }, 5000);
+      }
+      
+    } catch (error) {
+      console.error('❌ [ApiService] Erro na reconexão automática:', error);
+      
+      // Tentar novamente em 5 segundos
+      setTimeout(() => {
+        this.autoReconnect();
+      }, 5000);
+    } finally {
+      this.isReconnecting = false;
     }
   }
 
@@ -449,13 +736,10 @@ class ApiService {
 
       const data = await response.json();
       
-      if (!response.ok) {
-        throw new Error(data.message || 'Erro ao atualizar localização');
-      }
-
+     
       return data;
     } catch (error) {
-      console.error('❌ Erro ao atualizar localização:', error);
+      //console.error('❌ Erro ao atualizar localização:', error);
       throw error;
     }
   }
@@ -481,7 +765,7 @@ class ApiService {
 
       return data;
     } catch (error) {
-      console.error('❌ Erro ao registrar motorista:', error);
+      //console.error('❌ Erro ao registrar motorista:', error);
       throw error;
     }
   }
@@ -505,7 +789,7 @@ class ApiService {
 
       return data;
     } catch (error) {
-      console.error('❌ Erro ao atualizar status:', error);
+      //console.error('❌ Erro ao atualizar status:', error);
       throw error;
     }
   }
@@ -667,13 +951,14 @@ class ApiService {
    // Método de debug para testar notificações
    testRideAcceptedNotification(rideId, passengerId) {
      if (this.socket && this.socket.connected) {
-       console.log('🧪 Testando notificação ride_accepted...');
+       console.log('🧪 [TESTE] Testando notificação ride_accepted...');
        
        const testData = {
-         rideId: rideId,
+         test: true, // Flag para identificar teste
+         rideId: rideId || 'test-ride-123',
          ride: {
-           id: rideId,
-           passengerId: passengerId,
+           id: rideId || 'test-ride-123',
+           passengerId: passengerId || 'test-passenger-123',
            status: 'accepted'
          },
          driver: {
@@ -687,17 +972,144 @@ class ApiService {
              plate: 'LD-12-34-AB'
            }
          },
-         estimatedArrival: '3-5 minutos'
+         estimatedArrival: '3-5 minutos',
+         timestamp: new Date().toISOString()
        };
        
-       this.socket.emit('test_ride_accepted', testData);
-       console.log('📤 Evento de teste enviado:', testData);
+       // Simular recebimento do evento
+       console.log('📤 [TESTE] Simulando recebimento de ride_accepted...');
+       this.triggerCallbacks('ride_accepted', testData);
        
+       console.log('📤 [TESTE] Evento de teste executado:', testData);
        return testData;
+       
      } else {
-       console.error('❌ Socket não está conectado para teste');
+       console.error('❌ [TESTE] Socket não está conectado para teste');
        return null;
      }
+   }
+   
+   // Ferramenta de teste abrangente para todos os eventos
+   testAllRideEvents(rideId = 'test-ride-123', passengerId = 'test-passenger-123') {
+     if (!this.socket || !this.socket.connected) {
+       console.error('❌ [TESTE] Socket não conectado');
+       return false;
+     }
+     
+     console.log('🧪 [TESTE COMPLETO] Iniciando teste de todos os eventos...');
+     
+     const baseRideData = {
+       rideId,
+       ride: {
+         id: rideId,
+         passengerId,
+         status: 'pending'
+       },
+       timestamp: new Date().toISOString(),
+       test: true
+     };
+     
+     const tests = [
+       {
+         event: 'ride_accepted',
+         data: {
+           ...baseRideData,
+           driver: {
+             id: 'test-driver-123',
+             name: 'Motorista Teste',
+             phone: '+244 900 000 000'
+           },
+           estimatedArrival: '5-10 minutos'
+         }
+       },
+       {
+         event: 'ride_rejected',
+         data: {
+           ...baseRideData,
+           reason: 'Teste de rejeição'
+         }
+       },
+       {
+         event: 'ride_started',
+         data: {
+           ...baseRideData,
+           ride: { ...baseRideData.ride, status: 'started' },
+           message: 'Corrida iniciada - TESTE'
+         }
+       },
+       {
+         event: 'ride_completed',
+         data: {
+           ...baseRideData,
+           ride: { ...baseRideData.ride, status: 'completed' },
+           fare: 500
+         }
+       },
+       {
+         event: 'ride_cancelled',
+         data: {
+           ...baseRideData,
+           cancelledBy: 'driver',
+           reason: 'Teste de cancelamento'
+         }
+       },
+       {
+         event: 'no_drivers_available',
+         data: {
+           ...baseRideData,
+           message: 'Nenhum motorista disponível - TESTE'
+         }
+       }
+     ];
+     
+     let testIndex = 0;
+     const runNextTest = () => {
+       if (testIndex >= tests.length) {
+         console.log('✅ [TESTE COMPLETO] Todos os testes foram executados!');
+         return;
+       }
+       
+       const test = tests[testIndex];
+       console.log(`🧪 [TESTE ${testIndex + 1}/${tests.length}] Testando evento: ${test.event}`);
+       
+       this.triggerCallbacks(test.event, test.data);
+       
+       testIndex++;
+       
+       // Executar próximo teste após 2 segundos
+       setTimeout(runNextTest, 2000);
+     };
+     
+     runNextTest();
+     return true;
+   }
+   
+   // Diagnóstico do estado dos callbacks
+   diagnoseCallbacks() {
+     console.log('🔍 [DIAGNÓSTICO] Estado dos callbacks:');
+     console.log(`📊 Total de eventos registrados: ${this.eventCallbacks.size}`);
+     
+     if (this.eventCallbacks.size === 0) {
+       console.warn('⚠️ [DIAGNÓSTICO] NENHUM callback registrado!');
+       return false;
+     }
+     
+     for (const [eventName, callbacks] of this.eventCallbacks.entries()) {
+       console.log(`  📦 ${eventName}: ${callbacks.length} callback(s)`);
+       
+       callbacks.forEach((callback, index) => {
+         console.log(`    - Callback ${index + 1}: ${typeof callback}`);
+       });
+     }
+     
+     // Verificar estado do socket
+     console.log('🔌 [DIAGNÓSTICO] Estado do Socket:');
+     console.log(`  Conectado: ${this.socket?.connected || false}`);
+     console.log(`  Socket ID: ${this.socket?.id || 'N/A'}`);
+     console.log(`  UserType: ${this.userType || 'N/A'}`);
+     console.log(`  UserID: ${this.userId || 'N/A'}`);
+     
+     return true;
    }
 
   // Calcular preço estimado da corrida
@@ -722,6 +1134,55 @@ class ApiService {
     
     // Fallback para standard
     return 500;
+  }
+
+  // Implementar fallback via polling para status de corrida
+  startRideStatusPolling(rideId, onStatusUpdate, intervalMs = 2000, maxDuration = 60000) {
+    console.log(`🔄 [POLLING] Iniciando polling para corrida ${rideId}`);
+    
+    let pollCount = 0;
+    const startTime = Date.now();
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        pollCount++;
+        console.log(`🔍 [POLLING] Verificando status da corrida ${rideId} (tentativa ${pollCount})`);
+        
+        // Verificar se deve parar o polling
+        if (Date.now() - startTime > maxDuration) {
+          console.log(`⏰ [POLLING] Tempo máximo atingido, parando polling`);
+          clearInterval(pollInterval);
+          return;
+        }
+        
+        // Buscar status da corrida
+        const response = await this.getRide(rideId);
+        
+        if (response.success && response.data) {
+          const ride = response.data;
+          
+          // Chamar callback com atualização de status
+          if (onStatusUpdate) {
+            onStatusUpdate(ride);
+          }
+          
+          // Parar polling se corrida foi aceita, completada ou cancelada
+          if (['accepted', 'in_progress', 'completed', 'cancelled'].includes(ride.status)) {
+            console.log(`✅ [POLLING] Status final detectado: ${ride.status}, parando polling`);
+            clearInterval(pollInterval);
+          }
+        }
+        
+      } catch (error) {
+        console.error(`❌ [POLLING] Erro ao verificar status:`, error);
+      }
+    }, intervalMs);
+    
+    // Retornar função para parar o polling manualmente
+    return () => {
+      console.log(`🛑 [POLLING] Parando polling manualmente para corrida ${rideId}`);
+      clearInterval(pollInterval);
+    };
   }
 
   // Calcular distância entre dois pontos

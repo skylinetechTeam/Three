@@ -234,6 +234,16 @@ const SettingsScreen = ({ navigation }) => {
             } else {
               console.log('Navegando para:', item.screen);
             }
+          } else if (item.action === 'whatsapp') {
+            const whatsappUrl = 'https://wa.me/+244928873593';
+            Linking.openURL(whatsappUrl)
+              .catch(err => {
+                Alert.alert(
+                  'Erro',
+                  'Não foi possível abrir o WhatsApp. Verifique se o aplicativo está instalado.',
+                  [{ text: 'OK' }]
+                );
+              });
           }
         }}
         disabled={item.action === 'switch'}

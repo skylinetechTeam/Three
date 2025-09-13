@@ -3,9 +3,11 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, Keyboard } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import * as Updates from 'expo-updates';
+import { UIProvider, useUI } from './contexts/UIContext';
+import { RESPONSIVE, SIZES } from './config/theme';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -28,6 +30,7 @@ import DriverMapScreen from './screens/DriverMapScreen';
 import DriverRequestsScreen from './screens/DriverRequestsScreen';
 import DriverProfileScreen from './screens/DriverProfileScreen';
 import DriverSettingsScreen from './screens/DriverSettingsScreen';
+import DriverChangePasswordScreen from './screens/DriverChangePasswordScreen';
 import Toast from 'react-native-toast-message';
 import SplashScreen from './components/SplashScreen';
 import LocalDatabase from './services/localDatabase';
@@ -38,27 +41,44 @@ const Tab = createBottomTabNavigator();
 
 function HomeTabs() {
   const insets = useSafeAreaInsets();
+  const { actions } = useUI();
+  
+  // Update keyboard state for responsive UI
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
+      actions.setKeyboardState(true, e.endCoordinates.height);
+    });
+    
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      actions.setKeyboardState(false, 0);
+    });
+
+    return () => {
+      keyboardDidShowListener?.remove();
+      keyboardDidHideListener?.remove();
+    };
+  }, [actions]);
   
   return (
     <Tab.Navigator
       screenOptions={{
         tabBarStyle: {
-          height: 70 + insets.bottom,
+          height: RESPONSIVE.getDynamicSize({ small: 65, standard: 70, large: 75, tablet: 80 }) + insets.bottom,
           backgroundColor: '#2563EB',
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
           paddingBottom: insets.bottom,
-          paddingTop: 8,
+          paddingTop: SIZES.spacing.sm,
         },
         tabBarIconStyle: {
-          height: 30,
-          width: 30,
+          height: RESPONSIVE.getIconSize('large'),
+          width: RESPONSIVE.getIconSize('large'),
         },
         tabBarActiveTintColor: '#ffffff',
         tabBarInactiveTintColor: '#93C5FD',
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: RESPONSIVE.getDynamicSize({ small: 10, standard: 12, large: 14, tablet: 16 }),
           fontWeight: '500',
           marginBottom: Platform.OS === 'ios' ? 0 : 4,
         },
@@ -70,7 +90,7 @@ function HomeTabs() {
         options={{
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+            <Ionicons name="home-outline" size={RESPONSIVE.getIconSize('medium')} color={color} />
           ),
         }}
       />
@@ -80,7 +100,7 @@ function HomeTabs() {
         options={{
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" size={size} color={color} />
+            <Ionicons name="calendar-outline" size={RESPONSIVE.getIconSize('medium')} color={color} />
           ),
         }}
       />
@@ -90,7 +110,7 @@ function HomeTabs() {
         options={{
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="heart-outline" size={size} color={color} />
+            <Ionicons name="heart-outline" size={RESPONSIVE.getIconSize('medium')} color={color} />
           ),
         }}
       />
@@ -100,7 +120,7 @@ function HomeTabs() {
         options={{
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+            <Ionicons name="person-outline" size={RESPONSIVE.getIconSize('medium')} color={color} />
           ),
         }}
       />
@@ -110,27 +130,28 @@ function HomeTabs() {
 
 function DriverTabs() {
   const insets = useSafeAreaInsets();
+  const { actions } = useUI();
   
   return (
     <Tab.Navigator
       screenOptions={{
         tabBarStyle: {
-          height: 70 + insets.bottom,
+          height: RESPONSIVE.getDynamicSize({ small: 65, standard: 70, large: 75, tablet: 80 }) + insets.bottom,
           backgroundColor: '#1F2937',
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
           paddingBottom: insets.bottom,
-          paddingTop: 8,
+          paddingTop: SIZES.spacing.sm,
         },
         tabBarIconStyle: {
-          height: 30,
-          width: 30,
+          height: RESPONSIVE.getIconSize('large'),
+          width: RESPONSIVE.getIconSize('large'),
         },
         tabBarActiveTintColor: '#ffffff',
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: RESPONSIVE.getDynamicSize({ small: 10, standard: 12, large: 14, tablet: 16 }),
           fontWeight: '500',
           marginBottom: Platform.OS === 'ios' ? 0 : 4,
         },
@@ -143,7 +164,7 @@ function DriverTabs() {
           headerShown: false,
           tabBarLabel: 'Mapa',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="map-outline" size={size} color={color} />
+            <Ionicons name="map-outline" size={RESPONSIVE.getIconSize('medium')} color={color} />
           ),
         }}
       />
@@ -154,7 +175,7 @@ function DriverTabs() {
           headerShown: false,
           tabBarLabel: 'Solicitações',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="list-outline" size={size} color={color} />
+            <Ionicons name="list-outline" size={RESPONSIVE.getIconSize('medium')} color={color} />
           ),
         }}
       />
@@ -165,7 +186,7 @@ function DriverTabs() {
           headerShown: false,
           tabBarLabel: 'Perfil',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+            <Ionicons name="person-outline" size={RESPONSIVE.getIconSize('medium')} color={color} />
           ),
         }}
       />
@@ -176,7 +197,7 @@ function DriverTabs() {
           headerShown: false,
           tabBarLabel: 'Configurações',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" size={size} color={color} />
+            <Ionicons name="settings-outline" size={RESPONSIVE.getIconSize('medium')} color={color} />
           ),
         }}
       />
@@ -184,11 +205,13 @@ function DriverTabs() {
   );
 }
 
-export default function App() {
+// Main App Component with UI Context
+function AppContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isDriverLoggedIn, setIsDriverLoggedIn] = useState(false);
   const [userType, setUserType] = useState(null); // 'passenger' ou 'driver'
+  const { actions } = useUI();
 
   useEffect(() => {
     checkLoginStatus();
@@ -360,9 +383,23 @@ export default function App() {
             component={EditProfileScreen}
             options={{ headerShown: false }}
           />
+          <Stack.Screen
+            name="DriverChangePassword"
+            component={DriverChangePasswordScreen}
+            options={{ headerShown: false }}
+          />
         </Stack.Navigator>
         <Toast />
       </NavigationContainer>
     </SafeAreaProvider>
+  );
+}
+
+// Main App wrapper with UI Provider
+export default function App() {
+  return (
+    <UIProvider>
+      <AppContent />
+    </UIProvider>
   );
 }

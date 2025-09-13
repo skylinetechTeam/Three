@@ -139,7 +139,7 @@ export default function DriverMapScreen({ navigation, route }) {
 
       const driverId = driverProfile?.id || driverProfile?.apiDriverId;
       if (!driverId) {
-        console.error('ID do motorista não encontrado');
+        //console.error('ID do motorista não encontrado');
         return;
       }
 
@@ -490,14 +490,14 @@ export default function DriverMapScreen({ navigation, route }) {
       if (driverProfile.apiDriverId) {
         const driverData = {
           driverId: driverProfile.apiDriverId,
-          driverName: driverProfile.nome || 'Motorista',
+          driverName: driverProfile.name || 'Motorista',
           driverPhone: driverProfile.telefone || driverProfile.phone,
           vehicleInfo: {
-            make: driverProfile.veiculo?.marca || 'Toyota',
-            model: driverProfile.veiculo?.modelo || 'Corolla',
-            year: driverProfile.veiculo?.ano || 2020,
-            color: driverProfile.veiculo?.cor || 'Branco',
-            plate: driverProfile.veiculo?.placa || 'LD-12-34-AB'
+            make: driverProfile.vehicles[0]?.make || 'Toyota',
+            model: driverProfile.vehicles[0]?.model || 'Corolla',
+            year: driverProfile.vehicles[0]?.year || 2020,
+            color: driverProfile.vehicles[0]?.color || 'Branco',
+            plate: driverProfile.vehicles[0]?.license_plate || 'LD-12-34-AB'
           }
         };
         
@@ -763,159 +763,219 @@ export default function DriverMapScreen({ navigation, route }) {
     }
   };
 
-  const simulateArrival = () => {
-    if (ridePhase === 'pickup') {
-      // Arrived at pickup location
-      Alert.alert(
-        'Chegou ao local de embarque',
-        'Você chegou ao local do passageiro. Confirme que o passageiro entrou no veículo.',
-        [
-          {
-            text: 'Passageiro Embarcou',
-            onPress: async () => {
-              try {
-                // Start ride via API
-                if (driverProfile?.apiDriverId && activeRide?.id) {
-                  console.log('🚗 Iniciando corrida via API:', {
-                    rideId: activeRide.id,
-                    driverId: driverProfile.apiDriverId,
-                    location: location?.coords
-                  });
-                  
-                  await apiService.startRide(
-                    activeRide.id, 
-                    driverProfile.apiDriverId, 
-                    location?.coords
-                  );
-                  
-                  console.log('✅ Corrida iniciada com sucesso via API');
-                  
-                  // NOVA FUNCIONALIDADE: Emitir evento manualmente via WebSocket se conectado
-                  if (apiService.socket && apiService.isConnected) {
-                    console.log('📡 Emitindo evento ride_started via WebSocket manual...');
-                    const rideStartedData = {
+  // Reset driver state completely after ride completion
+  const resetDriverState = () => {
+    console.log('🔄 === RESETTING DRIVER STATE IMMEDIATELY ===');
+    
+    try {
+      // Clear navigation in WebView FIRST (synchronously)
+      if (webViewRef.current) {
+        console.log('🧹 Sending clearNavigation command to WebView...');
+        const clearScript = `
+          console.log('🧹 WebView received clear command');
+          if (typeof clearNavigation === 'function') {
+            clearNavigation();
+            console.log('✅ clearNavigation executed in WebView');
+          } else {
+            console.error('❌ clearNavigation function not found in WebView');
+          }
+        `;
+        
+        // Use both methods to ensure it works
+        try {
+          webViewRef.current.injectJavaScript(clearScript);
+          console.log('💫 Script injected directly');
+        } catch (e) {
+          webViewRef.current.postMessage(clearScript);
+          console.log('📤 Script sent via postMessage');
+        }
+      }
+      
+      // Clear ride-related states IMMEDIATELY
+      console.log('🧹 Clearing React states...');
+      setActiveRide(null);
+      setNavigationMode(false);
+      setRidePhase('pickup');
+      setCurrentRequest(null);
+      setShowRequestModal(false);
+      setAcceptingRequest(false);
+      
+      console.log('✅ All React states cleared immediately');
+      
+      // Restart polling for new requests if driver is online
+      if (isOnline && driverProfile?.apiDriverId && location) {
+        console.log('🔄 Restarting request polling...');
+        setTimeout(() => {
+          startRequestPolling();
+          console.log('✅ Request polling restarted');
+        }, 500); // Reduced delay
+      }
+      
+      console.log('✅ 🔄 DRIVER STATE RESET COMPLETE');
+      
+    } catch (error) {
+      console.error('❌ Error resetting driver state:', error);
+    }
+  };
+
+  const simulateArrival = async () => {
+    // Prevent multiple clicks
+    if (acceptingRequest) {
+      console.log('🛑 Already processing arrival, ignoring click');
+      return;
+    }
+    
+    setAcceptingRequest(true);
+    
+    try {
+      if (ridePhase === 'pickup') {
+        // Arrived at pickup location - confirm passenger boarding
+        Alert.alert(
+          'Chegou ao local de embarque',
+          'Confirme que o passageiro entrou no veículo para iniciar a corrida.',
+          [
+            {
+              text: 'Passageiro Embarcou',
+              onPress: async () => {
+                try {
+                  // Start ride via API
+                  if (driverProfile?.apiDriverId && activeRide?.id) {
+                    console.log('🚗 Iniciando corrida via API:', {
                       rideId: activeRide.id,
                       driverId: driverProfile.apiDriverId,
-                      ride: activeRide,
-                      status: 'started',
-                      timestamp: Date.now()
+                      location: location?.coords
+                    });
+                    
+                    await apiService.startRide(
+                      activeRide.id, 
+                      driverProfile.apiDriverId, 
+                      location?.coords
+                    );
+                    
+                    console.log('✅ Corrida iniciada com sucesso via API');
+                    
+                    // Emit WebSocket event manually if connected
+                    if (apiService.socket && apiService.isConnected) {
+                      console.log('📡 Emitindo evento ride_started via WebSocket manual...');
+                      const rideStartedData = {
+                        rideId: activeRide.id,
+                        driverId: driverProfile.apiDriverId,
+                        ride: activeRide,
+                        status: 'started',
+                        timestamp: Date.now()
+                      };
+                      
+                      apiService.socket.emit('ride_started_manual', rideStartedData);
+                      apiService.triggerCallbacks('ride_started', rideStartedData);
+                    }
+                  }
+                  
+                  // Update UI state to dropoff phase
+                  setRidePhase('dropoff');
+                  Toast.show({
+                    type: "success",
+                    text1: "Corrida iniciada!",
+                    text2: "Navegando para o destino",
+                  });
+                  
+                  // Start navigation to destination
+                  setTimeout(() => {
+                    if (webViewRef.current) {
+                      const script = `
+                        if (typeof startNavigation === 'function') {
+                          startNavigation(${activeRide.destination.lat}, ${activeRide.destination.lng}, '${activeRide.passengerName}', 'dropoff');
+                        }
+                      `;
+                      webViewRef.current.postMessage(script);
+                    }
+                  }, 1000);
+                  
+                } catch (error) {
+                  console.error('Error starting ride:', error);
+                  Toast.show({
+                    type: "error",
+                    text1: "Erro ao iniciar corrida",
+                    text2: "Continuando localmente",
+                  });
+                  
+                  // Continue locally even if API fails
+                  setRidePhase('dropoff');
+                } finally {
+                  setAcceptingRequest(false);
+                }
+              }
+            },
+            {
+              text: 'Cancelar',
+              style: 'cancel',
+              onPress: () => setAcceptingRequest(false)
+            }
+          ]
+        );
+      } else {
+        // Arrived at destination - complete the ride
+        Alert.alert(
+          'Finalizar Corrida',
+          'Você chegou ao destino. Deseja finalizar a corrida?',
+          [
+            {
+              text: 'Sim, Finalizar',
+              onPress: async () => {
+                try {
+                  const fareEarned = activeRide.estimatedFare || activeRide.fare;
+                  
+                  // Complete ride via API
+                  if (driverProfile?.apiDriverId && activeRide?.id) {
+                    const completionData = {
+                      dropoffLocation: location?.coords,
+                      actualFare: fareEarned,
+                      paymentConfirmed: true
                     };
                     
-                    // Emitir evento para todos os passageiros conectados
-                    apiService.socket.emit('ride_started_manual', rideStartedData);
-                    
-                    // Também executar callbacks localmente para garantir
-                    apiService.triggerCallbacks('ride_started', rideStartedData);
+                    await apiService.completeRide(
+                      activeRide.id, 
+                      driverProfile.apiDriverId, 
+                      completionData
+                    );
                   }
-                }
-                
-                setRidePhase('dropoff');
-                Toast.show({
-                  type: "success",
-                  text1: "Corrida iniciada!",
-                  text2: "Navegando para o destino",
-                });
-                
-                // Start navigation to destination
-                setTimeout(() => {
-                  if (webViewRef.current) {
-                    const script = `
-                      if (typeof startNavigation === 'function') {
-                        startNavigation(${activeRide.destination.lat}, ${activeRide.destination.lng}, '${activeRide.passengerName}', 'dropoff');
-                      }
-                    `;
-                    webViewRef.current.postMessage(script);
-                  }
-                }, 1000);
-                
-              } catch (error) {
-                console.error('Error starting ride:', error);
-                Toast.show({
-                  type: "error",
-                  text1: "Erro ao iniciar corrida",
-                  text2: "Continuando localmente",
-                });
-                
-                // Continue locally even if API fails
-                setRidePhase('dropoff');
-              }
-            }
-          }
-        ]
-      );
-    } else {
-      // Arrived at destination
-      Alert.alert(
-        'Corrida finalizada',
-        'Você chegou ao destino. A corrida foi concluída com sucesso!',
-        [
-          {
-            text: 'Finalizar Corrida',
-            onPress: async () => {
-              try {
-                const fareEarned = activeRide.estimatedFare || activeRide.fare;
-                
-                // Complete ride via API
-                if (driverProfile?.apiDriverId && activeRide?.id) {
-                  const completionData = {
-                    dropoffLocation: location?.coords,
-                    actualFare: fareEarned,
-                    paymentConfirmed: true
-                  };
                   
-                  await apiService.completeRide(
-                    activeRide.id, 
-                    driverProfile.apiDriverId, 
-                    completionData
-                  );
-                }
-                
-                setActiveRide(null);
-                setNavigationMode(false);
-                setRidePhase('pickup');
-                
-                // Reiniciar polling para novas solicitações
-                if (isOnline && driverProfile?.apiDriverId && location) {
-                  startRequestPolling();
-                }
-                
-                if (webViewRef.current) {
-                  const script = `
-                    if (typeof clearNavigation === 'function') {
-                      clearNavigation();
-                    }
-                  `;
-                  webViewRef.current.postMessage(script);
-                }
-                
-                Toast.show({
-                  type: "success",
-                  text1: "Corrida concluída!",
-                  text2: `Você ganhou ${fareEarned} AOA`,
-                });
-                
-              } catch (error) {
-                console.error('Error completing ride:', error);
-                Toast.show({
-                  type: "success",
-                  text1: "Corrida concluída!",
-                  text2: "Finalizando localmente",
-                });
-                
-                // Continue locally even if API fails
-                setActiveRide(null);
-                setNavigationMode(false);
-                setRidePhase('pickup');
-                
-                // Reiniciar polling para novas solicitações
-                if (isOnline && driverProfile?.apiDriverId && location) {
-                  startRequestPolling();
+                  Toast.show({
+                    type: "success",
+                    text1: "Corrida concluída!",
+                    text2: `Você ganhou ${fareEarned} Kz`,
+                  });
+                  
+                  // Reset driver state IMMEDIATELY - don't wait for API
+                  console.log('📋 Finalizing ride - resetting state immediately');
+                  resetDriverState();
+                  
+                } catch (error) {
+                  console.error('Error completing ride:', error);
+                  Toast.show({
+                    type: "success",
+                    text1: "Corrida concluída!",
+                    text2: "Finalizando localmente",
+                  });
+                  
+                  // Reset state IMMEDIATELY even if API fails
+                  console.log('📋 API failed but resetting state immediately');
+                  resetDriverState();
+                } finally {
+                  setAcceptingRequest(false);
                 }
               }
+            },
+            {
+              text: 'Cancelar',
+              style: 'cancel',
+              onPress: () => setAcceptingRequest(false)
             }
-          }
-        ]
-      );
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error in simulateArrival:', error);
+      setAcceptingRequest(false);
     }
   };
 
@@ -928,30 +988,38 @@ export default function DriverMapScreen({ navigation, route }) {
         {
           text: 'Sim, cancelar',
           style: 'destructive',
-          onPress: () => {
-            setActiveRide(null);
-            setNavigationMode(false);
-            setRidePhase('pickup');
-            
-            // Reiniciar polling para novas solicitações
-            if (isOnline && driverProfile?.apiDriverId && location) {
-              startRequestPolling();
+          onPress: async () => {
+            try {
+              // Cancel ride via API if possible
+              if (driverProfile?.apiDriverId && activeRide?.id) {
+                await apiService.cancelRide(
+                  activeRide.id, 
+                  driverProfile.apiDriverId, 
+                  'driver', 
+                  'Driver cancelled'
+                );
+              }
+              
+              Toast.show({
+                type: "info",
+                text1: "Corrida cancelada",
+                text2: "Você está disponível para novas corridas",
+              });
+              
+              // Reset driver state completely
+              resetDriverState();
+              
+            } catch (error) {
+              console.error('Error cancelling ride:', error);
+              // Reset state even if API call fails
+              resetDriverState();
+              
+              Toast.show({
+                type: "info",
+                text1: "Corrida cancelada",
+                text2: "Cancelamento processado localmente",
+              });
             }
-            
-            if (webViewRef.current) {
-              const script = `
-                if (typeof clearNavigation === 'function') {
-                  clearNavigation();
-                }
-              `;
-              webViewRef.current.postMessage(script);
-            }
-            
-            Toast.show({
-              type: "info",
-              text1: "Corrida cancelada",
-              text2: "Você está disponível para novas corridas",
-            });
           }
         }
       ]
@@ -1097,19 +1165,8 @@ export default function DriverMapScreen({ navigation, route }) {
         <div id="map"></div>
        
         <div class="speed-info" id="speedInfo">0 km/h</div>
-        <button class="arrival-button" id="arrivalButton" onclick="handleArrival()">
-            Cheguei ao local
-        </button>
-        <div class="navigation-info" id="navigationInfo">
-            <div class="navigation-header">
-                <div class="ride-phase" id="ridePhase">BUSCANDO PASSAGEIRO</div>
-                <div class="eta-info" id="etaInfo">ETA: --:--</div>
-            </div>
-            <div class="next-instruction" id="nextInstruction">Aguardando rota...</div>
-            <div class="distance-time">
-                <span id="remainingDistance">0 km</span>
-                <span id="remainingTime">0 min</span>
-            </div>
+       
+       
         </div>
         
         <script>
@@ -1488,10 +1545,10 @@ export default function DriverMapScreen({ navigation, route }) {
                          currentInstructionIndex = 0;
                          
                          // Show navigation elements
-                         const arrivalBtn = document.getElementById('arrivalButton');
+                         //const arrivalBtn = document.getElementById('arrivalButton');
                          const navInfo = document.getElementById('navigationInfo');
                          
-                         if (arrivalBtn) arrivalBtn.style.display = 'block';
+                         
                          if (navInfo) navInfo.style.display = 'block';
                          console.log('✅ Navigation UI elements shown');
                          
@@ -1590,15 +1647,7 @@ export default function DriverMapScreen({ navigation, route }) {
                 const phaseElement = document.getElementById('ridePhase');
                 const instructionElement = document.getElementById('nextInstruction');
                 
-                if (phase === 'pickup') {
-                    phaseElement.textContent = 'BUSCANDO PASSAGEIRO';
-                    instructionElement.textContent = \`Navegando até \${passengerName}\`;
-                } else {
-                    phaseElement.textContent = 'LEVANDO PASSAGEIRO';
-                    instructionElement.textContent = 'Navegando para o destino';
-                }
-                
-                updateRouteInfo();
+               
             }
 
             function updateRouteInfo() {
@@ -1655,14 +1704,7 @@ export default function DriverMapScreen({ navigation, route }) {
                          document.getElementById('remainingDistance').textContent = '0 km';
                          document.getElementById('remainingTime').textContent = '0 min';
                          
-                         // Flash the arrival button
-                         const arrivalBtn = document.getElementById('arrivalButton');
-                         arrivalBtn.style.background = '#F59E0B';
-                         arrivalBtn.textContent = 'CHEGOU! Confirmar';
-                         setTimeout(() => {
-                             arrivalBtn.style.background = '#10B981';
-                             arrivalBtn.textContent = 'Cheguei ao local';
-                         }, 2000);
+                        
                      }
                  }, 5000); // Every 5 seconds for more realistic timing
              }
@@ -1696,19 +1738,120 @@ export default function DriverMapScreen({ navigation, route }) {
                 }));
             }
 
-                         // Clear navigation
+                         // Enhanced function to clear all navigation elements completely
              function clearNavigation() {
-                 clearPreviousRoute();
+                 console.log('🧹 === CLEARING ALL NAVIGATION ELEMENTS IMMEDIATELY ===');
                  
-                 if (simulationInterval) {
-                     clearInterval(simulationInterval);
-                     simulationInterval = null;
+                 try {
+                     // Step 1: Clear previous route elements first
+                     clearPreviousRoute();
+                     console.log('✅ Step 1: Previous route cleared');
+                     
+                     // Step 2: Force remove ALL polylines immediately
+                     let polylineCount = 0;
+                     map.eachLayer(function(layer) {
+                         if (layer instanceof L.Polyline) {
+                             map.removeLayer(layer);
+                             polylineCount++;
+                         }
+                     });
+                     console.log('✅ Step 2: Removed ' + polylineCount + ' polylines');
+                     
+                     // Step 3: Force remove route control if exists
+                     if (routeControl) {
+                         try {
+                             map.removeControl(routeControl);
+                             routeControl = null;
+                             console.log('✅ Step 3: Route control removed');
+                         } catch (e) {
+                             console.warn('Route control removal failed:', e);
+                         }
+                     }
+                     
+                     // Step 4: Clear route line specifically
+                     if (routeLine) {
+                         try {
+                             map.removeLayer(routeLine);
+                             routeLine = null;
+                             console.log('✅ Step 4: Route line cleared');
+                         } catch (e) {
+                             console.warn('Route line removal failed:', e);
+                         }
+                     }
+                     
+                     // Step 5: Clear destination marker and any other markers except driver
+                     let markerCount = 0;
+                     map.eachLayer(function(layer) {
+                         if (layer instanceof L.Marker && layer !== driverMarker) {
+                             map.removeLayer(layer);
+                             markerCount++;
+                         }
+                     });
+                     if (destinationMarker) {
+                         destinationMarker = null;
+                     }
+                     console.log('✅ Step 5: Removed ' + markerCount + ' markers');
+                     
+                     // Step 6: Clear any running simulation IMMEDIATELY
+                     if (simulationInterval) {
+                         clearInterval(simulationInterval);
+                         simulationInterval = null;
+                         console.log('✅ Step 6: Simulation interval cleared');
+                     }
+                     
+                     // Step 7: Hide all navigation UI elements IMMEDIATELY
+                     const navInfo = document.getElementById('navigationInfo');
+                     if (navInfo) {
+                         navInfo.style.display = 'none';
+                         console.log('✅ Step 7a: Navigation info hidden');
+                     }
+                    
+                     
+                     // Step 8: Reset all navigation variables IMMEDIATELY
+                     routeInstructions = [];
+                     currentInstructionIndex = 0;
+                     routeSummary = null;
+                     currentPhase = 'pickup';
+                     console.log('✅ Step 8: All variables reset');
+                     
+                     // Step 9: Center map on driver location immediately
+                     if (driverMarker) {
+                         const driverPos = driverMarker.getLatLng();
+                         map.setView([driverPos.lat, driverPos.lng], 16);
+                         console.log('✅ Step 9: Map centered on driver');
+                     }
+                     
+                     // Step 10: Force a map refresh
+                     try {
+                         map.invalidateSize();
+                         console.log('✅ Step 10: Map refreshed');
+                     } catch (e) {
+                         console.warn('Map refresh failed:', e);
+                     }
+                     
+                     // Send immediate confirmation to React Native
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'navigation_cleared',
+                             message: 'All navigation elements successfully cleared IMMEDIATELY',
+                             polylines: polylineCount,
+                             markers: markerCount
+                         }));
+                     } catch (e) {
+                         console.warn('Could not send navigation cleared message:', e);
+                     }
+                     
+                     console.log('🧹 ✅ NAVIGATION COMPLETELY CLEARED IMMEDIATELY!');
+                     
+                 } catch (error) {
+                     console.error('❌ Error clearing navigation:', error);
+                     try {
+                         window.ReactNativeWebView?.postMessage(JSON.stringify({
+                             type: 'error',
+                             message: 'Error clearing navigation: ' + error.message
+                         }));
+                     } catch (e) {}
                  }
-                 document.getElementById('navigationInfo').style.display = 'none';
-                 document.getElementById('arrivalButton').style.display = 'none';
-                 routeInstructions = [];
-                 currentInstructionIndex = 0;
-                 routeSummary = null;
              }
 
                          // Initialize driver marker if location is available
@@ -1835,7 +1978,7 @@ export default function DriverMapScreen({ navigation, route }) {
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerLeft}>
           <View style={styles.driverInfo}>
-            <Text style={styles.headerTitle}>{driverProfile?.nome || 'Motorista'}</Text>
+            <Text style={styles.headerTitle}>{driverProfile?.name || 'Motorista'}</Text>
             <Text style={styles.headerSubtitle}>
               {driverProfile?.telefone || driverProfile?.phone || 'Carregando...'}
             </Text>
@@ -1873,7 +2016,7 @@ export default function DriverMapScreen({ navigation, route }) {
         </View>
       </View>
 
-      {/* Active Ride Info */}
+      {/* Active Ride Info 
       {activeRide && navigationMode && (
         <View style={styles.activeRideInfo}>
           <View style={styles.rideInfoHeader}>
@@ -1891,8 +2034,11 @@ export default function DriverMapScreen({ navigation, route }) {
           <Text style={styles.destinationText}>
             {ridePhase === 'pickup' ? activeRide.pickup.address : activeRide.destination.address}
           </Text>
+          
         </View>
+        
       )}
+        */}
 
       {/* Map */}
       <View style={styles.mapContainer}>
@@ -1927,20 +2073,16 @@ export default function DriverMapScreen({ navigation, route }) {
                 simulateArrival();
               } else if (data.type === 'navigation_status') {
                 console.log('🧭 Navigation status:', data.message);
+              } else if (data.type === 'navigation_cleared') {
+                console.log('🧹 Navigation cleared:', data.message);
               } else if (data.type === 'error') {
                 console.error('❌ WebView error:', data.message);
-                // Verificar se é o erro específico que estamos procurando
-              
               } else if (data.type === 'debug') {
                 console.log('🐛 WebView debug:', data.message);
               }
             } catch (error) {
               console.error('Error parsing WebView message:', error);
-              // Log the raw message for debugging
               console.log('Raw WebView message:', event.nativeEvent.data);
-              
-              // Verificar se a mensagem raw contém o erro que estamos procurando
-             
             }
           }}
         />
@@ -1965,6 +2107,9 @@ export default function DriverMapScreen({ navigation, route }) {
 
      
 
+      {/* Debug button for testing immediate clear */}
+     
+
       {/* Navigation Controls */}
       {navigationMode && (
         <View style={[styles.navigationControls, { bottom: insets.bottom + 20 }]}>
@@ -1977,12 +2122,14 @@ export default function DriverMapScreen({ navigation, route }) {
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={styles.arrivalButton}
+            style={[styles.arrivalButton, acceptingRequest && styles.buttonDisabled]}
             onPress={simulateArrival}
+            disabled={acceptingRequest}
           >
             <MaterialIcons name="place" size={20} color="#ffffff" />
             <Text style={styles.arrivalButtonText}>
-              {ridePhase === 'pickup' ? 'Cheguei' : 'Finalizar'}
+              {acceptingRequest ? 'Processando...' : 
+                (ridePhase === 'pickup' ? 'Cheguei ao local' : 'Finalizar corrida')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1996,67 +2143,69 @@ export default function DriverMapScreen({ navigation, route }) {
         onRequestClose={() => setShowRequestModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
+          <View style={styles.modalContainer}>
             {currentRequest && (
               <>
-                <View style={styles.modalHeader}>
-                  <View style={styles.modalHeaderIcon}>
-                    <MaterialIcons name="local-taxi" size={32} color="#2563EB" />
-                  </View>
-                  <Text style={styles.modalTitle}>Nova Solicitação!</Text>
-                  <Text style={styles.modalSubtitle}>
-                    Passageiro aguardando
-                    {pendingRequests.length > 1 && (
-                      <Text style={styles.pendingCount}> • +{pendingRequests.length - 1} pendentes</Text>
-                    )}
-                  </Text>
-                </View>
-
-                <View style={styles.passengerSection}>
-                  <MaterialIcons name="person" size={24} color="#1F2937" />
-                  <View style={styles.passengerInfo}>
-                    <Text style={styles.passengerName}>{currentRequest.passengerName}</Text>
-                    <Text style={styles.requestTime}>
-                      Solicitado agora • {currentRequest.paymentMethod}
+                <View style={styles.modalContent}>
+                  <View style={styles.modalHeader}>
+                    <View style={styles.modalHeaderIcon}>
+                      <MaterialIcons name="local-taxi" size={28} color="#2563EB" />
+                    </View>
+                    <Text style={styles.modalTitle}>Nova Solicitação!</Text>
+                    <Text style={styles.modalSubtitle}>
+                      Passageiro aguardando
+                      {pendingRequests.length > 1 && (
+                        <Text style={styles.pendingCount}> • +{pendingRequests.length - 1} pendentes</Text>
+                      )}
                     </Text>
                   </View>
-                </View>
 
-                <View style={styles.routeSection}>
-                  <View style={styles.locationRow}>
-                    <MaterialIcons name="radio-button-checked" size={20} color="#10B981" />
-                    <View style={styles.locationInfo}>
-                      <Text style={styles.locationLabel}>ORIGEM</Text>
-                      <Text style={styles.locationAddress}>{currentRequest.pickup.address}</Text>
+                  <View style={styles.passengerSection}>
+                    <MaterialIcons name="person" size={20} color="#1F2937" />
+                    <View style={styles.passengerInfo}>
+                      <Text style={styles.passengerName}>{currentRequest.passengerName}</Text>
+                      <Text style={styles.requestTime}>
+                        Solicitado agora • {currentRequest.paymentMethod}
+                      </Text>
                     </View>
                   </View>
 
-                  <View style={styles.routeLine} />
+                  <View style={styles.routeSection}>
+                    <View style={styles.locationRow}>
+                      <MaterialIcons name="radio-button-checked" size={16} color="#10B981" />
+                      <View style={styles.locationInfo}>
+                        <Text style={styles.locationLabel}>ORIGEM</Text>
+                        <Text style={styles.locationAddress}>{currentRequest.pickup.address}</Text>
+                      </View>
+                    </View>
 
-                  <View style={styles.locationRow}>
-                    <MaterialIcons name="place" size={20} color="#EF4444" />
-                    <View style={styles.locationInfo}>
-                      <Text style={styles.locationLabel}>DESTINO</Text>
-                      <Text style={styles.locationAddress}>{currentRequest.destination.address}</Text>
+                    <View style={styles.routeLine} />
+
+                    <View style={styles.locationRow}>
+                      <MaterialIcons name="place" size={16} color="#EF4444" />
+                      <View style={styles.locationInfo}>
+                        <Text style={styles.locationLabel}>DESTINO</Text>
+                        <Text style={styles.locationAddress}>{currentRequest.destination.address}</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
 
-                <View style={styles.tripDetails}>
-                  <View style={styles.detailCard}>
-                    <MaterialIcons name="straighten" size={20} color="#6B7280" />
-                    <Text style={styles.detailLabel}>Distância</Text>
-                    <Text style={styles.detailValue}>{(currentRequest.estimatedDistance / 1000).toFixed(1)} km</Text>
-                  </View>
-                  <View style={styles.detailCard}>
-                    <MaterialIcons name="access-time" size={20} color="#6B7280" />
-                    <Text style={styles.detailLabel}>Tempo</Text>
-                    <Text style={styles.detailValue}>{Math.round(currentRequest.estimatedTime / 60)} min</Text>
-                  </View>
-                  <View style={styles.detailCard}>
-                    <MaterialIcons name="attach-money" size={20} color="#6B7280" />
-                    <Text style={styles.detailLabel}>Valor</Text>
-                    <Text style={styles.detailValue}>{currentRequest.estimatedFare} AOA</Text>
+                  <View style={styles.tripDetails}>
+                    <View style={styles.detailCard}>
+                      <MaterialIcons name="straighten" size={16} color="#6B7280" />
+                      <Text style={styles.detailLabel}>Distância</Text>
+                      <Text style={styles.detailValue}>{(currentRequest.estimatedDistance / 1000).toFixed(1)} km</Text>
+                    </View>
+                    <View style={styles.detailCard}>
+                      <MaterialIcons name="access-time" size={16} color="#6B7280" />
+                      <Text style={styles.detailLabel}>Tempo</Text>
+                      <Text style={styles.detailValue}>{Math.round(currentRequest.estimatedTime / 60)} min</Text>
+                    </View>
+                    <View style={styles.detailCard}>
+                      <MaterialIcons name="attach-money" size={16} color="#6B7280" />
+                      <Text style={styles.detailLabel}>Valor</Text>
+                      <Text style={styles.detailValue}>{currentRequest.estimatedFare} Kz</Text>
+                    </View>
                   </View>
                 </View>
 
@@ -2065,7 +2214,7 @@ export default function DriverMapScreen({ navigation, route }) {
                     style={styles.rejectButton} 
                     onPress={rejectRequest}
                   >
-                    <MaterialIcons name="close" size={20} color="#EF4444" />
+                    <MaterialIcons name="close" size={18} color="#EF4444" />
                     <Text style={styles.rejectButtonText}>Recusar</Text>
                   </TouchableOpacity>
                   
@@ -2073,7 +2222,7 @@ export default function DriverMapScreen({ navigation, route }) {
                     style={styles.acceptButton} 
                     onPress={acceptRequest}
                   >
-                    <MaterialIcons name="check" size={20} color="#ffffff" />
+                    <MaterialIcons name="check" size={18} color="#ffffff" />
                     <Text style={styles.acceptButtonText}>Aceitar</Text>
                   </TouchableOpacity>
                 </View>
@@ -2320,136 +2469,148 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   // Modal Styles
+  // Modal Styles - Responsive
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 40,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
   },
-  modalContent: {
+  modalContainer: {
     backgroundColor: '#ffffff',
-    borderRadius: 24,
-    paddingHorizontal: 24,
-    paddingTop: 24,
+    borderRadius: 20,
     width: '100%',
-    maxHeight: height * 0.85,
+    maxWidth: 350,
+    maxHeight: height * 0.65,
+    minHeight: height * 0.50,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 10,
+      height: 8,
     },
     shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowRadius: 16,
+    elevation: 16,
+    overflow: 'hidden',
+  },
+  modalContent: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   modalHeader: {
     alignItems: 'center',
-    marginBottom: 24,
-    paddingBottom: 20,
+    marginBottom: 12,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
   modalHeaderIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#EBF4FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 6,
   },
   modalTitle: {
-    fontSize: 24,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   modalSubtitle: {
-    fontSize: 16,
+    fontSize: 12,
     color: '#6B7280',
   },
   passengerSection: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 20,
+    padding: 8,
+    borderRadius: 10,
+    marginBottom: 10,
   },
   passengerInfo: {
-    marginLeft: 12,
+    marginLeft: 8,
     flex: 1,
   },
   passengerName: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#1F2937',
   },
   requestTime: {
-    fontSize: 14,
+    fontSize: 10,
     color: '#6B7280',
-    marginTop: 2,
+    marginTop: 1,
   },
   routeSection: {
-    marginBottom: 24,
+    marginBottom: 10,
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   locationInfo: {
-    marginLeft: 12,
+    marginLeft: 8,
     flex: 1,
   },
   locationLabel: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
     color: '#6B7280',
     letterSpacing: 0.5,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   locationAddress: {
-    fontSize: 16,
+    fontSize: 13,
     color: '#1F2937',
     fontWeight: '500',
   },
   routeLine: {
     width: 2,
-    height: 24,
+    height: 18,
     backgroundColor: '#D1D5DB',
     marginLeft: 9,
-    marginVertical: 4,
+    marginVertical: 2,
   },
   tripDetails: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     backgroundColor: '#F9FAFB',
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 24,
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 12,
   },
   detailCard: {
     alignItems: 'center',
     flex: 1,
   },
   detailLabel: {
-    fontSize: 12,
+    fontSize: 9,
     color: '#6B7280',
-    marginTop: 4,
+    marginTop: 2,
     fontWeight: '500',
   },
   detailValue: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginTop: 2,
+    marginTop: 1,
   },
   modalActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
   },
   rejectButton: {
     flex: 1,
@@ -2457,16 +2618,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F9FAFB',
-    paddingVertical: 16,
-    borderRadius: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#FEE2E2',
   },
   rejectButtonText: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '600',
     color: '#EF4444',
-    marginLeft: 6,
+    marginLeft: 3,
   },
   acceptButton: {
     flex: 2,
@@ -2474,8 +2635,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#10B981',
-    paddingVertical: 16,
-    borderRadius: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
     shadowColor: '#10B981',
     shadowOffset: {
       width: 0,
@@ -2486,9 +2647,13 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   acceptButtonText: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '600',
     color: '#ffffff',
-    marginLeft: 6,
+    marginLeft: 3,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+    backgroundColor: '#9CA3AF',
   },
 });

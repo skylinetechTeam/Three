@@ -5,7 +5,69 @@ const Joi = require('joi');
 const RideService = require('../services/rideService');
 const { validateRideRequest } = require('../middleware/validation');
 
+// Função de normalização de IDs
+const normalizeId = (id) => {
+  if (id === null || id === undefined) return null;
+  return String(id).trim();
+};
+
 const router = express.Router();
+
+// Função helper para notificação com retry
+const notifyWithRetry = async (io, socketId, event, data, maxRetries = 3) => {
+  console.log(`🔄 [RETRY] Tentando notificar ${event} para socket ${socketId}`);
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const socket = io.sockets.sockets.get(socketId);
+      
+      if (socket && socket.connected) {
+        console.log(`📡 [RETRY] Tentativa ${attempt}/${maxRetries} para ${event}`);
+        
+        // Enviar evento
+        socket.emit(event, data);
+        
+        // Aguardar confirmação (implementar acknowledge no cliente)
+        const confirmed = await new Promise((resolve) => {
+          const ackEvent = `${event}_ack_${data.rideId || 'unknown'}`;
+          
+          const ackHandler = (ackData) => {
+            console.log(`✅ [RETRY] Confirmação recebida para ${event}`);
+            resolve(true);
+          };
+          
+          socket.once(ackEvent, ackHandler);
+          
+          // Timeout para confirmação
+          setTimeout(() => {
+            socket.off(ackEvent, ackHandler);
+            resolve(false);
+          }, 1000);
+        });
+        
+        if (confirmed) {
+          console.log(`✅ [RETRY] Notificação ${event} entregue com sucesso na tentativa ${attempt}`);
+          return true;
+        } else {
+          console.log(`⚠️ [RETRY] Sem confirmação para ${event} na tentativa ${attempt}`);
+        }
+      } else {
+        console.log(`❌ [RETRY] Socket ${socketId} não conectado na tentativa ${attempt}`);
+      }
+      
+      // Aguardar antes da próxima tentativa
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+      }
+      
+    } catch (error) {
+      console.error(`❌ [RETRY] Erro na tentativa ${attempt}:`, error);
+    }
+  }
+  
+  console.error(`😭 [RETRY] Falha ao notificar ${event} após ${maxRetries} tentativas`);
+  return false;
+};
 
 // Validation schemas
 const rideRequestSchema = Joi.object({
@@ -268,82 +330,177 @@ router.put('/:id/accept', async (req, res) => {
     const io = req.app.get('io');
     const activeConnections = req.app.get('activeConnections');
     
-    // Notify passenger that ride was accepted
-    console.log(`📤 Notificando passageiro ${ride.passengerId} sobre corrida aceita`);
-    console.log(`🔍 Dados da corrida para notificação:`, JSON.stringify(ride, null, 2));
+    // Enhanced notification system with detailed logging
+    console.log(`📤 SISTEMA DE NOTIFICAÇÃO: Iniciando notificação para passageiro ${ride.passengerId}`);
+    console.log(`🔍 [DIAGNÓSTICO] Dados completos da corrida:`, {
+      id: ride.id,
+      passengerId: ride.passengerId,
+      status: ride.status,
+      pickup: ride.pickup,
+      destination: ride.destination
+    });
+    console.log(`🚗 [DIAGNÓSTICO] Dados do motorista:`, { driverId, driverName, driverPhone, vehicleInfo });
+    console.log(`🕰️ [DIAGNÓSTICO] Timestamp da aceitação: ${new Date().toISOString()}`);
+    console.log(`🔌 [DIAGNÓSTICO] Total de conexões ativas: ${activeConnections?.size || 0}`);
     
-    // Primeiro, tentar notificar o passageiro específico via WebSocket
+    // Log de todas as conexões para debugging
+    if (activeConnections && activeConnections.size > 0) {
+      console.log('📋 [DIAGNÓSTICO] LISTAGEM DE CONEXÕES ATIVAS:');
+      let connectionIndex = 1;
+      for (const [socketId, connection] of activeConnections.entries()) {
+        console.log(`  ${connectionIndex}. Socket: ${socketId} | Tipo: ${connection.userType} | UserID: ${connection.userId} | Registrado: ${connection.registered || false} | Timestamp: ${connection.registeredAt || 'N/A'}`);
+        connectionIndex++;
+      }
+    } else {
+      console.warn('⚠️ [DIAGNÓSTICO] Nenhuma conexão ativa encontrada!');
+    }
+    
+    // Prepare notification data with enhanced information
+    const notificationData = {
+      rideId: ride.id,
+      ride: {
+        ...ride,
+        status: 'accepted',
+        acceptedAt: new Date().toISOString()
+      },
+      driver: {
+        id: driverId,
+        name: driverName,
+        phone: driverPhone,
+        vehicleInfo: vehicleInfo || {},
+        rating: 4.8 // Default rating
+      },
+      estimatedArrival: '5-10 minutos',
+      message: `${driverName} aceitou sua solicitação e está a caminho!`,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log(`📦 Dados da notificação preparados:`, JSON.stringify(notificationData, null, 2));
+    
+    // Sistema dual de notificação: específico + broadcast
     let passengerNotified = false;
     console.log(`🔍 Conexões ativas totais: ${activeConnections?.size || 0}`);
-    if (activeConnections) {
+    
+    if (activeConnections && activeConnections.size > 0) {
       // Log all active connections for debugging
+      console.log('📋 LISTAGEM DE CONEXÕES ATIVAS:');
       for (const [socketId, connection] of activeConnections.entries()) {
-        console.log(`📋 Conexão ativa: ${socketId} - Tipo: ${connection.userType} - ID: ${connection.userId}`);
+        console.log(`  Socket: ${socketId} | Tipo: ${connection.userType} | UserID: ${connection.userId} | Registrado: ${connection.registered || false}`);
       }
       
+      // Tentar encontrar o passageiro específico
       for (const [socketId, connection] of activeConnections.entries()) {
-        if (connection.userType === 'passenger' && connection.userId === ride.passengerId) {
-          console.log(`✅ Encontrado passageiro conectado: ${socketId}`);
-          console.log(`📤 Enviando ride_accepted para socket ${socketId}:`, {
-            rideId: ride.id,
-            passengerId: ride.passengerId,
-            driverName: driverName
-          });
+        // NORMALIZAÇÃO CRÍTICA: Comparar IDs como strings para evitar incompatibilidades
+        const connectionUserId = normalizeId(connection.userId);
+        const ridePassengerId = normalizeId(ride.passengerId);
+        
+        console.log(`🔍 Verificando conexão: Socket=${socketId}, UserType=${connection.userType}, UserID=${connectionUserId}, Target=${ridePassengerId}`);
+        
+        if (connection.userType === 'passenger' && connectionUserId === ridePassengerId) {
+          console.log(`✅ PASSAGEIRO ENCONTRADO: ${socketId}`);
+          console.log(`📤 Enviando ride_accepted para socket específico ${socketId}`);
           
-          io.to(socketId).emit('ride_accepted', {
-            rideId: ride.id,
-            ride: ride,
-            driver: {
-              id: driverId,
-              name: driverName,
-              phone: driverPhone,
-              vehicleInfo
-            },
-            estimatedArrival: '5-10 minutos'
-          });
+          try {
+            // VALIDAÇÃO CRÍTICA: Verificar se socket está realmente conectado
+            const socketInstance = io.sockets.sockets.get(socketId);
+            if (socketInstance && socketInstance.connected) {
+              console.log(`✅ Socket ${socketId} está conectado e ativo`);
+              
+              // Enviar para socket específico com retry
+              const notified = await notifyWithRetry(io, socketId, 'ride_accepted', notificationData);
+              
+              if (notified) {
+                console.log(`✅ NOTIFICAÇÃO ESPECÍFICA ENVIADA com sucesso para ${socketId}`);
+                passengerNotified = true;
+              } else {
+                console.log(`⚠️ Falha ao notificar socket ${socketId} após todas as tentativas`);
+              }
+            } else {
+              console.warn(`⚠️ Socket ${socketId} não está conectado ou ativo, removendo da lista`);
+              
+              // Remover conexão inválida da lista
+              activeConnections.delete(socketId);
+              console.log(`🗑️ Conexão inválida removida: ${socketId}`);
+            }
+          } catch (socketError) {
+            console.error(`❌ Erro ao enviar para socket específico ${socketId}:`, socketError);
+          }
           
-          console.log(`✅ Evento ride_accepted enviado para socket ${socketId}`);
-          passengerNotified = true;
           break;
         }
       }
+    } else {
+      console.warn('⚠️ Nenhuma conexão ativa encontrada ou activeConnections é null');
     }
     
-    // Se não encontrou conexão específica, enviar para todos os passageiros
+    // Fallback: Broadcast para todos os passageiros se específico falhou
     if (!passengerNotified) {
-      console.log(`⚠️ Passageiro ${ride.passengerId} não encontrado nas conexões ativas. Enviando broadcast.`);
-      io.to('passenger').emit('ride_accepted', {
-        rideId: ride.id,
-        ride: ride,
-        driver: {
-          id: driverId,
-          name: driverName,
-          phone: driverPhone,
-          vehicleInfo
-        },
-        estimatedArrival: '5-10 minutos'
-      });
+      console.log(`⚠️ FALLBACK: Passageiro ${ride.passengerId} não encontrado ou notificação específica falhou`);
+      console.log(`📡 Enviando broadcast para todos os passageiros...`);
+      
+      try {
+        // Broadcast para sala de passageiros
+        io.to('passenger').emit('ride_accepted', notificationData);
+        console.log(`📡 BROADCAST ENVIADO para sala 'passenger'`);
+        
+        // Também tentar broadcast geral como último recurso
+        io.emit('ride_accepted', {
+          ...notificationData,
+          broadcast: true,
+          targetPassenger: ride.passengerId
+        });
+        console.log(`📢 BROADCAST GERAL ENVIADO como último recurso`);
+        
+      } catch (broadcastError) {
+        console.error(`❌ Erro no broadcast:`, broadcastError);
+      }
+    }
+    
+    // Verificar quantos sockets estão na sala de passageiros
+    const passengerSockets = io.sockets.adapter.rooms.get('passenger');
+    console.log(`👥 Sockets na sala 'passenger': ${passengerSockets?.size || 0}`);
+    if (passengerSockets && passengerSockets.size > 0) {
+      console.log(`📋 Sockets na sala passenger:`, Array.from(passengerSockets));
     }
 
     // Notify other drivers that ride is no longer available
+    console.log(`📢 Notificando outros motoristas que a corrida não está mais disponível`);
     io.to('driver').emit('ride_unavailable', {
       rideId: ride.id,
-      message: 'Corrida já foi aceita por outro motorista'
+      message: 'Corrida já foi aceita por outro motorista',
+      timestamp: new Date().toISOString()
     });
 
-    console.log(`✅ Corrida ${id} aceita pelo motorista ${driverName}`);
+    // Log final do processo
+    console.log(`✅ [DIAGNÓSTICO] PROCESSO COMPLETO: Corrida ${id} aceita pelo motorista ${driverName}`);
+    console.log(`📊 [DIAGNÓSTICO] Status da notificação: ${passengerNotified ? 'ESPECÍFICA' : 'BROADCAST FALLBACK'}`);
+    console.log(`🕰️ [DIAGNÓSTICO] Processamento concluído em: ${new Date().toISOString()}`);
+    
+    // Estatísticas de conexões por tipo
+    if (activeConnections) {
+      const drivers = Array.from(activeConnections.values()).filter(conn => conn.userType === 'driver');
+      const passengers = Array.from(activeConnections.values()).filter(conn => conn.userType === 'passenger');
+      console.log(`📊 [DIAGNÓSTICO] Estatísticas finais - Motoristas: ${drivers.length}, Passageiros: ${passengers.length}`);
+    }
 
     res.json({
       success: true,
       message: 'Corrida aceita com sucesso',
-      data: ride
+      data: ride,
+      notification: {
+        method: passengerNotified ? 'specific' : 'broadcast',
+        targetPassenger: ride.passengerId,
+        timestamp: new Date().toISOString()
+      }
     });
 
   } catch (error) {
-    console.error('❌ Erro ao aceitar corrida:', error);
+    console.error('❌ ERRO CRÍTICO ao aceitar corrida:', error);
+    console.error('Stack trace:', error.stack);
     res.status(500).json({
       error: 'Internal server error',
-      message: 'Erro ao aceitar corrida'
+      message: 'Erro ao aceitar corrida',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

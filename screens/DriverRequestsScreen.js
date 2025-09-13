@@ -54,7 +54,7 @@ export default function DriverRequestsScreen({ navigation }) {
           Toast.show({
             type: "info",
             text1: "Nova solicitação!",
-            text2: `Corrida para ${data.ride.destination.address}`,
+            text2: `Corrida para ${data.ride.destination?.address}`,
           });
         });
         
@@ -282,7 +282,7 @@ export default function DriverRequestsScreen({ navigation }) {
         <View style={styles.locationRow}>
           <MaterialIcons name="place" size={16} color="#EF4444" />
           <Text style={styles.locationText} numberOfLines={1}>
-            {item.destination.address}
+            {item.destination?.address}
           </Text>
         </View>
       </View>
@@ -426,7 +426,7 @@ export default function DriverRequestsScreen({ navigation }) {
                       <View style={styles.modalLocationDetails}>
                         <Text style={styles.modalLocationLabel}>Destino</Text>
                         <Text style={styles.modalLocationAddress}>
-                          {selectedRequest.destination.address}
+                          {selectedRequest.destination?.address}
                         </Text>
                       </View>
                     </View>

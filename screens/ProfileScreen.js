@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
 import LocalDatabase from '../services/localDatabase';
 
 export default function ProfileScreen({ navigation }) {
@@ -105,11 +106,24 @@ export default function ProfileScreen({ navigation }) {
               type: 'info'
             });
 
-            // Navigate to login screen
-            navigation.replace('Login');
+            Toast.show({
+              type: 'success',
+              text1: 'Logout realizado',
+              text2: 'Você foi desconectado com sucesso',
+            });
+
+            // Navigate to login screen using reset to clear navigation stack
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
           } catch (error) {
             console.error('Logout error:', error);
-            Alert.alert('Erro', 'Erro ao sair da conta. Tente novamente.');
+            Toast.show({
+              type: 'error',
+              text1: 'Erro',
+              text2: 'Não foi possível fazer logout',
+            });
           }
         }}
       ]

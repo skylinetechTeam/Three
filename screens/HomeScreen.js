@@ -20,6 +20,7 @@ import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import Toast from 'react-native-toast-message';
+import { COLORS, SIZES, FONTS, SHADOWS } from '../config/theme';
 import apiService from '../services/apiService';
 import LocalDatabase from '../services/localDatabase';
 import { 
@@ -268,84 +269,82 @@ export default function HomeScreen({ navigation, route }) {
 
   const initializePassenger = async () => {
     try {
-      // Get or create passenger profile
-      let profile = await LocalDatabase.getPassengerProfile();
+      console.log('🚀 Inicializando passageiro com sistema seguro de nomes...');
       
-      if (!profile) {
-        // Create default passenger profile
-        profile = {
-          name: 'Usuário Demo',
-          phone: '923456789',
-          email: 'usuario@demo.com',
-          preferredPaymentMethod: 'cash',
-          apiRegistered: false,
-        };
-        await LocalDatabase.savePassengerProfile(profile);
-      }
+      // 1. Obter ou criar perfil seguro usando as novas funções utilitárias
+      let profile = await LocalDatabase.getOrCreateSafePassengerProfile();
+      console.log('📁 Perfil seguro obtido/criado:', profile);
       
       setPassengerProfile(profile);
       
-      // Register with API if not already registered
+      // 2. Verificar se precisa registrar na API
       if (!profile.apiRegistered) {
         try {
+          // Criar dados para registro usando nome seguro
           const passengerData = {
-            name: profile.name,
-            phone: profile.phone,
-            email: profile.email,
-            preferredPaymentMethod: profile.preferredPaymentMethod
+            name: LocalDatabase.getSafePassengerName(profile), // ✅ CORREÇÃO: Usar função segura
+            phone: profile.phone || '',
+            email: profile.email || '',
+            preferredPaymentMethod: profile.preferredPaymentMethod || 'cash'
           };
+          
+          console.log('📤 Dados para registro na API com nome seguro:', passengerData);
+          console.log('✅ Nome verificado é seguro:', passengerData.name);
+          
+          // Validar que o nome não é demo antes de enviar
+          if (passengerData.name === 'userdemo' || passengerData.name.toLowerCase().includes('demo')) {
+            console.warn('⚠️ DETECTADO NOME DEMO após verificação! Usando fallback...');
+            passengerData.name = 'Passageiro';
+          }
+          
+          console.log('📦 Dados finais para API:', passengerData);
           
           const apiResponse = await apiService.registerPassenger(passengerData);
           const passengerId = apiResponse.data.passengerId;
           
-          // Update local profile with API ID
-          await LocalDatabase.updatePassengerProfile({
+          // Atualizar perfil local com ID da API
+          const updatedProfile = {
+            ...profile,
             apiPassengerId: passengerId,
-            apiRegistered: true
-          });
+            apiRegistered: true,
+            lastApiSync: new Date().toISOString()
+          };
           
-          setPassengerProfile(prev => ({
-            ...prev,
-            apiPassengerId: passengerId,
-            apiRegistered: true
-          }));
+          await LocalDatabase.updatePassengerProfile(updatedProfile);
+          setPassengerProfile(updatedProfile);
           
-          // Configure event callbacks ANTES de conectar o socket
+          console.log('✅ Passageiro registrado na API com sucesso - ID:', passengerId);
+          
+          // Configurar callbacks ANTES de conectar socket
           console.log('🎯 Configurando callbacks de eventos ANTES da conexão...');
           
-          // Listen for ride updates
+          // ✅ CALLBACKS COMPLETOS PARA NOVO USUÁRIO
+          console.log('🎯 [NOVO USUÁRIO] Configurando callbacks de eventos...');
+          
+          // Handler para corrida aceita
           apiService.onEvent('ride_accepted', (data) => {
-            console.log('🎉 Corrida aceita pelo motorista:', data);
-            console.log('📱 HomeScreen recebeu evento ride_accepted via ApiService');
+            console.log('🎉 [NOVO USUÁRIO] Corrida aceita pelo motorista:', data);
             
-            // Verificar se é um teste manual
             if (data.test) {
               console.log('🧪 TESTE MANUAL FUNCIONOU! Callback foi executado corretamente!');
-              console.log('✅ Isso prova que o sistema de callbacks está funcionando');
-              return; // Não processar como corrida real
+              return;
             }
             
-            // PARAR BUSCA IMEDIATAMENTE - PRIORIDADE MÁXIMA
             console.log('🛑 PARANDO BUSCA DE MOTORISTAS IMEDIATAMENTE');
             setIsSearchingDrivers(false);
             setDriversFound(true);
             setDriverSearchTime(0);
             
-            // Limpar TODOS os intervalos possíveis
             if (window.driverSearchInterval) {
-              console.log('🗑️ Limpando window.driverSearchInterval');
               clearInterval(window.driverSearchInterval);
               window.driverSearchInterval = null;
             }
             
-            // Limpar qualquer timeout de busca também
             if (searchTimeoutRef.current) {
-              console.log('🗑️ Limpando searchTimeoutRef');
               clearTimeout(searchTimeoutRef.current);
               searchTimeoutRef.current = null;
             }
             
-            // Update request status
             setRequestStatus('accepted');
             setDriverInfo({
               id: data.driver?.id || data.driverId,
@@ -357,12 +356,10 @@ export default function HomeScreen({ navigation, route }) {
               estimatedArrival: data.estimatedArrival || '5-10 minutos'
             });
             
-            // Store request ID for tracking
             if (data.rideId) {
               setRequestId(data.rideId);
             }
             
-            // Atualizar dados da corrida com informações do motorista
             if (data.ride) {
               setCurrentRide(prev => ({
                 ...prev,
@@ -372,17 +369,6 @@ export default function HomeScreen({ navigation, route }) {
               }));
             }
             
-            // Log final do estado após processamento
-            console.log('✅ Estado final após ride_accepted:', {
-              isSearchingDrivers: false,
-              driversFound: true,
-              driverSearchTime: 0,
-              requestStatus: 'accepted',
-              hasDriverInfo: !!data.driver,
-              intervalCleared: !window.driverSearchInterval
-            });
-            
-            // Mostrar toast de sucesso com detalhes do motorista
             Toast.show({
               type: "success",
               text1: "Solicitação Aceita! 🎉",
@@ -391,13 +377,12 @@ export default function HomeScreen({ navigation, route }) {
             });
           });
 
+          // Handler para corrida rejeitada
           apiService.onEvent('ride_rejected', (data) => {
-            console.log('❌ Solicitação rejeitada pelo motorista:', data);
+            console.log('❌ [NOVO USUÁRIO] Solicitação rejeitada pelo motorista:', data);
             
-            // Update request status
             setRequestStatus('rejected');
             
-            // Show rejection message
             Toast.show({
               type: "error",
               text1: "Solicitação Recusada",
@@ -405,24 +390,33 @@ export default function HomeScreen({ navigation, route }) {
               visibilityTime: 4000,
             });
             
-            // Continue searching for other drivers
             console.log('🔄 Continuando busca por outros motoristas...');
           });
 
+          // 🆕 CORREÇÃO CRÍTICA: Handler para quando nenhum motorista está disponível
           apiService.onEvent('no_drivers_available', (data) => {
-            console.log('🚫 Nenhum motorista disponível:', data);
+            console.log('🚫 [NOVO USUÁRIO] Nenhum motorista disponível:', data);
             
-            // Update request status
-            setRequestStatus('rejected');
+            // 🛑 PARAR BUSCA IMEDIATAMENTE
+            console.log('🛑 PARANDO BUSCA - NENHUM MOTORISTA DISPONÍVEL');
+            setIsSearchingDrivers(false);
+            setDriversFound(false);
+            setDriverSearchTime(0);
             
-            // Stop driver search
+            // Limpar TODOS os intervalos
             if (window.driverSearchInterval) {
+              console.log('🗑️ Limpando window.driverSearchInterval');
               clearInterval(window.driverSearchInterval);
               window.driverSearchInterval = null;
             }
             
-            setIsSearchingDrivers(false);
-            setDriversFound(false);
+            if (searchTimeoutRef.current) {
+              console.log('🗑️ Limpando searchTimeoutRef');
+              clearTimeout(searchTimeoutRef.current);
+              searchTimeoutRef.current = null;
+            }
+            
+            setRequestStatus('rejected');
             
             Toast.show({
               type: "error",
@@ -430,8 +424,35 @@ export default function HomeScreen({ navigation, route }) {
               text2: "Tente novamente em alguns minutos",
               visibilityTime: 5000,
             });
+            
+            console.log('✅ [NOVO USUÁRIO] Busca parada após no_drivers_available');
           });
-          
+
+          // Handler para corrida cancelada
+          apiService.onEvent('ride_cancelled', (data) => {
+            console.log('❌ [NOVO USUÁRIO] Corrida cancelada:', data);
+            
+            setRequestStatus('cancelled');
+            setIsSearchingDrivers(false);
+            setDriversFound(false);
+            setDriverSearchTime(0);
+            
+            if (window.driverSearchInterval) {
+              clearInterval(window.driverSearchInterval);
+              window.driverSearchInterval = null;
+            }
+            
+            setCurrentRide(null);
+            setDriverInfo(null);
+            setRequestId(null);
+            
+            Toast.show({
+              type: "error",
+              text1: "Corrida Cancelada",
+              text2: data.reason || "A corrida foi cancelada",
+              visibilityTime: 4000,
+            });
+          });
           apiService.onEvent('ride_started', (data) => {
             console.log('🚗 Corrida iniciada:', data);
             setRequestStatus('started');
@@ -624,28 +645,36 @@ export default function HomeScreen({ navigation, route }) {
           console.warn('Passenger API registration failed:', apiError);
         }
       } else if (profile.apiPassengerId) {
-        // Configure callbacks FIRST for already registered passenger
-        console.log('🎯 Configurando callbacks para passageiro já registrado...');
+        // ✅ CONFIGURAR MESMOS CALLBACKS PARA PASSAGEIRO JÁ REGISTRADO
+        console.log('🎯 [PASSAGEIRO JÁ REGISTRADO] Configurando callbacks...');
         
-        // Configurar os mesmos callbacks (simplificado)
+        // CORREÇÃO CRÍTICA: Sempre registrar todos os callbacks, mesmo para passageiros já registrados
+        console.log('🔄 [PASSAGEIRO JÁ REGISTRADO] Registrando todos os callbacks necessários...');
+        
+        // Handler para corrida aceita
         apiService.onEvent('ride_accepted', (data) => {
           console.log('🎉 [PASSAGEIRO JÁ REGISTRADO] Corrida aceita pelo motorista:', data);
+          
           if (data.test) {
             console.log('🧪 TESTE MANUAL FUNCIONOU! Callback foi executado corretamente!');
             return;
           }
+          
           console.log('🛑 PARANDO BUSCA DE MOTORISTAS IMEDIATAMENTE');
           setIsSearchingDrivers(false);
           setDriversFound(true);
           setDriverSearchTime(0);
+          
           if (window.driverSearchInterval) {
             clearInterval(window.driverSearchInterval);
             window.driverSearchInterval = null;
           }
+          
           if (searchTimeoutRef.current) {
             clearTimeout(searchTimeoutRef.current);
             searchTimeoutRef.current = null;
           }
+          
           setRequestStatus('accepted');
           setDriverInfo({
             id: data.driver?.id || data.driverId,
@@ -656,9 +685,11 @@ export default function HomeScreen({ navigation, route }) {
             location: data.driver?.location || null,
             estimatedArrival: data.estimatedArrival || '5-10 minutos'
           });
+          
           if (data.rideId) {
             setRequestId(data.rideId);
           }
+          
           if (data.ride) {
             setCurrentRide(prev => ({
               ...prev,
@@ -667,6 +698,7 @@ export default function HomeScreen({ navigation, route }) {
               status: 'accepted'
             }));
           }
+          
           Toast.show({
             type: "success",
             text1: "Solicitação Aceita! 🎉",
@@ -675,66 +707,86 @@ export default function HomeScreen({ navigation, route }) {
           });
         });
 
-        // Handler para quando a corrida é iniciada (passageiro já registrado)
+        // Handler para corrida rejeitada
+        apiService.onEvent('ride_rejected', (data) => {
+          console.log('❌ [PASSAGEIRO JÁ REGISTRADO] Solicitação rejeitada pelo motorista:', data);
+          
+          setRequestStatus('rejected');
+          
+          Toast.show({
+            type: "error",
+            text1: "Solicitação Recusada",
+            text2: data.reason || "O motorista não pode aceitar sua solicitação no momento",
+            visibilityTime: 4000,
+          });
+          
+          console.log('🔄 Continuando busca por outros motoristas...');
+        });
+
+        // Handler para quando nenhum motorista está disponível
+        apiService.onEvent('no_drivers_available', (data) => {
+          console.log('🚫 [PASSAGEIRO JÁ REGISTRADO] Nenhum motorista disponível:', data);
+          
+          console.log('🛑 PARANDO BUSCA - NENHUM MOTORISTA DISPONÍVEL');
+          setIsSearchingDrivers(false);
+          setDriversFound(false);
+          setDriverSearchTime(0);
+          
+          if (window.driverSearchInterval) {
+            clearInterval(window.driverSearchInterval);
+            window.driverSearchInterval = null;
+          }
+          
+          if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+            searchTimeoutRef.current = null;
+          }
+          
+          setRequestStatus('rejected');
+          
+          Toast.show({
+            type: "error",
+            text1: "Nenhum motorista disponível",
+            text2: "Tente novamente em alguns minutos",
+            visibilityTime: 5000,
+          });
+        });
+
+        // Handler para corrida cancelada
+        apiService.onEvent('ride_cancelled', (data) => {
+          console.log('❌ [PASSAGEIRO JÁ REGISTRADO] Corrida cancelada:', data);
+          
+          setRequestStatus('cancelled');
+          setIsSearchingDrivers(false);
+          setDriversFound(false);
+          setDriverSearchTime(0);
+          
+          if (window.driverSearchInterval) {
+            clearInterval(window.driverSearchInterval);
+            window.driverSearchInterval = null;
+          }
+          
+          setCurrentRide(null);
+          setDriverInfo(null);
+          setRequestId(null);
+          
+          Toast.show({
+            type: "error",
+            text1: "Corrida Cancelada",
+            text2: data.reason || "A corrida foi cancelada",
+            visibilityTime: 4000,
+          });
+        });
+        
+        // Handler para corrida iniciada
         apiService.onEvent('ride_started', (data) => {
           console.log('🚗 [PASSAGEIRO JÁ REGISTRADO] Corrida iniciada:', data);
           setRequestStatus('started');
-          
-          // NOVA FUNCIONALIDADE: Quando motorista inicia a corrida (chegou no cliente), 
-          // mudar o mapa para mostrar rota do cliente ao destino
-          console.log('🎯 Corrida iniciada! Mudando para rota cliente->destino');
           setDriverArrived(true);
           
-          // Limpar timer de proximidade se existir
           if (proximityTimerRef.current) {
             clearTimeout(proximityTimerRef.current);
             proximityTimerRef.current = null;
-          }
-          
-          // Forçar atualização do mapa para mostrar rota ao destino
-          if (location && webViewRef.current) {
-            console.log('🗺️ Atualizando mapa para mostrar rota ao destino após início da corrida');
-            
-            // Limpar marcador do motorista usando JavaScript injection
-            const clearDriverScript = `
-              if (typeof window.__clearDriverMarker === 'function') {
-                window.__clearDriverMarker();
-                console.log('✅ Driver marker cleared');
-              }
-            `;
-            webViewRef.current.injectJavaScript(clearDriverScript);
-            
-            // Determinar destino a usar
-            let destinationToUse = selectedDestination;
-            if (!destinationToUse && data.ride?.destination) {
-              destinationToUse = {
-                lat: data.ride.destination.lat,
-                lng: data.ride.destination.lng,
-                name: data.ride.destination.address || data.ride.destination.name,
-                address: data.ride.destination.address
-              };
-              console.log('🎯 Usando destino dos dados da corrida:', destinationToUse);
-              
-              // Atualizar estado local do destino também
-              setSelectedDestination(destinationToUse);
-            }
-            
-            // Mostrar rota do cliente ao destino usando JavaScript injection
-            if (destinationToUse) {
-              const destinationScript = `
-                if (typeof window.__setDestination === 'function') {
-                  console.log('🎯 Setting destination to:', ${destinationToUse.lat}, ${destinationToUse.lng});
-                  window.__setDestination(${destinationToUse.lat}, ${destinationToUse.lng}, ${JSON.stringify(destinationToUse.name)});
-                  console.log('✅ Destination set and route calculated');
-                } else {
-                  console.error('❌ __setDestination function not found');
-                }
-              `;
-              console.log('🚀 Injetando script para mostrar rota ao destino:', destinationScript);
-              webViewRef.current.injectJavaScript(destinationScript);
-            } else {
-              console.warn('⚠️ Nenhum destino disponível para mostrar rota');
-            }
           }
           
           Toast.show({
@@ -744,10 +796,25 @@ export default function HomeScreen({ navigation, route }) {
             visibilityTime: 3000,
           });
         });
-
-        // Handler para atualizações de localização do motorista (passageiro já registrado)  
+        
+        // Handler para corrida completada
+        apiService.onEvent('ride_completed', (data) => {
+          console.log('✅ [PASSAGEIRO JÁ REGISTRADO] Corrida finalizada:', data);
+          setRequestStatus('completed');
+          setCurrentRide(null);
+          setDriverInfo(null);
+          setRequestId(null);
+          
+          Toast.show({
+            type: "success",
+            text1: "Viagem Concluída",
+            text2: "Obrigado por usar nosso serviço!",
+            visibilityTime: 4000,
+          });
+        });
+        
+        // Handler para atualização de localização do motorista
         apiService.onEvent('driver_location_update', (data) => {
-          console.log('📍 [PASSAGEIRO JÁ REGISTRADO] Atualização de localização do motorista:', data);
           if (driverInfo && data.driverId === driverInfo.id) {
             setDriverInfo(prev => ({
               ...prev,
@@ -755,69 +822,17 @@ export default function HomeScreen({ navigation, route }) {
               estimatedArrival: data.estimatedArrival
             }));
             
-            // Update driver location for map
             if (data.location) {
               setDriverLocation(data.location);
-              
-              // Check if driver is nearby (within 100 meters) - same logic as for new users
-              if (location && location.coords) {
-                const distance = calculateDistance(
-                  location.coords.latitude,
-                  location.coords.longitude,
-                  data.location.latitude,
-                  data.location.longitude
-                );
-                
-                console.log(`📏 [PASSAGEIRO JÁ REGISTRADO] Distância até o motorista: ${Math.round(distance)}m`);
-                
-                // If driver is very close (within 50 meters) and wasn't nearby before
-                if (distance <= 50 && !isDriverNearby) {
-                  console.log('🚗 Motorista está muito perto! Iniciando timer de 5 segundos...');
-                  setIsDriverNearby(true);
-                  
-                  // Clear any existing timer
-                  if (proximityTimerRef.current) {
-                    clearTimeout(proximityTimerRef.current);
-                  }
-                  
-                  // Set timer for 5 seconds before switching to destination route
-                  proximityTimerRef.current = setTimeout(() => {
-                    console.log('⏰ 5 segundos passaram! Mudando para rota do destino...');
-                    setDriverArrived(true);
-                    setIsDriverNearby(false);
-                    
-                    Toast.show({
-                      type: "success",
-                      text1: "Motorista chegou!",
-                      text2: "Seguindo para o destino",
-                      visibilityTime: 3000,
-                    });
-                  }, 5000); // 5 seconds
-                  
-                  Toast.show({
-                    type: "info",
-                    text1: "Motorista próximo",
-                    text2: "Preparando para embarque...",
-                    visibilityTime: 3000,
-                  });
-                }
-                // If driver moves away, reset proximity
-                else if (distance > 100 && isDriverNearby) {
-                  console.log('📍 Motorista se afastou, cancelando timer...');
-                  setIsDriverNearby(false);
-                  if (proximityTimerRef.current) {
-                    clearTimeout(proximityTimerRef.current);
-                    proximityTimerRef.current = null;
-                  }
-                }
-              }
             }
           }
         });
         
+        // Verificar se todos os callbacks foram registrados
+        console.log('📊 [PASSAGEIRO JÁ REGISTRADO] Total de callbacks registrados:', apiService.eventCallbacks?.size || 0);
+        
         // Connect to socket AFTER configuring callbacks
         console.log('🔌 Conectando WebSocket para passageiro já registrado APÓS callbacks:', profile.apiPassengerId);
-        console.log('📊 Total de callbacks registrados antes da conexão:', apiService.eventCallbacks?.size || 0);
         apiService.connectSocket('passenger', profile.apiPassengerId);
       }
       
@@ -1214,7 +1229,7 @@ export default function HomeScreen({ navigation, route }) {
               return await calculateRoute(startLat, startLng, endLat, endLng);
             };
 
-            // Expose driver functions
+            // Expose driver functions with enhanced features
             window.__addDriverMarker = function(lat, lng, driverName) {
               addDriverMarker(lat, lng, driverName);
             };
@@ -1232,6 +1247,135 @@ export default function HomeScreen({ navigation, route }) {
                 map.removeLayer(routeToDriver);
                 routeToDriver = null;
               }
+            };
+            
+            // 🆕 NOVA FUNCIONALIDADE: Sistema avançado de visualização de corrida
+            window.__showRideAcceptedView = function(driverLat, driverLng, driverName, userLat, userLng) {
+              console.log('🎉 [RIDE ACCEPTED] Configurando visualização completa da corrida aceita');
+              
+              // Limpar qualquer rota anterior
+              if (routeLine) {
+                map.removeLayer(routeLine);
+                routeLine = null;
+              }
+              
+              // Adicionar marcador do motorista
+              addDriverMarker(driverLat, driverLng, driverName);
+              
+              // Calcular e mostrar rota até o motorista
+              calculateRouteToDriver(userLat, userLng, driverLat, driverLng).then(() => {
+                console.log('✅ [RIDE ACCEPTED] Rota até o motorista configurada');
+                
+                // Ajustar visualização para mostrar usuário e motorista
+                const bounds = L.latLngBounds([
+                  [userLat, userLng],
+                  [driverLat, driverLng]
+                ]);
+                
+                map.fitBounds(bounds.pad(0.15)); // 15% de padding
+                console.log('✅ [RIDE ACCEPTED] Mapa ajustado para mostrar usuário e motorista');
+              });
+            };
+            
+            window.__updateDriverLocation = function(driverLat, driverLng, driverName) {
+              console.log('📍 [DRIVER UPDATE] Atualizando localização do motorista');
+              
+              // Atualizar posição do marcador do motorista
+              if (driverMarker) {
+                const newPos = L.latLng(driverLat, driverLng);
+                driverMarker.setLatLng(newPos);
+                
+                // Atualizar popup se existir
+                if (driverName) {
+                  driverMarker.bindPopup('Motorista: ' + driverName);
+                }
+                
+                // Recalcular rota se necessário
+                if (currentUserLocation && routeToDriver) {
+                  calculateRouteToDriver(
+                    currentUserLocation.lat, 
+                    currentUserLocation.lng, 
+                    driverLat, 
+                    driverLng
+                  );
+                }
+              }
+            };
+            
+            window.__transitionToDestinationRoute = function(destLat, destLng, destName) {
+              console.log('🎯 [RIDE STARTED] Iniciando transição para rota do destino');
+              
+              // Animação suave: primeiro limpar marcador do motorista
+              if (driverMarker) {
+                // Adicionar efeito de fade out
+                driverMarker.getElement().style.transition = 'opacity 0.5s';
+                driverMarker.getElement().style.opacity = '0';
+                
+                setTimeout(() => {
+                  if (driverMarker) {
+                    map.removeLayer(driverMarker);
+                    driverMarker = null;
+                  }
+                  if (routeToDriver) {
+                    map.removeLayer(routeToDriver);
+                    routeToDriver = null;
+                  }
+                  
+                  // Adicionar destino e calcular rota
+                  addDestinationMarker(destLat, destLng, destName);
+                  
+                  if (currentUserLocation) {
+                    calculateRoute(
+                      currentUserLocation.lat, 
+                      currentUserLocation.lng, 
+                      destLat, 
+                      destLng
+                    ).then(() => {
+                      console.log('✅ [RIDE STARTED] Transição completa para rota do destino');
+                    });
+                  }
+                }, 500); // Aguardar animação de fade
+              } else {
+                // Se não há motorista, ir direto para o destino
+                addDestinationMarker(destLat, destLng, destName);
+                if (currentUserLocation) {
+                  calculateRoute(
+                    currentUserLocation.lat, 
+                    currentUserLocation.lng, 
+                    destLat, 
+                    destLng
+                  );
+                }
+              }
+            };
+            
+            window.__resetMapView = function() {
+              console.log('🔄 [RESET] Resetando visualização do mapa');
+              
+              // Limpar todos os marcadores e rotas
+              if (driverMarker) {
+                map.removeLayer(driverMarker);
+                driverMarker = null;
+              }
+              if (destinationMarker) {
+                map.removeLayer(destinationMarker);
+                destinationMarker = null;
+              }
+              if (routeLine) {
+                map.removeLayer(routeLine);
+                routeLine = null;
+              }
+              if (routeToDriver) {
+                map.removeLayer(routeToDriver);
+                routeToDriver = null;
+              }
+              
+              // Centralizar na localização do usuário
+              if (currentUserLocation) {
+                map.setView([currentUserLocation.lat, currentUserLocation.lng], 15);
+              }
+              
+              console.log('✅ [RESET] Mapa resetado com sucesso');
             };
 
             // Handle messages from React Native
@@ -1703,6 +1847,43 @@ export default function HomeScreen({ navigation, route }) {
           
           console.log('✅ Solicitação criada via API:', rideResponse);
           
+          // IMPLEMENTAR POLLING COMO FALLBACK
+          if (rideResponse.data?.ride?.id) {
+            console.log('🔄 Iniciando polling de fallback para corrida:', rideResponse.data.ride.id);
+            
+            const stopPolling = apiService.startRideStatusPolling(
+              rideResponse.data.ride.id,
+              (updatedRide) => {
+                console.log('🔍 [POLLING] Status atualizado:', updatedRide.status);
+                
+                // Se corrida foi aceita e ainda não tínhamos essa informação
+                if (updatedRide.status === 'accepted' && requestStatus !== 'accepted') {
+                  console.log('🎆 [POLLING] Corrida aceita detectada via polling!');
+                  
+                  // Simular evento ride_accepted para atualizar UI
+                  const acceptedData = {
+                    rideId: updatedRide.id,
+                    ride: updatedRide,
+                    driver: updatedRide.driver || {
+                      id: updatedRide.driverId,
+                      name: updatedRide.driverName || 'Motorista'
+                    },
+                    estimatedArrival: '5-10 minutos',
+                    fromPolling: true
+                  };
+                  
+                  // Disparar callbacks manualmente
+                  apiService.triggerCallbacks('ride_accepted', acceptedData);
+                }
+              },
+              2000, // Verificar a cada 2 segundos
+              45000 // Por até 45 segundos
+            );
+            
+            // Guardar função para parar polling se necessário
+            window.stopRidePolling = stopPolling;
+          }
+          
         } catch (apiError) {
           console.error('❌ Erro ao criar solicitação via API:', apiError);
           // Continue with simulation if API fails
@@ -1861,76 +2042,96 @@ export default function HomeScreen({ navigation, route }) {
     }
   }, [requestStatus, isDropdownMinimized]);
 
-  // Handle driver location and route display
+  // Handle driver location and route display com sistema avançado
   useEffect(() => {
     if (driverLocation && location && webViewRef.current && !driverArrived) {
-      // Show route to driver when driver hasn't arrived yet - USE JAVASCRIPT INJECTION
-      console.log('🚗 Adicionando motorista ao mapa:', {
+      // Show route to driver when driver hasn't arrived yet - USAR NOVA FUNÇÃO MELHORADA
+      console.log('🚗 [ENHANCED] Configurando visualização avançada da corrida aceita:', {
         driverLat: driverLocation.latitude,
         driverLng: driverLocation.longitude,
         driverName: driverInfo?.name,
-        userLat: location.latitude,
-        userLng: location.longitude
+        userLat: location.coords.latitude,
+        userLng: location.coords.longitude
       });
       
-      const driverScript = `
-        console.log('🚗 Executando script para adicionar motorista ao mapa');
+      const enhancedDriverScript = `
+        console.log('🎆 [ENHANCED] Executando visualização avançada da corrida aceita');
         
-        // Add driver marker
-        if (typeof window.__addDriverMarker === 'function') {
-          console.log('📍 Adicionando marcador do motorista:', ${driverLocation.latitude}, ${driverLocation.longitude});
-          window.__addDriverMarker(${driverLocation.latitude}, ${driverLocation.longitude}, ${JSON.stringify(driverInfo?.name || 'Motorista')});
-          console.log('✅ Marcador do motorista adicionado');
+        // Usar nova função avançada para mostrar corrida aceita
+        if (typeof window.__showRideAcceptedView === 'function') {
+          console.log('🎉 [ENHANCED] Configurando visualização completa da corrida aceita');
+          window.__showRideAcceptedView(
+            ${driverLocation.latitude}, 
+            ${driverLocation.longitude}, 
+            ${JSON.stringify(driverInfo?.name || 'Motorista')},
+            ${location.coords.latitude},
+            ${location.coords.longitude}
+          );
+          console.log('✅ [ENHANCED] Visualização avançada configurada com sucesso');
         } else {
-          console.error('❌ __addDriverMarker function not found');
-        }
-        
-        // Calculate route to driver
-        if (typeof window.__calculateRouteToDriver === 'function') {
-          console.log('🛣️ Calculando rota até o motorista');
-          window.__calculateRouteToDriver(${location.latitude}, ${location.longitude}, ${driverLocation.latitude}, ${driverLocation.longitude});
-          console.log('✅ Rota até o motorista calculada');
-        } else {
-          console.error('❌ __calculateRouteToDriver function not found');
+          // Fallback para método anterior
+          console.log('⚠️ [ENHANCED] Função avançada não encontrada, usando fallback');
+          
+          if (typeof window.__addDriverMarker === 'function') {
+            window.__addDriverMarker(${driverLocation.latitude}, ${driverLocation.longitude}, ${JSON.stringify(driverInfo?.name || 'Motorista')});
+          }
+          
+          if (typeof window.__calculateRouteToDriver === 'function') {
+            window.__calculateRouteToDriver(${location.coords.latitude}, ${location.coords.longitude}, ${driverLocation.latitude}, ${driverLocation.longitude});
+          }
         }
       `;
       
-      console.log('🚀 Injetando script para mostrar motorista no mapa');
-      webViewRef.current.injectJavaScript(driverScript);
+      console.log('🚀 [ENHANCED] Injetando script avançado para visualização da corrida');
+      webViewRef.current.injectJavaScript(enhancedDriverScript);
+      
     } else if (driverArrived && selectedDestination && location && webViewRef.current) {
-      // Switch to destination route when driver arrives
-      console.log('🎯 Driver arrived, showing route to destination (useEffect)');
+      // Switch to destination route when driver arrives - USAR NOVA FUNÇÃO DE TRANSIÇÃO
+      console.log('🎯 [ENHANCED] Motorista chegou, executando transição avançada para destino');
       
-      // Use proper JavaScript injection for clearing driver and setting destination
-      const scriptToExecute = `
-        // Clear driver marker first
-        if (typeof window.__clearDriverMarker === 'function') {
-          window.__clearDriverMarker();
-          console.log('✅ Driver marker cleared via useEffect');
-        }
+      const transitionScript = `
+        console.log('🎆 [ENHANCED] Executando transição avançada para rota do destino');
         
-        // Set destination and calculate route
-        if (typeof window.__setDestination === 'function') {
-          console.log('🎯 Setting destination via useEffect:', ${selectedDestination.lat}, ${selectedDestination.lng});
-          window.__setDestination(${selectedDestination.lat}, ${selectedDestination.lng}, ${JSON.stringify(selectedDestination.name || selectedDestination.address)});
-          console.log('✅ Destination set and route calculated via useEffect');
+        // Usar nova função de transição suave
+        if (typeof window.__transitionToDestinationRoute === 'function') {
+          console.log('🎯 [ENHANCED] Iniciando transição suave para destino');
+          window.__transitionToDestinationRoute(
+            ${selectedDestination.lat}, 
+            ${selectedDestination.lng}, 
+            ${JSON.stringify(selectedDestination.name || selectedDestination.address)}
+          );
+          console.log('✅ [ENHANCED] Transição avançada iniciada');
         } else {
-          console.error('❌ __setDestination function not found in useEffect');
+          // Fallback para método anterior
+          console.log('⚠️ [ENHANCED] Função de transição não encontrada, usando fallback');
+          
+          if (typeof window.__clearDriverMarker === 'function') {
+            window.__clearDriverMarker();
+          }
+          
+          if (typeof window.__setDestination === 'function') {
+            window.__setDestination(${selectedDestination.lat}, ${selectedDestination.lng}, ${JSON.stringify(selectedDestination.name || selectedDestination.address)});
+          }
         }
       `;
       
-      console.log('🚀 Executing useEffect script for driver arrival');
-      webViewRef.current.injectJavaScript(scriptToExecute);
+      console.log('🚀 [ENHANCED] Executando script de transição avançada');
+      webViewRef.current.injectJavaScript(transitionScript);
+      
     } else if (!driverLocation && webViewRef.current) {
-      // Clear driver marker when no driver - USE JAVASCRIPT INJECTION
-      console.log('🧹 Limpando marcador do motorista (sem driver location)');
-      const clearScript = `
+      // Clear driver marker when no driver - USAR FUNÇÃO DE RESET
+      console.log('🧹 [ENHANCED] Nenhuma localização de motorista, resetando visualização');
+      
+      const resetScript = `
+        console.log('🔄 [ENHANCED] Resetando visualização do mapa');
+        
         if (typeof window.__clearDriverMarker === 'function') {
           window.__clearDriverMarker();
-          console.log('✅ Driver marker cleared (no driver location)');
+          console.log('✅ [ENHANCED] Marcador do motorista limpo');
         }
       `;
-      webViewRef.current.injectJavaScript(clearScript);
+      
+      webViewRef.current.injectJavaScript(resetScript);
     }
   }, [driverLocation, location, driverInfo, driverArrived, selectedDestination]);
 
@@ -2507,7 +2708,7 @@ export default function HomeScreen({ navigation, route }) {
               <View style={styles.searchIconContainer}>
                 <Animated.View style={[styles.pulseCircle, { transform: [{ scale: pulseAnim }] }]} />
                 <Animated.View style={[styles.pulseCircle2, { transform: [{ scale: pulseAnim2 }] }]} />
-                <MaterialIcons name="directions-car" size={32} color="#4285F4" style={styles.carIcon} />
+                <MaterialIcons name="directions-car" size={40} color={COLORS.primary[500]} style={styles.carIcon} />
               </View>
             </View>
             
@@ -2523,14 +2724,14 @@ export default function HomeScreen({ navigation, route }) {
                 <View style={styles.progressBar}>
                   <View style={[styles.progressFill, { width: `${(driverSearchTime / 10) * 100}%` }]} />
                 </View>
-                <Text style={styles.progressText}>{driverSearchTime}/10s</Text>
+                <Text style={styles.progressText}>{driverSearchTime}/30s</Text>
               </View>
               
               {/* Indicadores de busca */}
               <View style={styles.searchIndicators}>
                 <View style={styles.indicatorRow}>
                   <View style={[styles.indicator, driverSearchTime >= 2 && styles.indicatorActive]}>
-                    <MaterialIcons name="search" size={16} color={driverSearchTime >= 2 ? "#4285F4" : "#E5E7EB"} />
+                    <MaterialIcons name="search" size={16} color={driverSearchTime >= 2 ? COLORS.primary[500] : "#E5E7EB"} />
                   </View>
                   <Text style={[styles.indicatorText, driverSearchTime >= 2 && styles.indicatorTextActive]}>
                     Analisando área
@@ -2539,7 +2740,7 @@ export default function HomeScreen({ navigation, route }) {
                 
                 <View style={styles.indicatorRow}>
                   <View style={[styles.indicator, driverSearchTime >= 5 && styles.indicatorActive]}>
-                    <MaterialIcons name="location-on" size={16} color={driverSearchTime >= 5 ? "#4285F4" : "#E5E7EB"} />
+                    <MaterialIcons name="location-on" size={16} color={driverSearchTime >= 5 ? COLORS.primary[500] : "#E5E7EB"} />
                   </View>
                   <Text style={[styles.indicatorText, driverSearchTime >= 5 && styles.indicatorTextActive]}>
                     Localizando motoristas
@@ -2548,7 +2749,7 @@ export default function HomeScreen({ navigation, route }) {
                 
                 <View style={styles.indicatorRow}>
                   <View style={[styles.indicator, driverSearchTime >= 8 && styles.indicatorActive]}>
-                    <MaterialIcons name="phone" size={16} color={driverSearchTime >= 8 ? "#4285F4" : "#E5E7EB"} />
+                    <MaterialIcons name="phone" size={16} color={driverSearchTime >= 8 ? COLORS.primary[500] : "#E5E7EB"} />
                   </View>
                   <Text style={[styles.indicatorText, driverSearchTime >= 8 && styles.indicatorTextActive]}>
                     Contactando motoristas
@@ -2899,61 +3100,83 @@ export default function HomeScreen({ navigation, route }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.confirmationModal}>
+            {/* Handle */}
+            <View style={styles.handle} />
+            
             <View style={styles.confirmationHeader}>
-              <Text style={styles.confirmationTitle}>Confirmar Corrida</Text>
+              <View style={styles.headerIconContainer}>
+                <MaterialIcons 
+                  name="local-taxi" 
+                  size={24} 
+                  color={COLORS.text.inverse} 
+                />
+              </View>
+              <View style={styles.headerContent}>
+                <Text style={styles.confirmationTitle}>Confirmar Corrida</Text>
+                <Text style={styles.confirmationSubtitle}>
+                  Revise os detalhes antes de confirmar
+                </Text>
+              </View>
               <TouchableOpacity
                 onPress={handleCancelConfirmation}
                 style={styles.closeButton}
               >
-                <MaterialIcons name="close" size={24} color="#6B7280" />
+                <MaterialIcons name="close" size={20} color={COLORS.text.secondary} />
               </TouchableOpacity>
             </View>
 
             {rideEstimate ? (
-              <View style={styles.confirmationBody}>
-                <View style={styles.routePreview}>
-                  <View style={styles.routePoint}>
-                    <MaterialIcons name="radio-button-checked" size={20} color="#10B981" />
-                    <Text style={styles.routePointText}>{currentLocationName}</Text>
+              <>
+                <ScrollView 
+                  style={styles.confirmationBody}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                >
+                  <View style={styles.routePreview}>
+                    <View style={styles.routePoint}>
+                      <MaterialIcons name="radio-button-checked" size={20} color="#10B981" />
+                      <Text style={styles.routePointText}>{currentLocationName}</Text>
+                    </View>
+                    <View style={styles.routeLine} />
+                    <View style={styles.routePoint}>
+                      <MaterialIcons name="place" size={20} color="#EF4444" />
+                      <Text style={styles.routePointText}>{rideEstimate.destination.name}</Text>
+                    </View>
                   </View>
-                  <View style={styles.routeLine} />
-                  <View style={styles.routePoint}>
-                    <MaterialIcons name="place" size={20} color="#EF4444" />
-                    <Text style={styles.routePointText}>{rideEstimate.destination.name}</Text>
-                  </View>
-                </View>
 
-                <View style={styles.estimateCard}>
-                  <View style={styles.estimateRow}>
-                    <MaterialIcons name="straighten" size={20} color="#6B7280" />
-                    <Text style={styles.estimateLabel}>Distância</Text>
-                    <Text style={styles.estimateValue}>{rideEstimate.distanceText}</Text>
+                  <View style={styles.estimateCard}>
+                    <View style={styles.estimateRow}>
+                      <MaterialIcons name="straighten" size={20} color="#6B7280" />
+                      <Text style={styles.estimateLabel}>Distância</Text>
+                      <Text style={styles.estimateValue}>{rideEstimate.distanceText}</Text>
+                    </View>
+                    <View style={styles.estimateRow}>
+                      <MaterialIcons name="access-time" size={20} color="#6B7280" />
+                      <Text style={styles.estimateLabel}>Tempo estimado</Text>
+                      <Text style={styles.estimateValue}>{rideEstimate.timeText}</Text>
+                    </View>
+                    <View style={styles.estimateRow}>
+                      <MaterialIcons name="local-taxi" size={20} color="#6B7280" />
+                      <Text style={styles.estimateLabel}>Tipo de veículo</Text>
+                      <Text style={styles.estimateValue}>
+                        {rideEstimate.vehicleType === 'privado' ? 'Privado' : 'Coletivo'}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.estimateRow}>
-                    <MaterialIcons name="access-time" size={20} color="#6B7280" />
-                    <Text style={styles.estimateLabel}>Tempo estimado</Text>
-                    <Text style={styles.estimateValue}>{rideEstimate.timeText}</Text>
-                  </View>
-                  <View style={styles.estimateRow}>
-                    <MaterialIcons name="local-taxi" size={20} color="#6B7280" />
-                    <Text style={styles.estimateLabel}>Tipo de veículo</Text>
-                    <Text style={styles.estimateValue}>
-                      {rideEstimate.vehicleType === 'privado' ? 'Privado' : 'Coletivo'}
+
+                  <View style={styles.fareCard}>
+                    <Text style={styles.fareLabel}>Valor da corrida</Text>
+                    <Text style={styles.fareValue}>{rideEstimate.fare} AOA</Text>
+                    <Text style={styles.fareNote}>
+                      {rideEstimate.vehicleType === 'privado' 
+                        ? 'Valor calculado por distância e tempo'
+                        : 'Preço fixo para coletivo'
+                      }
                     </Text>
                   </View>
-                </View>
-
-                <View style={styles.fareCard}>
-                  <Text style={styles.fareLabel}>Valor da corrida</Text>
-                  <Text style={styles.fareValue}>{rideEstimate.fare} AOA</Text>
-                  <Text style={styles.fareNote}>
-                    {rideEstimate.vehicleType === 'privado' 
-                      ? 'Valor calculado por distância e tempo'
-                      : 'Preço fixo para coletivo'
-                    }
-                  </Text>
-                </View>
-
+                </ScrollView>
+                
                 <View style={styles.confirmationActions}>
                   <TouchableOpacity
                     style={styles.cancelConfirmButton}
@@ -2969,7 +3192,7 @@ export default function HomeScreen({ navigation, route }) {
                     <Text style={styles.confirmRideText}>Confirmar e Buscar</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              </>
             ) : (
               <View style={styles.confirmationBody}>
                 <Text style={styles.debugText}>
@@ -3237,57 +3460,63 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 998,
   },
-  // Nova Interface de Busca de Motoristas
+  // Nova Interface de Busca de Motoristas - Modernizada e Responsiva
   driverSearchOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
   },
   driverSearchCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
+    backgroundColor: COLORS.surface.card,
+    borderRadius: 24,
     marginHorizontal: 20,
-    padding: 20,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { 
+      width: 0, 
+      height: 10 
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 25,
     alignItems: 'center',
-    minHeight: 280,
-    maxHeight: '70%',
+    minHeight: height * 0.4,
+    maxWidth: width * 0.9,
+    width: '100%',
   },
   searchHeader: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   searchIconContainer: {
     position: 'relative',
-    width: 60,
-    height: 60,
+    width: 80,
+    height: 80,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 16,
   },
   pulseCircle: {
     position: 'absolute',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(66, 133, 244, 0.2)',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(37, 99, 235, 0.2)',
     transform: [{ scale: 1 }],
   },
   pulseCircle2: {
     position: 'absolute',
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    backgroundColor: 'rgba(66, 133, 244, 0.3)',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(37, 99, 235, 0.3)',
     transform: [{ scale: 1 }],
   },
   carIcon: {
@@ -3298,12 +3527,22 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   searchingTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 6,
+    color: COLORS.text.primary,
+    marginBottom: 8,
     textAlign: 'center',
   },
+  searchingSubtitle: {
+    fontSize: 16,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+    paddingHorizontal: 16,
+  },
+    
+  
   searchingSubtitle: {
     fontSize: 14,
     color: '#6B7280',
@@ -3313,145 +3552,213 @@ const styles = StyleSheet.create({
   },
   progressContainer: {
     width: '100%',
-    alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 32,
+    paddingHorizontal: 16,
   },
   progressBar: {
-    width: '100%',
-    height: 8,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 4,
+    height: 6,
+    backgroundColor: COLORS.surface.background,
+    borderRadius: 3,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#4285F4',
-    borderRadius: 4,
+    backgroundColor: COLORS.primary[500],
+    borderRadius: 3,
+    shadowColor: COLORS.primary[500],
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   progressText: {
     fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
+    color: COLORS.text.secondary,
+    fontWeight: '600',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   searchIndicators: {
     width: '100%',
-    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    marginBottom: 32,
   },
   indicatorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
+    paddingVertical: 8,
   },
   indicator: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: COLORS.surface.background,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 16,
+    borderWidth: 2,
+    borderColor: COLORS.border,
   },
   indicatorActive: {
-    backgroundColor: '#EBF4FF',
+    backgroundColor: COLORS.primary[500],
+    borderColor: COLORS.primary[500],
+    shadowColor: COLORS.primary[500],
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   indicatorText: {
-    fontSize: 16,
-    color: '#9CA3AF',
+    fontSize: 14,
+    color: COLORS.text.light,
     fontWeight: '500',
+    flex: 1,
   },
   indicatorTextActive: {
-    color: '#4285F4',
+    color: COLORS.primary[500],
     fontWeight: '600',
   },
   cancelButton: {
-    marginTop: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#ef4444',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+    minWidth: 140,
   },
   cancelButtonText: {
-    fontSize: 16,
-    color: '#6B7280',
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+    textAlign: 'center',
+    letterSpacing: 0.5,
   },
-  // Nova Interface de Motoristas Não Encontrados
+  // Nova Interface de Motoristas Não Encontrados - Modernizada
   notFoundCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
+    backgroundColor: COLORS.surface.card,
+    borderRadius: 24,
     marginHorizontal: 20,
-    padding: 20,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { 
+      width: 0, 
+      height: 10 
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 25,
     alignItems: 'center',
-    minHeight: 250,
-    maxHeight: '60%',
+    minHeight: height * 0.35,
+    maxWidth: width * 0.9,
+    width: '100%',
   },
   notFoundIconContainer: {
-    marginBottom: 15,
+    marginBottom: 24,
   },
   notFoundIconBg: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#FEF2F2',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#EF4444',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
   notFoundContent: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 32,
+    paddingHorizontal: 16,
   },
   notFoundTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
+    color: COLORS.text.primary,
+    marginBottom: 12,
     textAlign: 'center',
   },
   notFoundSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 16,
+    color: COLORS.text.secondary,
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 15,
+    lineHeight: 22,
+    marginBottom: 24,
   },
   suggestionsList: {
     alignItems: 'flex-start',
     width: '100%',
+    paddingHorizontal: 16,
+    marginBottom: 24,
   },
   suggestionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
+    backgroundColor: COLORS.surface.background,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    width: '100%',
   },
   suggestionText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: COLORS.text.secondary,
     marginLeft: 12,
     flex: 1,
+    fontWeight: '500',
   },
   notFoundActions: {
     width: '100%',
     alignItems: 'center',
   },
   tryAgainButton: {
-    backgroundColor: '#4285F4',
+    backgroundColor: COLORS.primary[500],
     borderRadius: 12,
     paddingVertical: 16,
     paddingHorizontal: 32,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
     width: '100%',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
   },
   tryAgainButtonText: {
-    color: '#ffffff',
+    color: COLORS.text.inverse,
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
@@ -3462,7 +3769,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   changeLocationButtonText: {
-    color: '#4285F4',
+    color: COLORS.primary[500],
     fontSize: 16,
     fontWeight: '500',
   },
@@ -4025,71 +4332,135 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
   },
 
-  // Estilos do Modal de Confirmação
+  // Estilos do Modal de Confirmação - Modernizado e Responsivo
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
   },
   confirmationModal: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
+    backgroundColor: COLORS.surface.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     width: '100%',
-    maxHeight: height * 0.85,
+    maxHeight: height * 0.8,
+    minHeight: height * 0.6,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 10,
+      height: -10,
     },
     shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowRadius: 20,
+    elevation: 25,
+    paddingTop: 8,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    backgroundColor: COLORS.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
   },
   confirmationHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 24,
+    paddingBottom: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: COLORS.border,
+  },
+  headerIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.primary[500],
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    shadowColor: COLORS.primary[500],
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  headerContent: {
+    flex: 1,
   },
   confirmationTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    marginBottom: 4,
+  },
+  confirmationSubtitle: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
+    fontWeight: '500',
   },
   closeButton: {
-    padding: 8,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.surface.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   confirmationBody: {
-    padding: 20,
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 0,
   },
   routePreview: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
+    backgroundColor: COLORS.surface.background,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   routePoint: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    paddingVertical: 12,
   },
   routePointText: {
     fontSize: 16,
-    color: '#374151',
+    color: COLORS.text.primary,
     marginLeft: 12,
     flex: 1,
+    fontWeight: '600',
+    lineHeight: 22,
+  },
+  routeLine: {
+    width: 2,
+    height: 20,
+    backgroundColor: COLORS.border,
+    marginLeft: 10,
+    marginVertical: 4,
   },
   estimateCard: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
+    backgroundColor: COLORS.surface.background,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   estimateRow: {
     flexDirection: 'row',
@@ -4133,31 +4504,61 @@ const styles = StyleSheet.create({
   },
   confirmationActions: {
     flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     gap: 12,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    backgroundColor: COLORS.surface.card,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    position: 'relative',
+    bottom: 0,
   },
   cancelConfirmButton: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 16,
+    backgroundColor: '#ffffff',
     borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    flex: 1,
+    marginRight: 12,
+    justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   cancelConfirmText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#6B7280',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+    textAlign: 'center',
   },
   confirmRideButton: {
-    flex: 2,
-    backgroundColor: '#10B981',
-    paddingVertical: 16,
+    backgroundColor: COLORS.primary[500],
     borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    flex: 2,
+    marginLeft: 12,
+    justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
   },
   confirmRideText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text.inverse,
+    textAlign: 'center',
   },
   debugText: {
     fontSize: 16,

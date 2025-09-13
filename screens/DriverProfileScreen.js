@@ -30,6 +30,7 @@ export default function DriverProfileScreen({ navigation }) {
   useEffect(() => {
     loadDriverProfile();
     loadSettings();
+    
   }, []);
 
   const loadDriverProfile = async () => {
@@ -38,6 +39,7 @@ export default function DriverProfileScreen({ navigation }) {
       const localData = await driverAuthService.getLocalDriverData();
       
       if (localData) {
+        console.log(localData)
         setDriverProfile(localData);
         setIsOnline(localData.isOnline || false);
         
@@ -54,6 +56,7 @@ export default function DriverProfileScreen({ navigation }) {
             };
             
             setDriverProfile(mergedData);
+            console.log(driverProfile)
             
             // Atualizar dados locais com informações mais recentes
             await driverAuthService.saveDriverLocally(updatedData, localData.photo);
@@ -214,18 +217,7 @@ export default function DriverProfileScreen({ navigation }) {
           <Text style={styles.headerTitle}>Perfil do Motorista</Text>
         </View>
         
-        <TouchableOpacity 
-          style={styles.editButton}
-          onPress={() => {
-            Toast.show({
-              type: "info",
-              text1: "Em desenvolvimento",
-              text2: "Função de editar perfil em breve",
-            });
-          }}
-        >
-          <Ionicons name="create-outline" size={24} color="#ffffff" />
-        </TouchableOpacity>
+      
       </View>
 
       <ScrollView 
@@ -250,10 +242,11 @@ export default function DriverProfileScreen({ navigation }) {
           
           <View style={styles.profileInfo}>
             <Text style={styles.driverName}>{driverProfile.name || driverProfile.nome}</Text>
+              {/* 
             <Text style={styles.driverStatus}>
               {isOnline ? 'Online - Disponível' : 'Offline'}
             </Text>
-            
+          
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
                 <MaterialIcons name="star" size={20} color="#FFA500" />
@@ -266,10 +259,11 @@ export default function DriverProfileScreen({ navigation }) {
                 <Text style={styles.statLabel}>Corridas</Text>
               </View>
             </View>
+            */}
           </View>
         </View>
 
-        {/* Quick Actions */}
+        {/* Quick Actions 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Status</Text>
           
@@ -295,7 +289,7 @@ export default function DriverProfileScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
         </View>
-
+*/}
         {/* Vehicle Information */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Veículo</Text>
@@ -306,13 +300,13 @@ export default function DriverProfileScreen({ navigation }) {
             </View>
             <View style={styles.vehicleInfo}>
               <Text style={styles.vehicleModel}>
-                {driverProfile.veiculo?.modelo || 'Toyota Corolla'}
+                {driverProfile.vehicles[0]?.model || 'Toyota Corolla'}
               </Text>
               <Text style={styles.vehicleDetails}>
-                {driverProfile.veiculo?.placa || 'LD-12-34-AB'} • {driverProfile.veiculo?.cor || 'Branco'}
+                {driverProfile.vehicles[0]?.license_plate || 'LD-12-34-AB'} • {driverProfile.vehicles[0]?.color || 'Branco'}
               </Text>
               <Text style={styles.vehicleYear}>
-                Ano: {driverProfile.veiculo?.ano || '2020'}
+                Ano: {driverProfile.vehicles[0]?.year || '2020'}
               </Text>
             </View>
           </View>
@@ -342,19 +336,25 @@ export default function DriverProfileScreen({ navigation }) {
             <View style={styles.settingDivider} />
 
             <View style={styles.settingRow}>
+              {/*{/*
               <View style={styles.settingInfo}>
                 <MaterialIcons name="auto-awesome" size={24} color="#2563EB" />
+               
                 <View style={styles.settingText}>
                   <Text style={styles.settingTitle}>Aceitar Automaticamente</Text>
                   <Text style={styles.settingSubtitle}>Aceitar corridas próximas automaticamente</Text>
                 </View>
+
+                
               </View>
+            
               <Switch
                 value={autoAcceptEnabled}
                 onValueChange={toggleAutoAccept}
                 trackColor={{ false: '#D1D5DB', true: '#2563EB' }}
                 thumbColor={autoAcceptEnabled ? '#ffffff' : '#ffffff'}
               />
+                */}
             </View>
           </View>
         </View>
@@ -381,7 +381,7 @@ export default function DriverProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Actions */}
+        {/* Actions 
         <View style={styles.section}>
           <TouchableOpacity 
             style={styles.actionButton}
@@ -428,7 +428,7 @@ export default function DriverProfileScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
         </View>
-
+*/}
         {/* Logout */}
         <View style={styles.section}>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>

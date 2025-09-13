@@ -68,9 +68,21 @@ io.on('connection', (socket) => {
   // Register user type (driver or passenger)
   socket.on('register', (data) => {
     const { userType, userId } = data;
-    activeConnections.set(socket.id, { userType, userId, socketId: socket.id });
+    
+    // Normalizar userId como string para evitar problemas de compatibilidade
+    const normalizedUserId = userId ? String(userId).trim() : null;
+    
+    activeConnections.set(socket.id, { 
+      userType, 
+      userId: normalizedUserId, 
+      socketId: socket.id,
+      registered: true,
+      registeredAt: new Date().toISOString()
+    });
+    
     socket.join(userType); // Join room based on user type
-    console.log(`👤 Usuário registrado: ${userType} - ${userId} (Socket: ${socket.id})`);
+    
+    console.log(`👤 Usuário registrado: ${userType} - ${normalizedUserId} (Socket: ${socket.id})`);
     console.log(`📊 Total de conexões ativas: ${activeConnections.size}`);
     
     // Log das conexões por tipo
@@ -78,6 +90,14 @@ io.on('connection', (socket) => {
     const passengers = Array.from(activeConnections.values()).filter(conn => conn.userType === 'passenger');
     console.log(`🚗 Motoristas conectados: ${drivers.length}`);
     console.log(`👥 Passageiros conectados: ${passengers.length}`);
+    
+    // Enviar confirmação de registro para o cliente
+    socket.emit('registration_confirmed', {
+      socketId: socket.id,
+      userType,
+      userId: normalizedUserId,
+      timestamp: new Date().toISOString()
+    });
   });
   
   // Handle location updates
@@ -93,9 +113,23 @@ io.on('connection', (socket) => {
     }
   });
   
-  socket.on('disconnect', () => {
-    console.log(`🔌 Cliente desconectado: ${socket.id}`);
+  // Sistema de heartbeat - responder ao ping
+  socket.on('ping', (data) => {
+    console.log(`🏓 Ping recebido de ${socket.id}:`, data.userType, data.userId);
+    socket.emit('pong', {
+      timestamp: data.timestamp,
+      serverTime: Date.now()
+    });
+  });
+  
+  socket.on('disconnect', (reason) => {
+    console.log(`🔌 Cliente desconectado: ${socket.id} - Razão: ${reason}`);
+    const connection = activeConnections.get(socket.id);
+    if (connection) {
+      console.log(`🗑️ Removendo ${connection.userType} ${connection.userId} das conexões ativas`);
+    }
     activeConnections.delete(socket.id);
+    console.log(`📊 Total de conexões ativas após desconexão: ${activeConnections.size}`);
   });
 });
 

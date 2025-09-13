@@ -16,6 +16,7 @@ import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
 import authService from "../services/authService";
 import apiService from "../services/apiService";
+import LocalDatabase from "../services/localDatabase";
 import { COLORS, SIZES, FONTS, SHADOWS, COMMON_STYLES } from "../config/theme";
 
 export default function LoginScreen({ navigation }) {
@@ -49,6 +50,13 @@ export default function LoginScreen({ navigation }) {
       };
 
       const { user } = await authService.login(loginData);
+
+      // Save user data to local storage for ProfileScreen
+      await LocalDatabase.saveUserProfile({
+        ...user,
+        isLoggedIn: true,
+        lastLogin: new Date().toISOString()
+      });
 
       // Connect to API socket
       try {

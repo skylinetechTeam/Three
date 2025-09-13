@@ -603,7 +603,7 @@ const ReservasScreen = () => {
                     setShowAddressSearch(true);
                     setSearchField('origem');
                   }}
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={COLORS.text.light}
                 />
                 <TouchableOpacity
                   style={styles.locationButton}
@@ -619,12 +619,12 @@ const ReservasScreen = () => {
                     }
                   }}
                 >
-                  <Ionicons name="location" size={20} color={COLORS.primary} />
+                  <Ionicons name="location" size={20} color={COLORS.primary[500]} />
                 </TouchableOpacity>
               </View>
               {formErrors.origem && (
                 <Animated.View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification[500]} />
                   <Text style={styles.errorText}>{formErrors.origem}</Text>
                 </Animated.View>
               )}
@@ -643,7 +643,7 @@ const ReservasScreen = () => {
                   }
                 }}
               >
-                <Ionicons name="navigate" size={16} color={COLORS.primary} />
+                <Ionicons name="navigate" size={16} color={COLORS.primary[500]} />
                 <Text style={styles.quickLocationText}>Usar Minha Localização</Text>
               </TouchableOpacity>
             </View>
@@ -664,7 +664,7 @@ const ReservasScreen = () => {
                     setShowAddressSearch(true);
                     setSearchField('destino');
                   }}
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={COLORS.text.light}
                 />
                 <TouchableOpacity
                   style={styles.locationButton}
@@ -680,12 +680,12 @@ const ReservasScreen = () => {
                     }
                   }}
                 >
-                  <Ionicons name="location" size={20} color={COLORS.primary} />
+                  <Ionicons name="location" size={20} color={COLORS.primary[500]} />
                 </TouchableOpacity>
               </View>
               {formErrors.destino && (
                 <Animated.View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification[500]} />
                   <Text style={styles.errorText}>{formErrors.destino}</Text>
                 </Animated.View>
               )}
@@ -726,7 +726,7 @@ const ReservasScreen = () => {
 
             {isSearching && (
               <View style={styles.searchingIndicator}>
-                <MaterialIcons name="search" size={20} color={COLORS.primary} />
+                <MaterialIcons name="search" size={20} color={COLORS.primary[500]} />
                 <Text style={styles.searchingText}>Buscando com HERE Maps...</Text>
               </View>
             )}
@@ -746,18 +746,18 @@ const ReservasScreen = () => {
                 ]}
                 onPress={() => setShowDatePicker(true)}
               >
-                <Ionicons name="calendar-outline" size={20} color={COLORS.primary} />
+                <Ionicons name="calendar-outline" size={20} color={COLORS.primary[500]} />
                 <Text style={[
                   styles.dateTimeText,
                   !novaReserva.data && styles.placeholderText
                 ]}>
                   {novaReserva.data || 'Selecione a data'}
                 </Text>
-                <Ionicons name="chevron-down" size={20} color="#9ca3af" />
+                <Ionicons name="chevron-down" size={20} color={COLORS.text.light} />
               </TouchableOpacity>
               {formErrors.data && (
                 <Animated.View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification[500]} />
                   <Text style={styles.errorText}>{formErrors.data}</Text>
                 </Animated.View>
               )}
@@ -773,18 +773,18 @@ const ReservasScreen = () => {
                 ]}
                 onPress={() => setShowTimePicker(true)}
               >
-                <Ionicons name="time-outline" size={20} color={COLORS.primary} />
+                <Ionicons name="time-outline" size={20} color={COLORS.primary[500]} />
                 <Text style={[
                   styles.dateTimeText,
                   !novaReserva.hora && styles.placeholderText
                 ]}>
                   {novaReserva.hora || 'Selecione a hora'}
                 </Text>
-                <Ionicons name="chevron-down" size={20} color="#9ca3af" />
+                <Ionicons name="chevron-down" size={20} color={COLORS.text.light} />
               </TouchableOpacity>
               {formErrors.hora && (
                 <Animated.View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={16} color={COLORS.notification} />
+                  <Ionicons name="alert-circle" size={16} color={COLORS.notification[500]} />
                   <Text style={styles.errorText}>{formErrors.hora}</Text>
                 </Animated.View>
               )}
@@ -829,7 +829,7 @@ const ReservasScreen = () => {
                 placeholder="Adicione observações especiais..."
                 value={novaReserva.observacoes}
                 onChangeText={(text) => setNovaReserva(prev => ({ ...prev, observacoes: text }))}
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={COLORS.text.light}
                 multiline
                 numberOfLines={3}
               />
@@ -939,7 +939,7 @@ const ReservasScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface.card} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -987,7 +987,7 @@ const ReservasScreen = () => {
           setCurrentStep(1);
         }}
       >
-        <Ionicons name="add" size={24} color="#ffffff" />
+        <Ionicons name="add" size={24} color={COLORS.text.inverse} />
       </TouchableOpacity>
 
       {/* Bottom Sheet Modal para adicionar reserva */}
@@ -1020,7 +1020,7 @@ const ReservasScreen = () => {
                 <Ionicons 
                   name="calendar" 
                   size={24} 
-                  color="#ffffff" 
+                  color={COLORS.text.inverse} 
                 />
               </View>
               <View style={styles.headerContent}>
@@ -1035,7 +1035,7 @@ const ReservasScreen = () => {
                 style={styles.closeButton}
                 onPress={resetForm}
               >
-                <Ionicons name="close" size={20} color="#6B7280" />
+                <Ionicons name="close" size={20} color={COLORS.text.secondary} />
               </TouchableOpacity>
             </View>
 
@@ -1102,7 +1102,7 @@ const ReservasScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: COLORS.surface.background,
   },
   header: {
     flexDirection: 'row',
@@ -1111,14 +1111,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 20,
     paddingBottom: 15,
-    backgroundColor: '#ffffff',
+    backgroundColor: COLORS.surface.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: COLORS.border.light,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1F2937',
+    color: COLORS.text.primary,
   },
   clearButton: {
     flexDirection: 'row',
@@ -1141,7 +1141,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#1F2937',
+    color: COLORS.text.primary,
     marginBottom: 16,
   },
   reservasList: {
@@ -1157,7 +1157,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bottomSheet: {
-    backgroundColor: '#ffffff',
+    backgroundColor: COLORS.surface.card,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     maxHeight: height * 0.9,
@@ -1175,7 +1175,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: COLORS.border.light,
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: 20,
@@ -1186,17 +1186,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: COLORS.border.light,
   },
   headerIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
-    shadowColor: COLORS.primary,
+    shadowColor: COLORS.primary[500],
     shadowOffset: {
       width: 0,
       height: 4,
@@ -1211,23 +1211,23 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#111827',
+    color: COLORS.text.primary,
     marginBottom: 4,
   },
   modalSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: COLORS.text.secondary,
     fontWeight: '500',
   },
   closeButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: COLORS.surface.background,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border.light,
   },
   progressContainer: {
     paddingHorizontal: 24,
@@ -1235,16 +1235,16 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 6,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: COLORS.surface.background,
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 8,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
     borderRadius: 3,
-    shadowColor: COLORS.primary,
+    shadowColor: COLORS.primary[500],
     shadowOffset: {
       width: 0,
       height: 2,
@@ -1255,7 +1255,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: COLORS.text.secondary,
     fontWeight: '600',
     textAlign: 'center',
     textTransform: 'uppercase',
@@ -1275,9 +1275,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    backgroundColor: '#ffffff',
+    backgroundColor: COLORS.surface.card,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: COLORS.border.light,
   },
   inputGroup: {
     marginBottom: 24,
@@ -1285,13 +1285,13 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: COLORS.text.primary,
     marginBottom: 8,
   },
   textInput: {
     flex: 1,
     fontSize: 16,
-    color: '#1F2937',
+    color: COLORS.text.primary,
     paddingVertical: 12,
     paddingHorizontal: 15,
   },
@@ -1303,12 +1303,12 @@ const styles = StyleSheet.create({
   addressInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: COLORS.surface.background,
     borderRadius: 10,
     paddingHorizontal: 15,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border.light,
   },
   locationButton: {
     padding: 8,
@@ -1316,12 +1316,12 @@ const styles = StyleSheet.create({
   },
   // Search results styles
   searchResultsContainer: {
-    backgroundColor: '#ffffff',
+    backgroundColor: COLORS.surface.card,
     borderRadius: 12,
     marginTop: 8,
     maxHeight: 200,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border.light,
     ...SHADOWS.medium,
   },
   searchResultsList: {
@@ -1333,7 +1333,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: COLORS.border.light,
   },
   searchResultIcon: {
     width: 30,
@@ -1350,11 +1350,11 @@ const styles = StyleSheet.create({
   searchResultName: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: COLORS.text.primary,
   },
   searchResultAddress: {
     fontSize: 12,
-    color: '#6B7280',
+    color: COLORS.text.secondary,
     marginTop: 2,
   },
   hereMapsBadge: {
@@ -1377,7 +1377,7 @@ const styles = StyleSheet.create({
   },
   searchingText: {
     marginLeft: 8,
-    color: '#6B7280',
+    color: COLORS.text.secondary,
     fontSize: 14,
   },
   // Options container
@@ -1394,49 +1394,53 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   optionButtonActive: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: COLORS.primary[500],
   },
   optionButtonText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: COLORS.text.primary,
   },
   optionButtonTextActive: {
-    color: '#ffffff',
+    color: COLORS.text.inverse,
   },
   // Buttons
   buttonRow: {
     flexDirection: 'row',
     gap: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   buttonSecondary: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: COLORS.surface.background,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border.light,
   },
   buttonSecondaryText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    color: COLORS.text.secondary,
   },
   buttonPrimary: {
     flex: 1,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
+    justifyContent: 'center',
     ...SHADOWS.medium,
   },
   buttonPrimaryText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#ffffff',
+    color: COLORS.text.inverse,
   },
   buttonPrimaryDisabled: {
     backgroundColor: '#9CA3AF',
@@ -1488,7 +1492,7 @@ const styles = StyleSheet.create({
   },
   // Reserva item styles
   reservaItem: {
-    backgroundColor: '#ffffff',
+    backgroundColor: COLORS.surface.card,
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
@@ -1501,7 +1505,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 6,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderColor: COLORS.border.light,
   },
   reservaHeader: {
     flexDirection: 'row',
@@ -1510,12 +1514,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: COLORS.border.light,
   },
   reservaStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: COLORS.surface.background,
     borderRadius: 12,
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -1530,7 +1534,7 @@ const styles = StyleSheet.create({
   reservaPreco: {
     fontSize: 18,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: COLORS.primary[500],
   },
   reservaRoute: {
     flexDirection: 'row',
@@ -1555,17 +1559,17 @@ const styles = StyleSheet.create({
   },
   routeLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: COLORS.text.secondary,
   },
   routeAddress: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: COLORS.text.primary,
   },
   routeLine: {
     width: 1,
     height: '100%',
-    backgroundColor: '#E5E7EB',
+    backgroundColor: COLORS.border.light,
     marginHorizontal: 10,
   },
   reservaDetails: {
@@ -1579,18 +1583,18 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: COLORS.text.secondary,
     marginLeft: 5,
   },
   reservaObservacoes: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: COLORS.surface.background,
     borderRadius: 10,
     padding: 10,
     marginTop: 10,
   },
   observacoesText: {
     fontSize: 14,
-    color: '#1F2937',
+    color: COLORS.text.primary,
   },
     reservaActions: {
     flexDirection: 'row',
@@ -1681,26 +1685,28 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: COLORS.text.primary,
     marginTop: 20,
   },
   emptyStateSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: COLORS.text.secondary,
     textAlign: 'center',
     marginTop: 10,
   },
   // Floating action button
   fab: {
     position: 'absolute',
-    bottom: Platform.OS === 'android' ? 30 : 20,
+    bottom: Platform.OS === 'android' ? 100 : 90, // Higher position to avoid tab bar
     right: 20,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
     borderRadius: 30,
     width: 60,
     height: 60,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1000,
+    elevation: 8,
     ...SHADOWS.medium,
   },
   // New styles for quick location button
@@ -1718,7 +1724,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
     fontWeight: 'bold',
-    color: COLORS.primary,
+    color: COLORS.primary[500],
   },
   // Step indicator styles
   stepIndicator: {
@@ -1734,45 +1740,45 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: COLORS.surface.background,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border.light,
   },
   stepCircleActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
+    borderColor: COLORS.primary[500],
   },
   stepNumber: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: COLORS.text.secondary,
   },
   stepNumberActive: {
-    color: '#ffffff',
+    color: COLORS.text.inverse,
   },
   stepLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: COLORS.text.secondary,
     marginTop: 5,
   },
   stepLabelActive: {
-    color: COLORS.primary,
+    color: COLORS.primary[500],
     fontWeight: 'bold',
   },
   stepLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: COLORS.border.light,
     marginHorizontal: 10,
   },
   stepLineActive: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
   },
   // New styles for step buttons
   nextButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primary[500],
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 32,
@@ -1817,7 +1823,7 @@ const styles = StyleSheet.create({
   },
   // New styles for resumo container
   resumoContainer: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: COLORS.surface.background,
     borderRadius: 10,
     padding: 15,
     marginTop: 15,
@@ -1825,7 +1831,7 @@ const styles = StyleSheet.create({
   resumoTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: COLORS.text.primary,
     marginBottom: 10,
     textAlign: 'center',
   },
@@ -1836,20 +1842,20 @@ const styles = StyleSheet.create({
   },
   resumoLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: COLORS.text.secondary,
   },
   resumoValue: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: COLORS.text.primary,
   },
   resumoPrice: {
-    color: COLORS.primary,
+    color: COLORS.primary[500],
     fontSize: 16,
   },
   // Novos estilos para melhorias
   inputError: {
-    borderColor: COLORS.notification,
+    borderColor: COLORS.notification[500],
     borderWidth: 2,
   },
   errorContainer: {
@@ -1859,7 +1865,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   errorText: {
-    color: COLORS.notification,
+    color: COLORS.notification[500],
     fontSize: 12,
     marginLeft: 5,
     flex: 1,
@@ -1867,22 +1873,22 @@ const styles = StyleSheet.create({
   dateTimeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: COLORS.surface.background,
     borderRadius: 10,
     paddingHorizontal: 15,
     paddingVertical: 15,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: COLORS.border.light,
     justifyContent: 'space-between',
   },
   dateTimeText: {
     fontSize: 16,
-    color: '#1F2937',
+    color: COLORS.text.primary,
     flex: 1,
     marginLeft: 10,
   },
   placeholderText: {
-    color: '#9ca3af',
+    color: COLORS.text.light,
   },
   saveButtonDisabled: {
     backgroundColor: '#9ca3af',

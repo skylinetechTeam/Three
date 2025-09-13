@@ -565,7 +565,15 @@ class LocalDatabase {
   async getPassengerProfile() {
     try {
       const profile = await AsyncStorage.getItem(DB_KEYS.PASSENGER_PROFILE);
-      return profile ? JSON.parse(profile) : null;
+      if (profile) {
+        const parsedProfile = JSON.parse(profile);
+        // Garantir que o nome é seguro quando carregamos o perfil
+        if (parsedProfile.name) {
+          parsedProfile.name = this.getSafePassengerName(parsedProfile);
+        }
+        return parsedProfile;
+      }
+      return null;
     } catch (error) {
       console.error('Error getting passenger profile:', error);
       return null;
@@ -577,6 +585,10 @@ class LocalDatabase {
       const currentProfile = await this.getPassengerProfile();
       if (currentProfile) {
         const updatedProfile = { ...currentProfile, ...updates };
+        // Garantir que o nome é seguro antes de salvar
+        if (updatedProfile.name) {
+          updatedProfile.name = this.getSafePassengerName(updatedProfile);
+        }
         await AsyncStorage.setItem(DB_KEYS.PASSENGER_PROFILE, JSON.stringify(updatedProfile));
         return updatedProfile;
       }
@@ -584,6 +596,284 @@ class LocalDatabase {
     } catch (error) {
       console.error('Error updating passenger profile:', error);
       return null;
+    }
+  }
+
+  // === FUNÇÕES UTILITÁRIAS PARA OBTENÇÃO SEGURA DE NOME ===
+  
+  /**
+   * Função principal para obter nome do perfil do passageiro de forma segura
+   * @param {Object} profile - Perfil do passageiro
+   * @returns {string} Nome seguro do passageiro
+   */
+  getSafePassengerName(profile) {
+    console.log('🏷️ [getSafePassengerName] Obtendo nome seguro para perfil:', profile);
+    
+    // Verificar se o perfil existe
+    if (!profile || typeof profile !== 'object') {
+      console.log('⚠️ [getSafePassengerName] Perfil inválido ou nulo');
+      return 'Passageiro';
+    }
+    
+    // Lista de nomes demo que devem ser filtrados
+    const demoNames = [
+      'userdemo', 
+      'user demo', 
+      'usuário demo', 
+      'demo', 
+      'teste',
+      'test',
+      'user',
+      'usuario',
+      'passageiro demo'
+    ];
+    
+    // Função auxiliar para verificar se um nome é válido
+    const isValidName = (name) => {
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return false;
+      }
+      
+      const cleanName = name.toLowerCase().trim();
+      return !demoNames.some(demo => 
+        cleanName.includes(demo.toLowerCase()) || 
+        cleanName === demo.toLowerCase()
+      );
+    };
+    
+    // Prioridade: name > nome > fullName > email > fallback
+    console.log('🔍 [getSafePassengerName] Verificando campos disponíveis:', {
+      name: profile.name,
+      nome: profile.nome,
+      fullName: profile.fullName,
+      email: profile.email
+    });
+    
+    // 1. Verificar campo 'name'
+    if (isValidName(profile.name)) {
+      console.log('✅ [getSafePassengerName] Usando campo name:', profile.name);
+      return profile.name.trim();
+    }
+    
+    // 2. Verificar campo 'nome'
+    if (isValidName(profile.nome)) {
+      console.log('✅ [getSafePassengerName] Usando campo nome:', profile.nome);
+      return profile.nome.trim();
+    }
+    
+    // 3. Verificar campo 'fullName'
+    if (isValidName(profile.fullName)) {
+      console.log('✅ [getSafePassengerName] Usando campo fullName:', profile.fullName);
+      return profile.fullName.trim();
+    }
+    
+    // 4. Tentar extrair nome do email
+    if (profile.email && profile.email.includes('@')) {
+      const emailPart = profile.email.split('@')[0];
+      if (isValidName(emailPart)) {
+        const capitalizedName = emailPart.charAt(0).toUpperCase() + emailPart.slice(1).toLowerCase();
+        console.log('✅ [getSafePassengerName] Usando nome do email:', capitalizedName);
+        return capitalizedName;
+      }
+    }
+    
+    // 5. Fallback final seguro
+    console.log('⚠️ [getSafePassengerName] Usando fallback padrão: Passageiro');
+    return 'Passageiro';
+  }
+  
+  /**
+   * Função para obter nome do perfil de usuário (para criação de perfil de passageiro)
+   * @param {Object} userProfile - Perfil de usuário do sistema de login
+   * @returns {string} Nome seguro extraído do perfil do usuário
+   */
+  getNameFromUserProfile(userProfile) {
+    console.log('👤 [getNameFromUserProfile] Extraindo nome do perfil de usuário:', userProfile);
+    
+    if (!userProfile || typeof userProfile !== 'object') {
+      console.log('⚠️ [getNameFromUserProfile] Perfil de usuário inválido');
+      return 'Passageiro';
+    }
+    
+    // Filtrar nomes de demo
+    const demoNames = [
+      'userdemo', 
+      'user demo', 
+      'usuário demo', 
+      'demo', 
+      'teste',
+      'test',
+      'user',
+      'usuario'
+    ];
+    
+    const checkName = (name) => {
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return false;
+      }
+      const cleanName = name.toLowerCase().trim();
+      return !demoNames.some(demo => cleanName.includes(demo.toLowerCase()));
+    };
+    
+    console.log('🔍 [getNameFromUserProfile] Verificando campos:', {
+      nome: userProfile.nome,
+      name: userProfile.name,
+      fullName: userProfile.fullName,
+      email: userProfile.email
+    });
+    
+    // Verificar campos em ordem de prioridade
+    if (checkName(userProfile.nome)) {
+      console.log('✅ [getNameFromUserProfile] Usando userProfile.nome:', userProfile.nome);
+      return userProfile.nome.trim();
+    }
+    
+    if (checkName(userProfile.name)) {
+      console.log('✅ [getNameFromUserProfile] Usando userProfile.name:', userProfile.name);
+      return userProfile.name.trim();
+    }
+    
+    if (checkName(userProfile.fullName)) {
+      console.log('✅ [getNameFromUserProfile] Usando userProfile.fullName:', userProfile.fullName);
+      return userProfile.fullName.trim();
+    }
+    
+    // Tentar email se não for demo
+    if (userProfile.email && userProfile.email.includes('@')) {
+      const emailName = userProfile.email.split('@')[0];
+      if (checkName(emailName)) {
+        const capitalizedName = emailName.charAt(0).toUpperCase() + emailName.slice(1).toLowerCase();
+        console.log('✅ [getNameFromUserProfile] Usando nome do email:', capitalizedName);
+        return capitalizedName;
+      }
+    }
+    
+    console.log('⚠️ [getNameFromUserProfile] Usando fallback padrão: Passageiro');
+    return 'Passageiro';
+  }
+  
+  /**
+   * Criar perfil padrão de passageiro com nome seguro
+   * @param {Object} userProfile - Perfil de usuário do sistema de login
+   * @returns {Object} Perfil de passageiro criado
+   */
+  async createDefaultPassengerProfile(userProfile) {
+    console.log('🆕 [createDefaultPassengerProfile] Criando perfil padrão do passageiro...');
+    console.log('👤 [createDefaultPassengerProfile] Perfil de usuário disponível:', userProfile);
+    
+    const safeName = this.getNameFromUserProfile(userProfile);
+    console.log('🏷️ [createDefaultPassengerProfile] Nome extraído com segurança:', safeName);
+    
+    const defaultProfile = {
+      name: safeName,
+      phone: userProfile?.telefone || userProfile?.phone || '',
+      email: userProfile?.email || '',
+      preferredPaymentMethod: 'cash',
+      apiRegistered: false,
+      createdAt: new Date().toISOString(),
+      source: 'auto-created', // Para debug
+      version: '1.0' // Para futuras migrações
+    };
+    
+    // Salvar perfil padrão no banco local
+    const saved = await this.savePassengerProfile(defaultProfile);
+    if (saved) {
+      console.log('✅ [createDefaultPassengerProfile] Perfil padrão salvo com sucesso:', defaultProfile);
+    } else {
+      console.error('❌ [createDefaultPassengerProfile] Falha ao salvar perfil padrão');
+    }
+    
+    return defaultProfile;
+  }
+  
+  /**
+   * Verificar e corrigir nome de demo no perfil existente
+   * @param {Object} profile - Perfil atual do passageiro
+   * @returns {Object|null} Perfil corrigido ou null se não precisar correção
+   */
+  async validateAndFixDemoName(profile) {
+    if (!profile) {
+      console.log('⚠️ [validateAndFixDemoName] Perfil não existe');
+      return null;
+    }
+    
+    const currentName = profile.name || '';
+    const safeName = this.getSafePassengerName(profile);
+    
+    console.log('🔍 [validateAndFixDemoName] Comparando nomes:', {
+      currentName,
+      safeName,
+      needsUpdate: currentName !== safeName
+    });
+    
+    // Se o nome atual é diferente do nome seguro, precisamos atualizar
+    if (currentName !== safeName) {
+      console.log('🔄 [validateAndFixDemoName] Nome precisa ser corrigido');
+      
+      const correctedProfile = {
+        ...profile,
+        name: safeName,
+        lastNameCorrection: new Date().toISOString(),
+        nameSource: 'corrected-from-demo'
+      };
+      
+      const updated = await this.updatePassengerProfile(correctedProfile);
+      if (updated) {
+        console.log('✅ [validateAndFixDemoName] Nome corrigido com sucesso:', safeName);
+        return updated;
+      } else {
+        console.error('❌ [validateAndFixDemoName] Falha ao corrigir nome');
+      }
+    }
+    
+    return profile;
+  }
+  
+  /**
+   * Obter ou criar perfil de passageiro com nome seguro
+   * @returns {Object} Perfil de passageiro garantidamente seguro
+   */
+  async getOrCreateSafePassengerProfile() {
+    console.log('🚀 [getOrCreateSafePassengerProfile] Iniciando obtenção/criação de perfil seguro...');
+    
+    try {
+      // 1. Tentar obter perfil existente
+      let profile = await this.getPassengerProfile();
+      console.log('📁 [getOrCreateSafePassengerProfile] Perfil obtido do banco:', profile);
+      
+      // 2. Se não existe perfil, criar um padrão
+      if (!profile) {
+        console.log('⚠️ [getOrCreateSafePassengerProfile] Perfil não existe, criando padrão...');
+        const userProfile = await this.getUserProfile();
+        profile = await this.createDefaultPassengerProfile(userProfile);
+      } else {
+        // 3. Verificar e corrigir nome se necessário
+        const correctedProfile = await this.validateAndFixDemoName(profile);
+        if (correctedProfile) {
+          profile = correctedProfile;
+        }
+      }
+      
+      console.log('✅ [getOrCreateSafePassengerProfile] Perfil final seguro:', profile);
+      return profile;
+      
+    } catch (error) {
+      console.error('❌ [getOrCreateSafePassengerProfile] Erro crítico:', error);
+      
+      // Fallback: criar perfil mínimo
+      const fallbackProfile = {
+        name: 'Passageiro',
+        phone: '',
+        email: '',
+        preferredPaymentMethod: 'cash',
+        apiRegistered: false,
+        createdAt: new Date().toISOString(),
+        source: 'fallback-error'
+      };
+      
+      await this.savePassengerProfile(fallbackProfile);
+      console.log('🆘 [getOrCreateSafePassengerProfile] Perfil fallback criado:', fallbackProfile);
+      return fallbackProfile;
     }
   }
 
@@ -613,6 +903,96 @@ class LocalDatabase {
       console.error('Error importing database:', error);
       return false;
     }
+  }
+  
+  /**
+   * Migrar perfil existente para nova estrutura segura
+   * @returns {Object|null} Perfil migrado ou null se não há perfil
+   */
+  async migratePassengerProfileToSafe() {
+    console.log('🔄 [migratePassengerProfileToSafe] Iniciando migração de perfil...');
+    
+    try {
+      const existingProfile = await AsyncStorage.getItem(DB_KEYS.PASSENGER_PROFILE);
+      
+      if (!existingProfile) {
+        console.log('ℹ️ [migratePassengerProfileToSafe] Nenhum perfil existente para migrar');
+        return null;
+      }
+      
+      const profile = JSON.parse(existingProfile);
+      console.log('📁 [migratePassengerProfileToSafe] Perfil existente:', profile);
+      
+      // Verificar se já foi migrado
+      if (profile.version && profile.version >= '1.0') {
+        console.log('✅ [migratePassengerProfileToSafe] Perfil já migrado, versão:', profile.version);
+        return profile;
+      }
+      
+      // Aplicar migração
+      const migratedProfile = {
+        ...profile,
+        name: this.getSafePassengerName(profile),
+        version: '1.0',
+        migratedAt: new Date().toISOString(),
+        source: profile.source || 'migrated'
+      };
+      
+      // Salvar perfil migrado
+      const saved = await this.savePassengerProfile(migratedProfile);
+      
+      if (saved) {
+        console.log('✅ [migratePassengerProfileToSafe] Perfil migrado com sucesso:', migratedProfile);
+        return migratedProfile;
+      } else {
+        console.error('❌ [migratePassengerProfileToSafe] Falha ao salvar perfil migrado');
+        return null;
+      }
+      
+    } catch (error) {
+      console.error('❌ [migratePassengerProfileToSafe] Erro na migração:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Validar integridade do perfil de passageiro
+   * @param {Object} profile - Perfil a ser validado
+   * @returns {Object} Resultado da validação
+   */
+  validatePassengerProfile(profile) {
+    console.log('🔍 [validatePassengerProfile] Validando perfil:', profile);
+    
+    const validation = {
+      isValid: true,
+      errors: [],
+      warnings: [],
+      fixes: []
+    };
+    
+    // Validar campos obrigatórios
+    if (!profile) {
+      validation.isValid = false;
+      validation.errors.push('Perfil é null ou undefined');
+      return validation;
+    }
+    
+    // Validar nome
+    if (!profile.name || typeof profile.name !== 'string' || profile.name.trim().length === 0) {
+      validation.errors.push('Nome inválido ou ausente');
+      validation.fixes.push('Definir nome como "Passageiro"');
+      validation.isValid = false;
+    } else {
+      // Verificar se é nome demo
+      const safeName = this.getSafePassengerName(profile);
+      if (safeName !== profile.name) {
+        validation.warnings.push(`Nome possivelmente demo: "${profile.name}"`);
+        validation.fixes.push(`Corrigir nome para: "${safeName}"`);
+      }
+    }
+    
+    console.log('📊 [validatePassengerProfile] Resultado da validação:', validation);
+    return validation;
   }
 }
 

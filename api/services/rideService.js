@@ -17,7 +17,7 @@ class RideService {
         passengerName: rideData.passengerName,
         passengerPhone: rideData.passengerPhone,
         pickup: rideData.pickup,
-        destination: rideData.destination,
+        destination: rideData?.destination,
         estimatedFare: rideData.estimatedFare,
         estimatedDistance: rideData.estimatedDistance,
         estimatedTime: rideData.estimatedTime,

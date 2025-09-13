@@ -9,6 +9,7 @@ import {
   ScrollView,
   Switch,
   Alert,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
@@ -236,7 +237,7 @@ export default function DriverSettingsScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Auto Accept Section */}
+        {/* Auto Accept Section
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Automação</Text>
           
@@ -250,8 +251,8 @@ export default function DriverSettingsScreen({ navigation }) {
             />
           </View>
         </View>
-
-        {/* Display Section */}
+ */}
+        {/* Display Section 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Aparência</Text>
           
@@ -265,7 +266,7 @@ export default function DriverSettingsScreen({ navigation }) {
             />
           </View>
         </View>
-
+*/}
         {/* Account Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Conta</Text>
@@ -273,13 +274,7 @@ export default function DriverSettingsScreen({ navigation }) {
           <View style={styles.settingCard}>
             <TouchableOpacity 
               style={styles.settingItem}
-              onPress={() => {
-                Toast.show({
-                  type: "info",
-                  text1: "Em desenvolvimento",
-                  text2: "Alterar senha em breve",
-                });
-              }}
+              onPress={() => navigation.navigate('DriverChangePassword')}
             >
               <View style={styles.settingContent}>
                 <MaterialIcons name="lock" size={24} color="#2563EB" />
@@ -293,25 +288,7 @@ export default function DriverSettingsScreen({ navigation }) {
             
             <View style={styles.divider} />
             
-            <TouchableOpacity 
-              style={styles.settingItem}
-              onPress={() => {
-                Toast.show({
-                  type: "info",
-                  text1: "Em desenvolvimento",
-                  text2: "Editar dados do veículo em breve",
-                });
-              }}
-            >
-              <View style={styles.settingContent}>
-                <MaterialIcons name="directions-car" size={24} color="#2563EB" />
-                <View style={styles.settingText}>
-                  <Text style={styles.settingTitle}>Dados do Veículo</Text>
-                  <Text style={styles.settingSubtitle}>Alterar informações do seu carro</Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
+            
           </View>
         </View>
 
@@ -323,11 +300,7 @@ export default function DriverSettingsScreen({ navigation }) {
             <TouchableOpacity 
               style={styles.settingItem}
               onPress={() => {
-                Toast.show({
-                  type: "info",
-                  text1: "Em desenvolvimento",
-                  text2: "Central de ajuda em breve",
-                });
+                navigation.navigate('Help');
               }}
             >
               <View style={styles.settingContent}>
@@ -345,18 +318,23 @@ export default function DriverSettingsScreen({ navigation }) {
             <TouchableOpacity 
               style={styles.settingItem}
               onPress={() => {
-                Toast.show({
-                  type: "info",
-                  text1: "Em desenvolvimento",
-                  text2: "Contato em breve",
-                });
+                // Abrir WhatsApp
+                const whatsappUrl = 'https://wa.me/+244928873593';
+                Linking.openURL(whatsappUrl)
+                  .catch(err => {
+                    Toast.show({
+                      type: "error",
+                      text1: "Erro",
+                      text2: "Não foi possível abrir o WhatsApp",
+                    });
+                  });
               }}
             >
               <View style={styles.settingContent}>
-                <MaterialIcons name="contact-support" size={24} color="#2563EB" />
+                <MaterialIcons name="whatsapp" size={24} color="#25D366" />
                 <View style={styles.settingText}>
-                  <Text style={styles.settingTitle}>Contato</Text>
-                  <Text style={styles.settingSubtitle}>Fale conosco</Text>
+                  <Text style={styles.settingTitle}>Contato via WhatsApp</Text>
+                  <Text style={styles.settingSubtitle}>Fale conosco diretamente</Text>
                 </View>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
@@ -389,30 +367,7 @@ export default function DriverSettingsScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Data Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Dados</Text>
-          
-          <View style={styles.settingCard}>
-            <TouchableOpacity 
-              style={styles.settingItem}
-              onPress={clearAppData}
-            >
-              <View style={styles.settingContent}>
-                <MaterialIcons name="delete-sweep" size={24} color="#EF4444" />
-                <View style={styles.settingText}>
-                  <Text style={[styles.settingTitle, { color: '#EF4444' }]}>
-                    Limpar Dados do App
-                  </Text>
-                  <Text style={styles.settingSubtitle}>
-                    Remove todos os dados salvos no dispositivo
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-          </View>
-        </View>
+       
 
         {/* App Info */}
         <View style={styles.section}>

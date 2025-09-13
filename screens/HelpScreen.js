@@ -121,8 +121,15 @@ const HelpScreen = ({ navigation }) => {
   };
 
   const handleContactSupport = () => {
-    // Aqui você navegaria para a tela de contato
-    console.log('Navegando para suporte');
+    const whatsappUrl = 'https://wa.me/+244928873593';
+    Linking.openURL(whatsappUrl)
+      .catch(err => {
+        Alert.alert(
+          'Erro',
+          'Não foi possível abrir o WhatsApp. Verifique se o aplicativo está instalado.',
+          [{ text: 'OK' }]
+        );
+      });
   };
 
   // Função de tutorial removida conforme solicitado

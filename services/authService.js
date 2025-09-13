@@ -9,18 +9,17 @@ const generateSalt = (length = 16) => {
   return Buffer.from(bytes).toString('base64');
 };
 
-// Função para hash da senha usando SHA-256 com salt
-const hashPassword = (password, salt) => {
-  const hash = sha256(password + salt);
+// Função para hash da senha usando SHA-256 (sem salt por enquanto para resolver erro de coluna)
+const hashPassword = (password) => {
+  const hash = sha256(password + 'TRAVEL_APP_SECRET_2024');
   return Base64.stringify(hash);
 };
 
 const authService = {
   async register({ nome, email, telefone, senha }) {
     try {
-      // Gera salt e hash da senha
-      const salt = generateSalt();
-      const hashedPassword = hashPassword(senha, salt);
+      // Hash da senha (sem salt por enquanto)
+      const hashedPassword = hashPassword(senha);
       
       // Inserir usuário
       const { data, error } = await supabase
@@ -30,8 +29,7 @@ const authService = {
             nome,
             email,
             telefone,
-            senha: hashedPassword,
-            salt
+            senha: hashedPassword
           }
         ])
         .select()
@@ -51,23 +49,52 @@ const authService = {
 
   async login({ email, telefone, senha }) {
     try {
+      console.log('Login attempt with:', { email, telefone, hasPassword: !!senha });
+      
       // Busca usuário por email ou telefone
-      const { data: user, error } = await supabase
-        .from('users')
-        .select('*')
-        .or(`email.eq.${email},telefone.eq.${telefone}`)
-        .single();
+      let query = supabase.from('users').select('*');
+      
+      if (email) {
+        console.log('Searching by email:', email);
+        query = query.eq('email', email);
+      } else if (telefone) {
+        console.log('Searching by telefone:', telefone);
+        query = query.eq('telefone', telefone);
+      } else {
+        throw new Error('Email ou telefone é obrigatório');
+      }
+      
+      console.log('Executing Supabase query...');
+      const { data: user, error } = await query.single();
+      
+      console.log('Supabase response:', { user: user ? 'found' : 'not found', error });
 
-      if (error) throw error;
-      if (!user) throw new Error('Usuário não encontrado');
+      if (error) {
+        console.error('Supabase error details:', error);
+        if (error.code === 'PGRST116') {
+          throw new Error('Usuário não encontrado. Verifique se o email/telefone está correto.');
+        }
+        throw error;
+      }
+      
+      if (!user) {
+        throw new Error('Usuário não encontrado');
+      }
 
-      // Verifica senha
-      const hashedInput = hashPassword(senha, user.salt);
+      // Verifica senha (sem salt)
+      console.log('Verifying password...');
+      const hashedInput = hashPassword(senha);
       const passwordMatch = hashedInput === user.senha;
-      if (!passwordMatch) throw new Error('Senha incorreta');
+      
+      console.log('Password verification:', { match: passwordMatch });
+      
+      if (!passwordMatch) {
+        throw new Error('Senha incorreta');
+      }
 
       // Retorna usuário sem a senha
       const { senha: _, ...userWithoutPassword } = user;
+      console.log('Login successful for user:', userWithoutPassword.nome);
       return { user: userWithoutPassword };
 
     } catch (error) {
@@ -125,14 +152,13 @@ const authService = {
 
       if (fetchError) throw fetchError;
 
-      // Verifica senha atual
-      const oldHash = hashPassword(oldPassword, user.salt);
+      // Verifica senha atual (sem salt)
+      const oldHash = hashPassword(oldPassword);
       const passwordMatch = oldHash === user.senha;
       if (!passwordMatch) throw new Error('Senha atual incorreta');
 
-      // Gera novo salt e hash para a nova senha
-      const newSalt = generateSalt();
-      const hashedPassword = hashPassword(newPassword, newSalt);
+      // Gera hash para a nova senha (sem salt)
+      const hashedPassword = hashPassword(newPassword);
 
       // Atualiza senha
       const { error: updateError } = await supabase
