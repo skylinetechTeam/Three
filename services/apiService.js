@@ -203,6 +203,8 @@ class ApiService {
   // Registrar callbacks pendentes após conexão
   registerPendingCallbacks() {
     console.log('🔄 [ApiService] Registrando callbacks pendentes...');
+    console.log(`🆔 [ApiService] Socket ID: ${this.socket?.id}`);
+    console.log(`👤 [ApiService] User Type: ${this.userType}, User ID: ${this.userId}`);
     
     if (!this.socket || !this.socket.connected) {
       console.warn('⚠️ [ApiService] Socket não está conectado, abortando registro de callbacks pendentes');
@@ -210,19 +212,23 @@ class ApiService {
     }
     
     // Registrar todos os callbacks que foram adicionados antes da conexão
+    console.log(`📦 [ApiService] Total de eventos para registrar: ${this.eventCallbacks.size}`);
+    
     for (const [eventName, callbacks] of this.eventCallbacks.entries()) {
       console.log(`🎯 [ApiService] Registrando ${callbacks.length} callbacks pendentes para: ${eventName}`);
       
+      // Limpar listeners existentes para evitar duplicatas
+      this.socket.removeAllListeners(eventName);
+      
       callbacks.forEach((callback, index) => {
-        // Verificar se já existe listener para evitar duplicatas
-        if (!this.socket.listeners(eventName).includes(callback)) {
-          this.socket.on(eventName, callback);
-          console.log(`✅ [ApiService] Callback ${index + 1} registrado para: ${eventName}`);
-        } else {
-          console.log(`ℹ️ [ApiService] Callback ${index + 1} já registrado para: ${eventName}`);
-        }
+        this.socket.on(eventName, callback);
+        console.log(`✅ [ApiService] Callback ${index + 1} registrado para: ${eventName}`);
       });
     }
+    
+    // Listar todos os eventos que têm listeners agora
+    const allEvents = this.socket.eventNames();
+    console.log(`📡 [ApiService] Eventos com listeners ativos:`, allEvents);
     
     console.log('✅ [ApiService] Todos os callbacks pendentes foram registrados');
   }
@@ -277,6 +283,7 @@ class ApiService {
     // Configurar listeners para eventos principais
     setupEventListener('ride_accepted', (data) => {
       console.log('🎉 [ApiService] RIDE_ACCEPTED - Processamento iniciado');
+      console.log('📊 [ApiService] Dados completos recebidos:', JSON.stringify(data, null, 2));
       
       // Validar dados essenciais
       if (!data.rideId) {
@@ -290,7 +297,9 @@ class ApiService {
         hasRideId: !!data.rideId,
         hasDriver: !!data.driver,
         driverName: data.driver?.name,
-        estimatedArrival: data.estimatedArrival
+        estimatedArrival: data.estimatedArrival,
+        ridePassengerId: data.ride?.passengerId,
+        currentUserId: this.userId
       });
     });
 
@@ -347,8 +356,10 @@ class ApiService {
   // Trigger callbacks for a specific event
   triggerCallbacks(eventName, data) {
     console.log(`🔔 [ApiService] Tentando executar callbacks para: ${eventName}`);
+    console.log(`📦 [ApiService] Dados recebidos:`, JSON.stringify(data, null, 2));
     const callbacks = this.eventCallbacks.get(eventName);
     console.log(`📋 [ApiService] Callbacks registrados para ${eventName}:`, callbacks ? callbacks.length : 0);
+    console.log(`🗺️ [ApiService] Todos os eventos registrados:`, Array.from(this.eventCallbacks.keys()));
     
     if (callbacks && callbacks.length > 0) {
       console.log(`▶️ [ApiService] Executando ${callbacks.length} callbacks para ${eventName}`);
@@ -430,12 +441,24 @@ class ApiService {
     
     console.log('💓 [ApiService] Configurando heartbeat melhorado...');
     
-    // Enviar ping a cada 5 segundos para deteção rápida de problemas
+    // Variável para controlar último ping
+    let lastPingTime = 0;
+    
+    // Enviar ping a cada 25 segundos para evitar sobrecarga
     this.heartbeatInterval = setInterval(() => {
       if (this.socket && this.socket.connected) {
-        console.log('🏓 [ApiService] Enviando ping para manter conexão');
+        const now = Date.now();
+        
+        // Debounce: só enviar se passou pelo menos 20 segundos desde o último ping
+        if (now - lastPingTime < 20000) {
+          console.log('⏱️ [ApiService] Ping muito recente, pulando...');
+          return;
+        }
+        
+        lastPingTime = now;
+        console.log('🏝 [ApiService] Enviando ping para manter conexão');
         this.socket.emit('ping', { 
-          timestamp: Date.now(),
+          timestamp: now,
           userType: this.userType,
           userId: this.userId 
         });
@@ -451,7 +474,7 @@ class ApiService {
           }, 2000);
         }
       }
-    }, 5000); // 5 segundos para deteção mais rápida
+    }, 25000); // 25 segundos para evitar sobrecarga de rede
     
     // Listener para resposta pong com timeout de detecção
     if (this.socket) {
@@ -577,7 +600,15 @@ class ApiService {
 
   // Aceitar corrida (motorista)
   async acceptRide(rideId, driverData) {
+    console.log('🔵 [apiService.acceptRide] INICIANDO aceitação de corrida');
+    console.log('🔵 [apiService.acceptRide] Parâmetros:', {
+      rideId,
+      driverData,
+      url: `${API_BASE_URL}/rides/${rideId}/accept`
+    });
+    
     try {
+      console.log('🔵 [apiService.acceptRide] Fazendo requisição HTTP...');
       const response = await fetch(`${API_BASE_URL}/rides/${rideId}/accept`, {
         method: 'PUT',
         headers: {
@@ -586,16 +617,41 @@ class ApiService {
         body: JSON.stringify(driverData),
       });
 
+      console.log('🔵 [apiService.acceptRide] Resposta recebida:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
       const data = await response.json();
+      console.log('🔵 [apiService.acceptRide] Dados da resposta:', data);
       
       if (!response.ok) {
+        console.error('🔴 [apiService.acceptRide] Resposta não OK:', {
+          status: response.status,
+          data
+        });
         throw new Error(data.message || 'Erro ao aceitar corrida');
       }
 
-      console.log('✅ Corrida aceita:', data);
+      console.log('✅ [apiService.acceptRide] Corrida aceita com sucesso:', data);
+      
+      // Emitir evento manualmente se o socket estiver conectado
+      if (this.socket && this.socket.connected) {
+        console.log('📡 [apiService.acceptRide] Emitindo evento ride_accepted via socket...');
+        this.socket.emit('ride_accepted', {
+          rideId,
+          driverData,
+          ride: data.ride || data,
+          timestamp: Date.now()
+        });
+      }
+      
       return data;
     } catch (error) {
-      console.error('❌ Erro ao aceitar corrida:', error);
+      console.error('❌ [apiService.acceptRide] ERRO COMPLETO:', error);
+      console.error('❌ [apiService.acceptRide] Stack trace:', error.stack);
+      console.error('❌ [apiService.acceptRide] Tipo de erro:', error.name);
       throw error;
     }
   }

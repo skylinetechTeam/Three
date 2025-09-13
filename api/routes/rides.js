@@ -335,6 +335,7 @@ router.put('/:id/accept', async (req, res) => {
     console.log(`🔍 [DIAGNÓSTICO] Dados completos da corrida:`, {
       id: ride.id,
       passengerId: ride.passengerId,
+      passengerIdType: typeof ride.passengerId,
       status: ride.status,
       pickup: ride.pickup,
       destination: ride.destination
@@ -395,6 +396,7 @@ router.put('/:id/accept', async (req, res) => {
         const ridePassengerId = normalizeId(ride.passengerId);
         
         console.log(`🔍 Verificando conexão: Socket=${socketId}, UserType=${connection.userType}, UserID=${connectionUserId}, Target=${ridePassengerId}`);
+        console.log(`🔍 [DEBUG] Comparação exata: "${connectionUserId}" === "${ridePassengerId}" ? ${connectionUserId === ridePassengerId}`);
         
         if (connection.userType === 'passenger' && connectionUserId === ridePassengerId) {
           console.log(`✅ PASSAGEIRO ENCONTRADO: ${socketId}`);

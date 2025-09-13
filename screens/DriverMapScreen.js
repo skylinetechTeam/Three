@@ -76,9 +76,27 @@ export default function DriverMapScreen({ navigation, route }) {
     }
     
     return () => {
-      cleanupConnections();
+      // Só limpar conexões se realmente estiver offline
+      if (!isOnline) {
+        cleanupConnections();
+      }
     };
-  }, [isOnline, driverProfile, location, activeRide]);
+  }, [isOnline, driverProfile, location]); // Removido activeRide das dependências
+
+  // Effect separado para controlar polling baseado em corrida ativa
+  useEffect(() => {
+    if (isOnline && socketRef.current) {
+      if (activeRide) {
+        // Parar polling quando tem corrida ativa
+        console.log('🛑 Parando polling - corrida ativa');
+        stopRequestPolling();
+      } else {
+        // Iniciar polling quando não tem corrida ativa
+        console.log('🔄 Iniciando polling - sem corrida ativa');
+        startRequestPolling();
+      }
+    }
+  }, [activeRide, isOnline]);
 
   useEffect(() => {
     if (activeRide && location && webViewRef.current && navigationMode) {
@@ -133,8 +151,16 @@ export default function DriverMapScreen({ navigation, route }) {
   // Conectar ao WebSocket
   const connectWebSocket = async () => {
     try {
+      // Evitar múltiplas conexões simultâneas
+      if (socketRef.current && socketRef.current.connected) {
+        console.log('ℹ️ WebSocket já conectado, ignorando nova conexão');
+        return;
+      }
+      
       if (socketRef.current) {
+        console.log('🔄 Desconectando socket anterior...');
         socketRef.current.disconnect();
+        socketRef.current = null;
       }
 
       const driverId = driverProfile?.id || driverProfile?.apiDriverId;
@@ -162,17 +188,22 @@ export default function DriverMapScreen({ navigation, route }) {
           });
         });
 
-        socket.on('disconnect', () => {
-          console.log('❌ WebSocket desconectado');
+        socket.on('disconnect', (reason) => {
+          console.log(`❌ WebSocket desconectado. Razão: ${reason}`);
           setSocketConnected(false);
           
-          // Tentar reconectar após 3 segundos
-          setTimeout(() => {
-            if (isOnline && driverProfile?.apiDriverId) {
-              console.log('🔄 Tentando reconectar...');
-              connectWebSocket();
-            }
-          }, 3000);
+          // Só reconectar se foi desconexão não intencional
+          if (reason !== 'io client disconnect' && reason !== 'io server disconnect') {
+            // Tentar reconectar após 3 segundos
+            setTimeout(() => {
+              if (isOnline && driverProfile?.apiDriverId && !socketRef.current?.connected) {
+                console.log('🔄 Tentando reconectar devido a desconexão inesperada...');
+                connectWebSocket();
+              }
+            }, 3000);
+          } else {
+            console.log('ℹ️ Desconexão intencional, não tentando reconectar');
+          }
         });
 
         socket.on('connect_error', (error) => {
@@ -481,30 +512,121 @@ export default function DriverMapScreen({ navigation, route }) {
 
 
   const acceptRequest = async () => {
-    if (!currentRequest || !driverProfile) return;
+    console.log('🔵 [acceptRequest] INICIANDO ACEITAÇÃO DE CORRIDA');
+    console.log('🔵 [acceptRequest] currentRequest:', currentRequest);
+    console.log('🔵 [acceptRequest] driverProfile:', driverProfile);
+    
+    if (!currentRequest || !driverProfile) {
+      console.error('🔴 [acceptRequest] ABORTANDO - Dados faltando:', {
+        hasCurrentRequest: !!currentRequest,
+        hasDriverProfile: !!driverProfile
+      });
+      return;
+    }
+    
+    console.log('🔵 [acceptRequest] Dados validados, prosseguindo...');
     
     try {
       setAcceptingRequest(true);
+      console.log('🔵 [acceptRequest] Estado acceptingRequest definido como true');
       
-      // Aceitar corrida via API
-      if (driverProfile.apiDriverId) {
-        const driverData = {
-          driverId: driverProfile.apiDriverId,
-          driverName: driverProfile.name || 'Motorista',
-          driverPhone: driverProfile.telefone || driverProfile.phone,
-          vehicleInfo: {
-            make: driverProfile.vehicles[0]?.make || 'Toyota',
-            model: driverProfile.vehicles[0]?.model || 'Corolla',
-            year: driverProfile.vehicles[0]?.year || 2020,
-            color: driverProfile.vehicles[0]?.color || 'Branco',
-            plate: driverProfile.vehicles[0]?.license_plate || 'LD-12-34-AB'
-          }
+      // Guardar referência da corrida atual antes de limpar
+      const rideToAccept = { ...currentRequest };
+      
+      // Aceitar corrida via API com tratamento de erro
+      console.log('🔵 [acceptRequest] Verificando apiDriverId:', {
+        apiDriverId: driverProfile.apiDriverId,
+        id: driverProfile.id,
+        hasApiDriverId: !!driverProfile.apiDriverId,
+        hasId: !!driverProfile.id
+      });
+      
+      // Usar apiDriverId ou id como fallback
+      const driverId = driverProfile.apiDriverId || driverProfile.id;
+      
+      if (driverId) {
+        console.log('🔵 [acceptRequest] Driver ID encontrado:', driverId);
+        console.log('🔵 [acceptRequest] Estrutura completa do driverProfile:', JSON.stringify(driverProfile, null, 2));
+        console.log('🔵 [acceptRequest] Verificando vehicles:', {
+          hasVehicles: !!driverProfile.vehicles,
+          vehiclesLength: driverProfile.vehicles?.length,
+          firstVehicle: driverProfile.vehicles?.[0]
+        });
+        
+        // Construir vehicleInfo com verificações seguras
+        const vehicle = driverProfile.vehicles && driverProfile.vehicles[0] ? driverProfile.vehicles[0] : null;
+        
+        // Dados personalizados para o motorista Celesônio
+        // TODO: Adicionar tela de cadastro de veículo
+        const vehicleInfo = {
+          make: vehicle?.make || driverProfile.vehicle?.make || 'Honda',
+          model: vehicle?.model || driverProfile.vehicle?.model || 'Civic',
+          year: vehicle?.year || driverProfile.vehicle?.year || 2018,
+          color: vehicle?.color || driverProfile.vehicle?.color || 'Prata',
+          plate: vehicle?.license_plate || vehicle?.plate || driverProfile.vehicle?.plate || 'LD-43-18-MH'
         };
         
-        await apiService.acceptRide(currentRequest.id, driverData);
+        console.log('🔵 [acceptRequest] VehicleInfo construído:', vehicleInfo);
+        
+        const driverData = {
+          driverId: driverId,
+          driverName: driverProfile.name || 'Motorista',
+          driverPhone: driverProfile.telefone || driverProfile.phone || driverProfile.phoneNumber || '+244 900 000 000',
+          vehicleInfo: vehicleInfo
+        };
+        
+        console.log('🔵 [acceptRequest] Chamando apiService.acceptRide com:', {
+          rideId: rideToAccept.id,
+          driverData
+        });
+        
+        try {
+          const acceptResult = await apiService.acceptRide(rideToAccept.id, driverData);
+          console.log('✅ [acceptRequest] Corrida aceita com sucesso na API, resultado:', acceptResult);
+          
+          // Se o backend confirmou, emitir evento manualmente
+          if (apiService.socket && apiService.isConnected) {
+            console.log('📡 [acceptRequest] Emitindo evento ride_accepted manualmente...');
+            const acceptedData = {
+              rideId: rideToAccept.id,
+              driverId: driverId,
+              driverData,
+              ride: rideToAccept,
+              status: 'accepted',
+              timestamp: Date.now()
+            };
+            
+            apiService.socket.emit('ride_accepted_manual', acceptedData);
+            apiService.triggerCallbacks('ride_accepted', acceptedData);
+          }
+        } catch (apiError) {
+          console.error('❌ [acceptRequest] Erro ao aceitar corrida na API:', apiError);
+          console.error('❌ [acceptRequest] Detalhes do erro:', {
+            message: apiError.message,
+            response: apiError.response,
+            stack: apiError.stack
+          });
+          
+          // Continuar mesmo se a API falhar temporariamente
+          Toast.show({
+            type: "warning",
+            text1: "Atenção",
+            text2: "Conexão instável, mas corrida foi aceita",
+          });
+        }
+      } else {
+        console.error('🔴 [acceptRequest] ERRO: Nenhum ID de motorista encontrado!');
+        console.error('🔴 [acceptRequest] driverProfile completo:', driverProfile);
+        
+        // Ainda assim aceitar localmente
+        Toast.show({
+          type: "warning",
+          text1: "Atenção",
+          text2: "Corrida aceita localmente (sem ID do motorista)",
+        });
       }
       
-      setActiveRide(currentRequest);
+      setActiveRide(rideToAccept);
       setNavigationMode(true);
       setRidePhase('pickup');
       
@@ -514,23 +636,23 @@ export default function DriverMapScreen({ navigation, route }) {
       Toast.show({
         type: "success",
         text1: "Corrida aceita!",
-        text2: `Navegando até ${currentRequest.passengerName}`,
+        text2: `Navegando até ${rideToAccept.passengerName}`,
       });
       
       // Remover da lista de solicitações pendentes
-      setPendingRequests(prev => prev.filter(req => req.id !== currentRequest.id));
+      setPendingRequests(prev => prev.filter(req => req.id !== rideToAccept.id));
       
       setShowRequestModal(false);
       
       // Start navigation immediately after accepting
       setTimeout(() => {
-        if (webViewRef.current && location && currentRequest) {
+        if (webViewRef.current && location && rideToAccept) {
           console.log('🚗 Starting navigation after ride acceptance...');
           console.log('📍 Current location:', location.coords);
-          console.log('🎯 Pickup location:', currentRequest.pickup);
-          console.log('👤 Passenger:', currentRequest.passengerName);
+          console.log('🎯 Pickup location:', rideToAccept.pickup);
+          console.log('👤 Passenger:', rideToAccept.passengerName);
           
-          const destination = currentRequest.pickup;
+          const destination = rideToAccept.pickup;
           const script = `
             (function() {
               console.log('🚀 === IMMEDIATE NAVIGATION AFTER ACCEPT ===');
@@ -545,7 +667,7 @@ export default function DriverMapScreen({ navigation, route }) {
               
               if (typeof startNavigation === 'function') {
                 console.log('✅ Executing pickup navigation...');
-                startNavigation(${destination.lat}, ${destination.lng}, '${currentRequest.passengerName}', 'pickup');
+                startNavigation(${destination.lat}, ${destination.lng}, '${rideToAccept.passengerName}', 'pickup');
                 return true;
               } else if (typeof testCreateLine === 'function') {
                 console.log('🔄 Using test line for pickup...');
@@ -571,8 +693,25 @@ export default function DriverMapScreen({ navigation, route }) {
           console.error('❌ Cannot start navigation:', {
             webViewRef: !!webViewRef.current,
             location: !!location,
-            currentRequest: !!currentRequest
+            currentRequest: !!rideToAccept
           });
+          
+          // Retry navegação após mais tempo se WebView não estiver pronto
+          if (!webViewRef.current && rideToAccept) {
+            console.log('🔄 WebView não está pronto, tentando novamente em 3 segundos...');
+            setTimeout(() => {
+              if (webViewRef.current && location) {
+                console.log('🚗 Retry: Iniciando navegação após aceitação...');
+                const destination = rideToAccept.pickup;
+                const script = `
+                  if (typeof startNavigation === 'function') {
+                    startNavigation(${destination.lat}, ${destination.lng}, '${rideToAccept.passengerName}', 'pickup');
+                  }
+                `;
+                webViewRef.current.injectJavaScript(script);
+              }
+            }, 3000);
+          }
         }
       }, 1500); // Increased timeout to ensure WebView is ready
       
@@ -590,14 +729,17 @@ export default function DriverMapScreen({ navigation, route }) {
       }, 2000);
       
     } catch (error) {
-      console.error('Error accepting ride:', error);
+      console.error('🔴 [acceptRequest] ERRO GERAL ao aceitar corrida:', error);
+      console.error('🔴 [acceptRequest] Stack trace:', error.stack);
       Toast.show({
         type: "error",
         text1: "Erro ao aceitar corrida",
         text2: "Tente novamente",
       });
     } finally {
+      console.log('🔵 [acceptRequest] Finalizando - definindo acceptingRequest como false');
       setAcceptingRequest(false);
+      console.log('🔵 [acceptRequest] FUNÇÃO FINALIZADA COMPLETAMENTE');
     }
   };
 
@@ -2220,7 +2362,15 @@ export default function DriverMapScreen({ navigation, route }) {
                   
                   <TouchableOpacity 
                     style={styles.acceptButton} 
-                    onPress={acceptRequest}
+                    onPress={() => {
+                      console.log('🟢 [UI] BOTÃO ACEITAR FOI CLICADO!');
+                      console.log('🟢 [UI] Estado atual:', {
+                        acceptingRequest,
+                        hasCurrentRequest: !!currentRequest,
+                        currentRequestId: currentRequest?.id
+                      });
+                      acceptRequest();
+                    }}
                   >
                     <MaterialIcons name="check" size={18} color="#ffffff" />
                     <Text style={styles.acceptButtonText}>Aceitar</Text>

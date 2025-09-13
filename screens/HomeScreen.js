@@ -102,7 +102,7 @@ export default function HomeScreen({ navigation, route }) {
       callbacksRegistered: apiService.eventCallbacks?.has('ride_started'),
       totalCallbacks: apiService.eventCallbacks?.get('ride_started')?.length || 0
     });
-    
+    console.log()
     const testData = {
       rideId: requestId || 'test-ride-123',
       driverId: driverInfo?.id || 'test-driver-456',
@@ -324,6 +324,13 @@ export default function HomeScreen({ navigation, route }) {
           // Handler para corrida aceita
           apiService.onEvent('ride_accepted', (data) => {
             console.log('🎉 [NOVO USUÁRIO] Corrida aceita pelo motorista:', data);
+            console.log('🚗 INFO DO MOTORISTA CHEGOU:', {
+              motorista: data.driver,
+              tempoEstimado: data.estimatedArrival,
+              localizacao: data.driver?.location,
+              veiculo: data.driver?.vehicle,
+              avaliacao: data.driver?.rating
+            });
             
             if (data.test) {
               console.log('🧪 TESTE MANUAL FUNCIONOU! Callback foi executado corretamente!');
@@ -569,6 +576,12 @@ export default function HomeScreen({ navigation, route }) {
 
           apiService.onEvent('driver_location_update', (data) => {
             console.log('📍 Atualização de localização do motorista:', data);
+            console.log('🗺️ LOCALIZAÇÃO DO MOTORISTA ATUALIZADA:', {
+              idMotorista: data.driverId,
+              novaLocalizacao: data.location,
+              tempoEstimadoChegada: data.estimatedArrival,
+              distancia: data.distance || 'N/A'
+            });
             if (driverInfo && data.driverId === driverInfo.id) {
               setDriverInfo(prev => ({
                 ...prev,
@@ -654,6 +667,13 @@ export default function HomeScreen({ navigation, route }) {
         // Handler para corrida aceita
         apiService.onEvent('ride_accepted', (data) => {
           console.log('🎉 [PASSAGEIRO JÁ REGISTRADO] Corrida aceita pelo motorista:', data);
+          console.log('🚗 INFO DO MOTORISTA CHEGOU (Passageiro Registrado):', {
+            motorista: data.driver,
+            tempoEstimado: data.estimatedArrival,
+            localizacao: data.driver?.location,
+            veiculo: data.driver?.vehicle,
+            avaliacao: data.driver?.rating
+          });
           
           if (data.test) {
             console.log('🧪 TESTE MANUAL FUNCIONOU! Callback foi executado corretamente!');
@@ -815,6 +835,14 @@ export default function HomeScreen({ navigation, route }) {
         
         // Handler para atualização de localização do motorista
         apiService.onEvent('driver_location_update', (data) => {
+          console.log('🗺️ LOCALIZAÇÃO DO MOTORISTA ATUALIZADA (Passageiro Registrado):', {
+            idMotorista: data.driverId,
+            novaLocalizacao: data.location,
+            tempoEstimadoChegada: data.estimatedArrival,
+            motoristaAtual: driverInfo?.id,
+            corresponde: driverInfo && data.driverId === driverInfo.id
+          });
+          
           if (driverInfo && data.driverId === driverInfo.id) {
             setDriverInfo(prev => ({
               ...prev,
@@ -2332,7 +2360,7 @@ export default function HomeScreen({ navigation, route }) {
   const handleCallDriver = () => {
     if (driverInfo && driverInfo.phone) {
       // In a real app, you would use Linking to make a phone call
-      console.log('📞 Ligando para motorista:', driverInfo.phone);
+      console.log('📞 Ligando para motorista:', driverInfo);
       Toast.show({
         type: "info",
         text1: "Ligando para motorista",
@@ -2377,6 +2405,7 @@ export default function HomeScreen({ navigation, route }) {
       'bank': 'account-balance',
       'church': 'church',
     };
+    console.log('driverinfo: ' + JSON.stringify(driverInfo))
     
     return categoryIcons[categoryId] || 'place';
   };
@@ -2831,7 +2860,10 @@ export default function HomeScreen({ navigation, route }) {
                     <Text style={styles.driverNameLarge}>{driverInfo.name}</Text>
                     <View style={styles.ratingRow}>
                       <MaterialIcons name="star" size={18} color="#FFC107" />
-                      <Text style={styles.driverRatingText}>{driverInfo.rating || 4.8}</Text>
+                      <Text style={styles.driverRatingText}>{driverInfo.rating || 4.8}
+                      
+                      
+                      </Text>
                       <Text style={styles.ratingCount}>(127 avaliações)</Text>
                     </View>
                   </View>
