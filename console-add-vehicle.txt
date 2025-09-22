@@ -1,0 +1,120 @@
+// ========================================
+// COPIE E COLE ESTE CÓDIGO NO CONSOLE DO NAVEGADOR
+// COM O APP RODANDO (MOTORISTA LOGADO)
+// ========================================
+
+(async () => {
+  console.log('🚗 ========== ADICIONANDO VEÍCULO AO MOTORISTA ==========');
+  
+  // Dados do veículo (você pode modificar estes valores)
+  const vehicleData = {
+    make: 'Toyota',
+    model: 'Corolla',
+    year: 2020,
+    color: 'Branco',
+    plate: 'LD-46-11-HE'
+  };
+  
+  try {
+    // Buscar perfil atual do AsyncStorage
+    const driverAuthData = await window.AsyncStorage.getItem('driver_auth_data');
+    const driverProfile = await window.AsyncStorage.getItem('driverProfile');
+    
+    let currentProfile = null;
+    
+    if (driverAuthData) {
+      currentProfile = JSON.parse(driverAuthData);
+      console.log('✅ Perfil encontrado em driver_auth_data');
+    } else if (driverProfile) {
+      currentProfile = JSON.parse(driverProfile);
+      console.log('✅ Perfil encontrado em driverProfile');
+    } else {
+      console.error('❌ Nenhum motorista logado!');
+      return;
+    }
+    
+    console.log('👤 Motorista:', currentProfile.name);
+    console.log('🆔 ID:', currentProfile.id);
+    console.log('🚙 Adicionando veículo:', vehicleData);
+    
+    // Criar perfil atualizado com dados do veículo em múltiplos formatos
+    const updatedProfile = {
+      ...currentProfile,
+      // Array vehicles (formato preferencial)
+      vehicles: [{
+        make: vehicleData.make,
+        model: vehicleData.model,
+        year: vehicleData.year,
+        color: vehicleData.color,
+        license_plate: vehicleData.plate,
+        plate: vehicleData.plate,
+        marca: vehicleData.make,
+        modelo: vehicleData.model,
+        ano: vehicleData.year,
+        cor: vehicleData.color,
+        placa: vehicleData.plate
+      }],
+      // Array vehicle (compatibilidade)
+      vehicle: [{
+        make: vehicleData.make,
+        model: vehicleData.model,
+        year: vehicleData.year,
+        color: vehicleData.color,
+        license_plate: vehicleData.plate,
+        plate: vehicleData.plate,
+        marca: vehicleData.make,
+        modelo: vehicleData.model,
+        ano: vehicleData.year,
+        cor: vehicleData.color,
+        placa: vehicleData.plate
+      }],
+      // Objeto vehicleInfo (compatibilidade)
+      vehicleInfo: {
+        make: vehicleData.make,
+        model: vehicleData.model,
+        year: vehicleData.year,
+        color: vehicleData.color,
+        plate: vehicleData.plate
+      },
+      // Campos individuais (compatibilidade)
+      vehicle_make: vehicleData.make,
+      vehicle_model: vehicleData.model,
+      vehicle_year: vehicleData.year,
+      vehicle_color: vehicleData.color,
+      vehicle_plate: vehicleData.plate,
+      license_plate: vehicleData.plate,
+      // Campos em português (compatibilidade)
+      marca: vehicleData.make,
+      modelo: vehicleData.model,
+      ano: vehicleData.year,
+      cor: vehicleData.color,
+      placa: vehicleData.plate
+    };
+    
+    // Salvar nos dois lugares para garantir
+    await window.AsyncStorage.setItem('driver_auth_data', JSON.stringify(updatedProfile));
+    await window.AsyncStorage.setItem('driverProfile', JSON.stringify(updatedProfile));
+    
+    console.log('✅ Veículo adicionado com sucesso!');
+    console.log('📊 === RESUMO ===');
+    console.log('✅ Motorista:', updatedProfile.name);
+    console.log('✅ Veículo:', `${vehicleData.make} ${vehicleData.model}`);
+    console.log('✅ Placa:', vehicleData.plate);
+    console.log('✅ Cor:', vehicleData.color);
+    console.log('✅ Ano:', vehicleData.year);
+    console.log('\n🔄 RECARREGUE A PÁGINA (F5) PARA VER AS MUDANÇAS');
+    
+    // Verificar dados salvos
+    const verify = JSON.parse(await window.AsyncStorage.getItem('driver_auth_data'));
+    if (verify.vehicles && verify.vehicles.length > 0) {
+      console.log('✅ Verificação: Veículo salvo corretamente!');
+      console.log('🚗 Dados salvos:', verify.vehicles[0]);
+    }
+    
+  } catch (error) {
+    console.error('❌ ERRO:', error);
+    console.error('Stack:', error.stack);
+  }
+  
+  console.log('========== PROCESSO CONCLUÍDO ==========');
+})();

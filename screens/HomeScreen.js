@@ -53,7 +53,16 @@ export default function HomeScreen({ navigation, route }) {
   const [isNavDropdownOpen, setIsNavDropdownOpen] = useState(false);
   const [passengerProfile, setPassengerProfile] = useState(null);
   const [currentRide, setCurrentRide] = useState(null);
-  const [requestStatus, setRequestStatus] = useState(null); // 'pending', 'accepted', 'rejected'
+  const [requestStatus, setRequestStatus] = useState(null); // 'pending', 'accepted', 'rejected', 'cancelled', 'completed', 'started'
+  
+  // Atualizar refs quando os estados mudam
+  useEffect(() => {
+    driverInfoRef.current = driverInfo;
+  }, [driverInfo]);
+  
+  useEffect(() => {
+    requestStatusRef.current = requestStatus;
+  }, [requestStatus]);
   const [driverInfo, setDriverInfo] = useState(null);
   const [requestId, setRequestId] = useState(null);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
@@ -68,6 +77,8 @@ export default function HomeScreen({ navigation, route }) {
   const slideAnim = useRef(new Animated.Value(height)).current;
   const searchTimeoutRef = useRef(null);
   const proximityTimerRef = useRef(null);
+  const driverInfoRef = useRef(null);
+  const requestStatusRef = useRef(null);
   
   // Animações
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -257,12 +268,31 @@ export default function HomeScreen({ navigation, route }) {
     }
   }, [route?.params?.selectedDestination, location]);
 
-  // Cleanup effect for proximity timer
+  // Cleanup effect for timers and intervals
   useEffect(() => {
     return () => {
+      // Limpar timer de proximidade
       if (proximityTimerRef.current) {
         clearTimeout(proximityTimerRef.current);
         proximityTimerRef.current = null;
+      }
+      
+      // Limpar interval de movimento do motorista
+      if (window.driverMovementInterval) {
+        clearInterval(window.driverMovementInterval);
+        window.driverMovementInterval = null;
+      }
+      
+      // Limpar polling de localização
+      if (window.driverLocationPolling) {
+        clearInterval(window.driverLocationPolling);
+        window.driverLocationPolling = null;
+      }
+      
+      // Limpar interval de busca
+      if (window.driverSearchInterval) {
+        clearInterval(window.driverSearchInterval);
+        window.driverSearchInterval = null;
       }
     };
   }, []);
@@ -324,11 +354,33 @@ export default function HomeScreen({ navigation, route }) {
           // Handler para corrida aceita
           apiService.onEvent('ride_accepted', (data) => {
             console.log('🎉 [NOVO USUÁRIO] Corrida aceita pelo motorista:', data);
+            
+            // PREVENIR EVENTOS DUPLICADOS
+            if (requestStatus === 'accepted' && driversFound) {
+              console.log('⏭️ [DUPLICADO] Evento ride_accepted ignorado - já processado anteriormente');
+              return;
+            }
+            
+            // EXTRAIR DADOS DO VEÍCULO CORRETAMENTE
+            let vehicleData = null;
+            
+            // Tentar múltiplas fontes para dados do veículo
+            if (data.ride?.vehicleInfo) {
+              vehicleData = data.ride.vehicleInfo;
+              console.log('🚗 [VEÍCULO] Dados encontrados em data.ride.vehicleInfo:', vehicleData);
+            } else if (data.driver?.vehicleInfo) {
+              vehicleData = data.driver.vehicleInfo;
+              console.log('🚗 [VEÍCULO] Dados encontrados em data.driver.vehicleInfo:', vehicleData);
+            } else if (data.vehicleInfo) {
+              vehicleData = data.vehicleInfo;
+              console.log('🚗 [VEÍCULO] Dados encontrados em data.vehicleInfo:', vehicleData);
+            }
+            
             console.log('🚗 INFO DO MOTORISTA CHEGOU:', {
               motorista: data.driver,
               tempoEstimado: data.estimatedArrival,
               localizacao: data.driver?.location,
-              veiculo: data.driver?.vehicle,
+              veiculo: vehicleData,
               avaliacao: data.driver?.rating
             });
             
@@ -353,25 +405,31 @@ export default function HomeScreen({ navigation, route }) {
             }
             
             setRequestStatus('accepted');
+            console.log('📦 [NOVO USUÁRIO] Dados finais do veículo sendo salvos:', vehicleData);
+            
+            // SALVAR INFORMAÇÕES DO MOTORISTA COM DADOS CORRETOS DO VEÍCULO
             setDriverInfo({
-              id: data.driver?.id || data.driverId,
-              name: data.driver?.name || 'Motorista',
-              phone: data.driver?.phone || '',
-              vehicle: data.driver?.vehicle || {},
-              rating: data.driver?.rating || 0,
+              id: data.driver?.id || data.driverId || data.ride?.driverId,
+              name: data.driver?.name || data.ride?.driverName || 'Motorista',
+              phone: data.driver?.phone || data.ride?.driverPhone || '',
+              vehicleInfo: vehicleData || {},
+              rating: data.driver?.rating || data.ride?.rating || 0,
               location: data.driver?.location || null,
               estimatedArrival: data.estimatedArrival || '5-10 minutos'
             });
             
-            if (data.rideId) {
-              setRequestId(data.rideId);
+            if (data.rideId || data.ride?.id) {
+              setRequestId(data.rideId || data.ride.id);
             }
             
             if (data.ride) {
               setCurrentRide(prev => ({
                 ...prev,
                 ...data.ride,
-                driver: data.driver,
+                driver: {
+                  ...data.driver,
+                  vehicleInfo: vehicleData
+                },
                 status: 'accepted'
               }));
             }
@@ -379,7 +437,7 @@ export default function HomeScreen({ navigation, route }) {
             Toast.show({
               type: "success",
               text1: "Solicitação Aceita! 🎉",
-              text2: `${data.driver?.name || 'Motorista'} está a caminho - ${data.estimatedArrival || '5-10 min'}`,
+              text2: `${data.driver?.name || data.ride?.driverName || 'Motorista'} está a caminho - ${data.estimatedArrival || '5-10 min'}`,
               visibilityTime: 6000,
             });
           });
@@ -667,11 +725,33 @@ export default function HomeScreen({ navigation, route }) {
         // Handler para corrida aceita
         apiService.onEvent('ride_accepted', (data) => {
           console.log('🎉 [PASSAGEIRO JÁ REGISTRADO] Corrida aceita pelo motorista:', data);
+          
+          // PREVENIR EVENTOS DUPLICADOS
+          if (requestStatus === 'accepted' && driversFound) {
+            console.log('⏭️ [DUPLICADO] Evento ride_accepted ignorado - já processado anteriormente');
+            return;
+          }
+          
+          // EXTRAIR DADOS DO VEÍCULO CORRETAMENTE
+          let vehicleData = null;
+          
+          // Tentar múltiplas fontes para dados do veículo
+          if (data.ride?.vehicleInfo) {
+            vehicleData = data.ride.vehicleInfo;
+            console.log('🚗 [VEÍCULO] Dados encontrados em data.ride.vehicleInfo:', vehicleData);
+          } else if (data.driver?.vehicleInfo) {
+            vehicleData = data.driver.vehicleInfo;
+            console.log('🚗 [VEÍCULO] Dados encontrados em data.driver.vehicleInfo:', vehicleData);
+          } else if (data.vehicleInfo) {
+            vehicleData = data.vehicleInfo;
+            console.log('🚗 [VEÍCULO] Dados encontrados em data.vehicleInfo:', vehicleData);
+          }
+          
           console.log('🚗 INFO DO MOTORISTA CHEGOU (Passageiro Registrado):', {
             motorista: data.driver,
             tempoEstimado: data.estimatedArrival,
             localizacao: data.driver?.location,
-            veiculo: data.driver?.vehicle,
+            veiculo: vehicleData,
             avaliacao: data.driver?.rating
           });
           
@@ -696,25 +776,31 @@ export default function HomeScreen({ navigation, route }) {
           }
           
           setRequestStatus('accepted');
+          console.log('📦 Dados finais do veículo sendo salvos:', vehicleData);
+          
+          // SALVAR INFORMAÇÕES DO MOTORISTA COM DADOS CORRETOS DO VEÍCULO
           setDriverInfo({
-            id: data.driver?.id || data.driverId,
-            name: data.driver?.name || 'Motorista',
-            phone: data.driver?.phone || '',
-            vehicle: data.driver?.vehicle || {},
-            rating: data.driver?.rating || 0,
+            id: data.driver?.id || data.driverId || data.ride?.driverId,
+            name: data.driver?.name || data.ride?.driverName || 'Motorista',
+            phone: data.driver?.phone || data.ride?.driverPhone || '',
+            vehicleInfo: vehicleData || {},
+            rating: data.driver?.rating || data.ride?.rating || 0,
             location: data.driver?.location || null,
             estimatedArrival: data.estimatedArrival || '5-10 minutos'
           });
           
-          if (data.rideId) {
-            setRequestId(data.rideId);
+          if (data.rideId || data.ride?.id) {
+            setRequestId(data.rideId || data.ride.id);
           }
           
           if (data.ride) {
             setCurrentRide(prev => ({
               ...prev,
               ...data.ride,
-              driver: data.driver,
+              driver: {
+                ...data.driver,
+                vehicleInfo: vehicleData
+              },
               status: 'accepted'
             }));
           }
@@ -722,7 +808,7 @@ export default function HomeScreen({ navigation, route }) {
           Toast.show({
             type: "success",
             text1: "Solicitação Aceita! 🎉",
-            text2: `${data.driver?.name || 'Motorista'} está a caminho - ${data.estimatedArrival || '5-10 min'}`,
+            text2: `${data.driver?.name || data.ride?.driverName || 'Motorista'} está a caminho - ${data.estimatedArrival || '5-10 min'}`,
             visibilityTime: 6000,
           });
         });
@@ -987,11 +1073,76 @@ export default function HomeScreen({ navigation, route }) {
             // Initialize OpenStreetMap with Leaflet
             const map = L.map('mapContainer').setView([${location?.coords.latitude || -8.8390}, ${location?.coords.longitude || 13.2894}], 15);
             
-            // Add OpenStreetMap tiles
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19
-            }).addTo(map);
+            // Tile servers - usar CartoDB Voyager como padrão (mais parecido com Google Maps)
+            const tileServers = [
+                {
+                    name: 'CartoDB Voyager (Google-like)',
+                    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                    options: {
+                        attribution: '© OpenStreetMap contributors, © CartoDB',
+                        subdomains: 'abcd',
+                        maxZoom: 20,
+                        tileSize: 256,
+                        zoomOffset: 0
+                    }
+                },
+                {
+                    name: 'CartoDB Voyager Labeled',  
+                    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}.png',
+                    options: {
+                        attribution: '© OpenStreetMap contributors, © CartoDB',
+                        subdomains: 'abcd',
+                        maxZoom: 20
+                    }
+                },
+                {
+                    name: 'CartoDB Positron (Clean)',
+                    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+                    options: {
+                        attribution: '© OpenStreetMap contributors, © CartoDB',
+                        subdomains: 'abcd',
+                        maxZoom: 20
+                    }
+                },
+                {
+                    name: 'ESRI World Street (Google-like)',
+                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                    options: {
+                        attribution: '© Esri, © OpenStreetMap contributors',
+                        maxZoom: 19
+                    }
+                },
+                {
+                    name: 'Wikimedia Maps',
+                    url: 'https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png',
+                    options: {
+                        attribution: '© OpenStreetMap contributors, © Wikimedia',
+                        maxZoom: 19
+                    }
+                }
+            ];
+            
+            // Sempre usar o primeiro (CartoDB Voyager) que é mais parecido com Google Maps
+            const selectedServer = tileServers[0]; // Usar sempre CartoDB Voyager
+            console.log('Using tile server:', selectedServer.name);
+            
+            // Add tile layer with error handling
+            const tileLayer = L.tileLayer(selectedServer.url, {
+                ...selectedServer.options,
+                errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+                crossOrigin: true
+            });
+            
+            // Add error handling for tile loading - tentar próximo servidor se falhar
+            let currentServerIndex = 0;
+            tileLayer.on('tileerror', function(error, tile) {
+                console.log('Tile error, trying alternative server...');
+                currentServerIndex = (currentServerIndex + 1) % tileServers.length;
+                const nextServer = tileServers[currentServerIndex];
+                tile.src = tile.src.replace(selectedServer.url.split('{')[0], nextServer.url.split('{')[0]);
+            });
+            
+            tileLayer.addTo(map);
 
             // Custom markers and route
             let userLocationGroup = null;
@@ -1110,10 +1261,29 @@ export default function HomeScreen({ navigation, route }) {
                         routeToDriver = null;
                     }
                     
-                    const routeUrl = \`https://router.project-osrm.org/route/v1/driving/\${userLng},\${userLat};\${driverLng},\${driverLat}?overview=full&geometries=geojson\`;
+                    // Try multiple routing services with fallback
+                    const routingServices = [
+                        \`https://router.project-osrm.org/route/v1/driving/\${userLng},\${userLat};\${driverLng},\${driverLat}?overview=full&geometries=geojson\`,
+                        \`https://api.openrouteservice.org/v2/directions/driving-car?api_key=5b3ce3597851110001cf62488a7e4a14a9164a8d8a3c49f973c8e8ef&start=\${userLng},\${userLat}&end=\${driverLng},\${driverLat}\`
+                    ];
                     
-                    const response = await fetch(routeUrl);
-                    const data = await response.json();
+                    let routeUrl = routingServices[0];
+                    let data = null;
+                    
+                    // Try each service until one works
+                    for (let i = 0; i < routingServices.length; i++) {
+                        try {
+                            routeUrl = routingServices[i];
+                            console.log('Trying routing service:', routeUrl.split('?')[0]);
+                            const response = await fetch(routeUrl);
+                            if (response.ok) {
+                                data = await response.json();
+                                break;
+                            }
+                        } catch (err) {
+                            console.log('Service failed, trying next...');
+                        }
+                    }
                     
                     if (data.routes && data.routes?.length > 0) {
                         const route = data.routes[0];
@@ -1162,11 +1332,29 @@ export default function HomeScreen({ navigation, route }) {
                         routeLine = null;
                     }
                     
-                    // OSRM API call for driving route
-                    const routeUrl = \`https://router.project-osrm.org/route/v1/driving/\${startLng},\${startLat};\${endLng},\${endLat}?overview=full&geometries=geojson\`;
+                    // Try multiple routing services with fallback
+                    const routingServices = [
+                        \`https://router.project-osrm.org/route/v1/driving/\${startLng},\${startLat};\${endLng},\${endLat}?overview=full&geometries=geojson\`,
+                        \`https://api.openrouteservice.org/v2/directions/driving-car?api_key=5b3ce3597851110001cf62488a7e4a14a9164a8d8a3c49f973c8e8ef&start=\${startLng},\${startLat}&end=\${endLng},\${endLat}\`
+                    ];
                     
-                    const response = await fetch(routeUrl);
-                    const data = await response.json();
+                    let routeUrl = routingServices[0];
+                    let data = null;
+                    
+                    // Try each service until one works
+                    for (let i = 0; i < routingServices.length; i++) {
+                        try {
+                            routeUrl = routingServices[i];
+                            console.log('Trying routing service:', routeUrl.split('?')[0]);
+                            const response = await fetch(routeUrl);
+                            if (response.ok) {
+                                data = await response.json();
+                                break;
+                            }
+                        } catch (err) {
+                            console.log('Service failed, trying next...');
+                        }
+                    }
                     
                     if (data.routes && data.routes?.length > 0) {
                         const route = data.routes[0];
@@ -1555,25 +1743,50 @@ export default function HomeScreen({ navigation, route }) {
       console.log('🛣️ Calculating route info from React Native...');
       console.log(`📍 From: ${startLat}, ${startLng} To: ${endLat}, ${endLng}`);
       
-      const routeUrl = `${OSRM_BASE_URL}/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`;
-      console.log('🌐 OSRM URL:', routeUrl);
-      
-      const response = await fetch(routeUrl, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'TaxiApp/1.0'
+      // Try multiple routing services
+      const routingServices = [
+        {
+          url: `${OSRM_BASE_URL}/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`,
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'TravelApp/1.0'
+          }
         },
-        timeout: 10000 // 10 segundos de timeout
-      });
+        {
+          url: `https://api.openrouteservice.org/v2/directions/driving-car?api_key=5b3ce3597851110001cf62488a7e4a14a9164a8d8a3c49f973c8e8ef&start=${startLng},${startLat}&end=${endLng},${endLat}`,
+          headers: {
+            'Accept': 'application/json'
+          }
+        }
+      ];
       
-      console.log('📡 Response status:', response.status);
+      let data = null;
+      let response = null;
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // Try each service until one works
+      for (const service of routingServices) {
+        try {
+          console.log('Trying routing service:', service.url.split('?')[0]);
+          response = await fetch(service.url, {
+            method: 'GET',
+            headers: service.headers,
+            timeout: 10000
+          });
+          
+          console.log('📡 Response status:', response.status);
+          
+          if (response.ok) {
+            data = await response.json();
+            break;
+          }
+        } catch (err) {
+          console.log('Routing service failed, trying next...');
+        }
       }
       
-      const data = await response.json();
+      if (!data) {
+        throw new Error('All routing services failed');
+      }
       console.log('📊 OSRM Response:', JSON.stringify(data, null, 2));
       
       if (data.routes && data.routes?.length > 0) {
@@ -1650,17 +1863,51 @@ export default function HomeScreen({ navigation, route }) {
       
       console.log('📍 User location:', userLat, userLng);
       
-      // Nominatim Search API
-      const searchUrl = `${NOMINATIM_BASE_URL}/search?format=json&q=${encodeURIComponent(query)}&limit=20&addressdetails=1&extratags=1&namedetails=1&accept-language=pt&countrycodes=AO`;
-      
-      console.log('🌐 Search URL:', searchUrl);
-      
-      const response = await fetch(searchUrl, {
-        headers: {
-          'User-Agent': 'TaxiApp/1.0 (contact@example.com)'
+      // Try multiple geocoding services for search
+      const searchServices = [
+        {
+          url: `https://nominatim.openstreetmap.fr/search?format=json&q=${encodeURIComponent(query)}&limit=20&addressdetails=1&extratags=1&namedetails=1&accept-language=pt&countrycodes=AO`,
+          headers: {
+            'User-Agent': 'TravelApp/1.0 (Angola Taxi Service)',
+            'Referer': 'https://travel-app.com'
+          }
+        },
+        {
+          url: `${NOMINATIM_BASE_URL}/search?format=json&q=${encodeURIComponent(query)}&limit=20&addressdetails=1&extratags=1&namedetails=1&accept-language=pt&countrycodes=AO`,
+          headers: {
+            'User-Agent': 'TravelApp/1.0 (contact@travel-app.com)',
+            'Referer': 'https://travel-app.com'
+          }
+        },
+        {
+          url: `https://us1.locationiq.com/v1/search.php?key=pk.a5c3fbf2119bfb2275b62eddbccd76b3&q=${encodeURIComponent(query)}&format=json&limit=20&countrycodes=AO&accept-language=pt`,
+          headers: {}
         }
-      });
-      const data = await response.json();
+      ];
+      
+      let data = null;
+      
+      // Try each service until one works
+      for (const service of searchServices) {
+        try {
+          console.log('Trying search service:', service.url.split('?')[0]);
+          const response = await fetch(service.url, {
+            headers: service.headers
+          });
+          
+          if (response.ok) {
+            data = await response.json();
+            console.log('📡 Search API response:', data);
+            break;
+          }
+        } catch (err) {
+          console.log('Search service failed, trying next...');
+        }
+      }
+      
+      if (!data) {
+        throw new Error('All search services failed');
+      }
       
       console.log('📡 Nominatim API response:', data);
       
@@ -1845,13 +2092,335 @@ export default function HomeScreen({ navigation, route }) {
       setDriverInfo(null);
       setRequestId(null);
 
+      // Conectar WebSocket se não estiver conectado
+      if (!apiService.socket || !apiService.isConnected) {
+        console.log('🔌 Conectando WebSocket...');
+        const socketUserId = passengerProfile?.id || passengerProfile?.phone || 'passenger_temp';
+        apiService.connectSocket('passenger', socketUserId);
+        // Aguardar um pouco para conexão
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      // CRÍTICO: Registrar callback para ride_accepted ANTES de criar a solicitação
+      console.log('🎯 Registrando callback para ride_accepted...');
+      const removeCallback = apiService.onEvent('ride_accepted', (data) => {
+        console.log('🎉 CORRIDA ACEITA PELO MOTORISTA!', data);
+        
+        // Parar busca imediatamente
+        setIsSearchingDrivers(false);
+        setDriversFound(true);
+        setRequestStatus('accepted');
+        
+        // Limpar intervalos
+        if (window.driverSearchInterval) {
+          clearInterval(window.driverSearchInterval);
+          window.driverSearchInterval = null;
+        }
+        
+        // Extrair dados do veículo
+        const vehicleData = data.vehicleInfo || data.ride?.vehicleInfo || data.driver?.vehicleInfo || {};
+        console.log('🚗 Dados do veículo:', vehicleData);
+        
+        // Salvar informações do motorista
+        setDriverInfo({
+          id: data.driverId || data.driver?.id || data.ride?.driverId,
+          name: data.driverName || data.driver?.name || data.ride?.driverName || 'Motorista',
+          phone: data.driverPhone || data.driver?.phone || data.ride?.driverPhone || '',
+          vehicleInfo: vehicleData,
+          rating: data.driver?.rating || data.ride?.rating || 4.5,
+          estimatedArrival: data.estimatedArrival || '5-10 minutos'
+        });
+        
+        // Atualizar corrida atual
+        if (data.ride) {
+          setCurrentRide(data.ride);
+        }
+        
+        // Mostrar notificação
+        Toast.show({
+          type: "success",
+          text1: "Motorista a caminho! 🚗",
+          text2: `${data.driverName || data.driver?.name || 'Motorista'} - ${vehicleData.model || 'Veículo'} ${vehicleData.color || ''}`,
+          visibilityTime: 5000,
+        });
+        
+        // Mostrar localização do motorista no mapa
+        // IMPORTANTE: Se não há localização, simular uma próxima
+        let driverLoc = data.driver?.location || data.driverLocation;
+        
+        if (!driverLoc || (!driverLoc.lat && !driverLoc.latitude)) {
+          console.log('⚠️ Localização do motorista não disponível, usando localização simulada...');
+          // Simular localização próxima (500m de distância)
+          if (location?.coords) {
+            const offsetLat = (Math.random() - 0.5) * 0.01; // ~500m
+            const offsetLng = (Math.random() - 0.5) * 0.01; // ~500m
+            driverLoc = {
+              lat: location.coords.latitude + offsetLat,
+              lng: location.coords.longitude + offsetLng
+            };
+            console.log('🎯 Localização simulada criada:', driverLoc);
+          } else {
+            console.error('❌ Não foi possível criar localização simulada');
+            return;
+          }
+        }
+        
+        // Iniciar polling de localização real do motorista
+        console.log('📍 Iniciando polling de localização real do motorista...');
+        const startLocationPolling = () => {
+          const pollingInterval = setInterval(async () => {
+            // Usar refs para obter valores atuais
+            const currentDriverInfo = driverInfoRef.current;
+            const currentStatus = requestStatusRef.current;
+            
+            if (!currentDriverInfo || !currentDriverInfo.id || 
+                currentStatus === 'cancelled' || 
+                currentStatus === 'completed') {
+              console.log('🛑 Parando polling - corrida finalizada ou motorista não definido');
+              clearInterval(pollingInterval);
+              if (window.driverLocationPolling === pollingInterval) {
+                window.driverLocationPolling = null;
+              }
+              return;
+            }
+            
+            try {
+              // Requisitar localização via socket
+              if (apiService.socket && apiService.isConnected) {
+                apiService.socket.emit('request_driver_location', {
+                  driverId: driverInfo.id,
+                  requestId: requestId || currentRide?.id
+                });
+                console.log('📡 Solicitando localização real do motorista...');
+              }
+            } catch (error) {
+              console.error('❌ Erro ao solicitar localização:', error);
+            }
+          }, 10000); // A cada 10 segundos
+          
+          // Salvar referência do interval
+          window.driverLocationPolling = pollingInterval;
+        };
+        
+        // Iniciar polling após 3 segundos
+        setTimeout(startLocationPolling, 3000);
+        
+        console.log('🗺️ Usando localização do motorista:', driverLoc);
+        setDriverLocation(driverLoc);
+        
+          // SIMULAR MOVIMENTO DO MOTORISTA (apenas se não há polling ativo)
+          if (location?.coords && driverLoc && !window.driverLocationPolling) {
+            console.log('🎮 Iniciando simulação de movimento do motorista');
+            
+            // Limpar simulação anterior se existir
+            if (window.driverMovementInterval) {
+              clearInterval(window.driverMovementInterval);
+            }
+            
+            // Função para simular movimento
+            const simulateMovement = () => {
+              let steps = 0;
+              const maxSteps = 30; // 30 passos = 1.5 minutos de simulação
+            
+            const movementInterval = setInterval(() => {
+              // Usar refs para obter valores atuais
+              const currentDriverInfo = driverInfoRef.current;
+              const currentStatus = requestStatusRef.current;
+              
+              if (!currentDriverInfo || !currentDriverInfo.id || 
+                  currentStatus === 'cancelled' || 
+                  currentStatus === 'completed') {
+                console.log('❌ Parando simulação - corrida finalizada');
+                clearInterval(movementInterval);
+                if (window.driverMovementInterval === movementInterval) {
+                  window.driverMovementInterval = null;
+                }
+                return;
+              }
+              
+              if (steps >= maxSteps) {
+                console.log('🎯 Motorista chegou (simulação)');
+                setDriverArrived(true);
+                // NÃO limpar o intervalo aqui - manter motorista visível
+                // Apenas parar de mover
+                return;
+              }
+              
+              // Calcular nova posição (mover em direção ao passageiro)
+              const currentLoc = driverLocation || driverLoc;
+              const targetLat = location.coords.latitude;
+              const targetLng = location.coords.longitude;
+              
+              const latDiff = targetLat - (currentLoc.lat || currentLoc.latitude);
+              const lngDiff = targetLng - (currentLoc.lng || currentLoc.longitude);
+              
+              // Mover 5% da distância a cada passo (mais lento)
+              const newLat = (currentLoc.lat || currentLoc.latitude) + (latDiff * 0.05);
+              const newLng = (currentLoc.lng || currentLoc.longitude) + (lngDiff * 0.05);
+              
+              // Adicionar variação aleatória pequena
+              const randomLat = (Math.random() - 0.5) * 0.0002;
+              const randomLng = (Math.random() - 0.5) * 0.0002;
+              
+              const newLocation = {
+                lat: newLat + randomLat,
+                lng: newLng + randomLng
+              };
+              
+              console.log(`🚗 [SIMULAÇÃO] Passo ${steps + 1}/${maxSteps}:`, newLocation);
+              
+              // Atualizar estado diretamente e disparar evento
+              setDriverLocation(newLocation);
+              
+              // Disparar evento de atualização de localização
+              if (apiService.eventCallbacks && apiService.eventCallbacks.has('driver_location_update')) {
+                const currentDriver = driverInfoRef.current;
+                apiService.triggerCallbacks('driver_location_update', {
+                  driverId: currentDriver?.id || data.driver?.id || data.driverId,
+                  location: newLocation,
+                  estimatedArrival: `${Math.max(1, maxSteps - steps)} min`
+                });
+              }
+              
+              // Atualizar marcador no mapa diretamente
+              if (webViewRef.current) {
+                const updateScript = `
+                  if (typeof window.__updateDriverLocation === 'function') {
+                    window.__updateDriverLocation(
+                      ${newLocation.lat}, 
+                      ${newLocation.lng}
+                    );
+                  }
+                `;
+                webViewRef.current.injectJavaScript(updateScript);
+              }
+              
+              steps++;
+            }, 3000); // Atualizar a cada 3 segundos (mais frequente)
+            
+            // Salvar intervalo para poder parar se necessário
+            window.driverMovementInterval = movementInterval;
+          };
+          
+          // Iniciar simulação após 2 segundos
+          setTimeout(simulateMovement, 2000);
+        }
+        
+        // Atualizar mapa para mostrar motorista
+        if (webViewRef.current && driverLoc.lat && driverLoc.lng) {
+            const driverScript = `
+              if (typeof window.__addDriverMarker === 'function') {
+                window.__addDriverMarker(
+                  ${driverLoc.lat || driverLoc.latitude}, 
+                  ${driverLoc.lng || driverLoc.longitude},
+                  ${JSON.stringify(data.driverName || 'Motorista')}
+                );
+                console.log('✅ Marcador do motorista adicionado no mapa');
+                
+                // Calcular rota do motorista até o passageiro
+                if (window.currentUserLocation) {
+                  window.__calculateRouteToDriver(
+                    window.currentUserLocation.lat,
+                    window.currentUserLocation.lng,
+                    ${driverLoc.lat || driverLoc.latitude},
+                    ${driverLoc.lng || driverLoc.longitude}
+                  ).then(() => {
+                    console.log('✅ Rota do motorista calculada');
+                  });
+                }
+              } else {
+                console.error('❌ Função __addDriverMarker não encontrada');
+              }
+            `;
+            webViewRef.current.injectJavaScript(driverScript);
+        }
+      });
+      
+      // Guardar função para remover callback se necessário
+      window.removeRideAcceptedCallback = removeCallback;
+      
+      // Registrar callback para atualização de localização do motorista
+      console.log('📍 Registrando callback para atualização de localização...');
+      apiService.onEvent('driver_location_update', (data) => {
+        console.log('📍 Localização do motorista atualizada:', data);
+        
+        // Verificar se é o motorista da corrida atual
+        if (driverInfo && data.driverId === driverInfo.id) {
+          // Atualizar estado da localização
+          const newLocation = {
+            lat: data.location?.lat || data.location?.latitude,
+            lng: data.location?.lng || data.location?.longitude
+          };
+          
+          setDriverLocation(newLocation);
+          
+          // Atualizar informações do motorista
+          setDriverInfo(prev => ({
+            ...prev,
+            location: newLocation,
+            estimatedArrival: data.estimatedArrival || prev.estimatedArrival
+          }));
+          
+          // Atualizar mapa em tempo real
+          if (webViewRef.current && newLocation.lat && newLocation.lng) {
+            const updateScript = `
+              if (typeof window.__updateDriverLocation === 'function') {
+                window.__updateDriverLocation(
+                  ${newLocation.lat}, 
+                  ${newLocation.lng}, 
+                  ${JSON.stringify(driverInfo.name || 'Motorista')}
+                );
+                console.log('🔄 Localização do motorista atualizada no mapa');
+              } else if (typeof window.__addDriverMarker === 'function') {
+                // Fallback: adicionar marcador se update não existir
+                window.__addDriverMarker(
+                  ${newLocation.lat}, 
+                  ${newLocation.lng},
+                  ${JSON.stringify(driverInfo.name || 'Motorista')}
+                );
+              }
+            `;
+            webViewRef.current.injectJavaScript(updateScript);
+            
+            // Calcular distância até o passageiro
+            if (location?.coords) {
+              const distance = calculateDistance(
+                location.coords.latitude,
+                location.coords.longitude,
+                newLocation.lat,
+                newLocation.lng
+              );
+              
+              console.log(`📏 Distância até o motorista: ${Math.round(distance)}m`);
+              
+              // Se motorista está muito perto (menos de 50 metros)
+              if (distance <= 50 && !isDriverNearby) {
+                setIsDriverNearby(true);
+                Toast.show({
+                  type: "info",
+                  text1: "Motorista chegou! 🚗",
+                  text2: "Prepare-se para embarcar",
+                  visibilityTime: 4000,
+                });
+              }
+            }
+          }
+        }
+      })
+
       // Criar solicitação de corrida via API
-      if (passengerProfile?.apiPassengerId && rideEstimate) {
+      // FIX: Removido check de apiPassengerId que sempre falhava
+      if (passengerProfile && rideEstimate) {
         try {
-          console.log('🚗 Criando corrida para passageiro:', passengerProfile.apiPassengerId);
+          // Gerar ID se não existir
+          const passengerId = passengerProfile.apiPassengerId || 
+                              passengerProfile.id || 
+                              passengerProfile.phone || 
+                              `passenger_${Date.now()}`;
+          console.log('🚗 Criando corrida para passageiro:', passengerId);
           const rideData = {
-            passengerId: passengerProfile.apiPassengerId,
-            passengerName: passengerProfile.name,
+            passengerId: passengerId, // Usar o ID gerado acima
+            passengerName: passengerProfile.name || 'Passageiro',
             passengerPhone: passengerProfile.phone,
             pickup: {
               address: currentLocationName,
@@ -1884,21 +2453,38 @@ export default function HomeScreen({ navigation, route }) {
               (updatedRide) => {
                 console.log('🔍 [POLLING] Status atualizado:', updatedRide.status);
                 
+                console.log('🔍 [POLLING DEBUG] Dados completos do updatedRide:', JSON.stringify(updatedRide, null, 2));
+                console.log('🔍 [POLLING DEBUG] Status atual:', updatedRide.status);
+                console.log('🔍 [POLLING DEBUG] Status anterior:', requestStatus);
+                
                 // Se corrida foi aceita e ainda não tínhamos essa informação
                 if (updatedRide.status === 'accepted' && requestStatus !== 'accepted') {
                   console.log('🎆 [POLLING] Corrida aceita detectada via polling!');
                   
+                  // EXTRAIR DADOS DO VEÍCULO DO POLLING
+                  let vehicleData = updatedRide.vehicleInfo || {};
+                  console.log('🚗 [POLLING] Dados do veículo encontrados:', vehicleData);
+                  
                   // Simular evento ride_accepted para atualizar UI
                   const acceptedData = {
                     rideId: updatedRide.id,
-                    ride: updatedRide,
-                    driver: updatedRide.driver || {
-                      id: updatedRide.driverId,
-                      name: updatedRide.driverName || 'Motorista'
+                    ride: {
+                      ...updatedRide,
+                      vehicleInfo: vehicleData
                     },
+                    driver: {
+                      id: updatedRide.driverId,
+                      name: updatedRide.driverName || 'Motorista',
+                      phone: updatedRide.driverPhone,
+                      rating: updatedRide.rating || 4.8,
+                      vehicleInfo: vehicleData
+                    },
+                    vehicleInfo: vehicleData,
                     estimatedArrival: '5-10 minutos',
                     fromPolling: true
                   };
+                  
+                  console.log('🚀 [POLLING] Disparando ride_accepted via polling:', acceptedData);
                   
                   // Disparar callbacks manualmente
                   apiService.triggerCallbacks('ride_accepted', acceptedData);
@@ -1985,9 +2571,12 @@ export default function HomeScreen({ navigation, route }) {
             
             return 30;
           }
-          return newTime;
-        });
-      }, 1000);
+        return newTime;
+      });
+    }, 1000);
+    
+    // Salvar interval globalmente para poder parar quando motorista aceitar
+    window.driverSearchInterval = driverSearchInterval;
       
       // Armazenar referência global para poder cancelar de outros lugares
       window.driverSearchInterval = driverSearchInterval;
@@ -2035,14 +2624,15 @@ export default function HomeScreen({ navigation, route }) {
   useEffect(() => {
     if (requestStatus === 'accepted') {
       // Ajustar valores para melhor visibilidade
-      const targetValue = isDropdownMinimized ? height - 120 : 0; // Deixar 120px visível quando minimizado
+      // Quando minimizado, deixar 180px visível (suficiente para ver e clicar)
+      const targetValue = isDropdownMinimized ? height - 180 : 0; 
       console.log('🎛️ Animando dropdown:', { isDropdownMinimized, targetValue, height });
       
       Animated.spring(slideAnim, {
         toValue: targetValue,
         useNativeDriver: true,
         tension: 100,
-        friction: 8,
+        friction: 12, // Mais fricção para movimento mais suave
       }).start();
       
       // Simular localização do motorista quando aceito
@@ -2075,22 +2665,26 @@ export default function HomeScreen({ navigation, route }) {
     if (driverLocation && location && webViewRef.current && !driverArrived) {
       // Show route to driver when driver hasn't arrived yet - USAR NOVA FUNÇÃO MELHORADA
       console.log('🚗 [ENHANCED] Configurando visualização avançada da corrida aceita:', {
-        driverLat: driverLocation.latitude,
-        driverLng: driverLocation.longitude,
+        driverLat: driverLocation.lat || driverLocation.latitude,
+        driverLng: driverLocation.lng || driverLocation.longitude,
         driverName: driverInfo?.name,
         userLat: location.coords.latitude,
         userLng: location.coords.longitude
       });
       
+      const driverLat = driverLocation.lat || driverLocation.latitude;
+      const driverLng = driverLocation.lng || driverLocation.longitude;
+      
       const enhancedDriverScript = `
         console.log('🎆 [ENHANCED] Executando visualização avançada da corrida aceita');
+        console.log('Localização do motorista: ${driverLat}, ${driverLng}');
         
         // Usar nova função avançada para mostrar corrida aceita
         if (typeof window.__showRideAcceptedView === 'function') {
           console.log('🎉 [ENHANCED] Configurando visualização completa da corrida aceita');
           window.__showRideAcceptedView(
-            ${driverLocation.latitude}, 
-            ${driverLocation.longitude}, 
+            ${driverLat}, 
+            ${driverLng},
             ${JSON.stringify(driverInfo?.name || 'Motorista')},
             ${location.coords.latitude},
             ${location.coords.longitude}
@@ -2101,11 +2695,11 @@ export default function HomeScreen({ navigation, route }) {
           console.log('⚠️ [ENHANCED] Função avançada não encontrada, usando fallback');
           
           if (typeof window.__addDriverMarker === 'function') {
-            window.__addDriverMarker(${driverLocation.latitude}, ${driverLocation.longitude}, ${JSON.stringify(driverInfo?.name || 'Motorista')});
+            window.__addDriverMarker(${driverLat}, ${driverLng}, ${JSON.stringify(driverInfo?.name || 'Motorista')});
           }
           
           if (typeof window.__calculateRouteToDriver === 'function') {
-            window.__calculateRouteToDriver(${location.coords.latitude}, ${location.coords.longitude}, ${driverLocation.latitude}, ${driverLocation.longitude});
+            window.__calculateRouteToDriver(${location.coords.latitude}, ${location.coords.longitude}, ${driverLat}, ${driverLng});
           }
         }
       `;
@@ -2197,15 +2791,34 @@ export default function HomeScreen({ navigation, route }) {
     setRequestId(null);
     setCurrentRide(null);
     setRideEstimate(null);
+    setDriverLocation(null);
+    setDriverArrived(false);
+    setIsDriverNearby(false);
     
-    // Clear route on map
-    const js = `window.__clearRoute(); true;`;
-    webViewRef.current?.injectJavaScript(js);
+    // Clear route and driver marker on map
+    const clearScript = `
+      if (typeof window.__clearRoute === 'function') {
+        window.__clearRoute();
+      }
+      if (typeof window.__clearDriverMarker === 'function') {
+        window.__clearDriverMarker();
+      }
+      true;
+    `;
+    webViewRef.current?.injectJavaScript(clearScript);
     
-    // Clear any ongoing search intervals
+    // Clear all intervals
     if (window.driverSearchInterval) {
       clearInterval(window.driverSearchInterval);
       window.driverSearchInterval = null;
+    }
+    if (window.driverMovementInterval) {
+      clearInterval(window.driverMovementInterval);
+      window.driverMovementInterval = null;
+    }
+    if (window.driverLocationPolling) {
+      clearInterval(window.driverLocationPolling);
+      window.driverLocationPolling = null;
     }
   };
 
@@ -2271,17 +2884,53 @@ export default function HomeScreen({ navigation, route }) {
         return nearestKnownLocation;
       }
       
-      // Usar Nominatim para geocodificação reversa
-      const reverseUrl = `${NOMINATIM_BASE_URL}/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=pt&addressdetails=1`;
-      
-      const response = await fetch(reverseUrl, {
-        headers: {
-          'User-Agent': 'TaxiApp/1.0 (contact@example.com)'
+      // Try multiple geocoding services with fallback
+      const geocodingServices = [
+        {
+          url: `https://nominatim.openstreetmap.fr/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=pt&addressdetails=1`,
+          headers: {
+            'User-Agent': 'TravelApp/1.0 (Angola Taxi Service)',
+            'Referer': 'https://travel-app.com'
+          }
+        },
+        {
+          url: `${NOMINATIM_BASE_URL}/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=pt&addressdetails=1`,
+          headers: {
+            'User-Agent': 'TravelApp/1.0 (contact@travel-app.com)',
+            'Referer': 'https://travel-app.com'
+          }
+        },
+        {
+          url: `https://us1.locationiq.com/v1/reverse.php?key=pk.a5c3fbf2119bfb2275b62eddbccd76b3&lat=${latitude}&lon=${longitude}&format=json&accept-language=pt`,
+          headers: {}
         }
-      });
+      ];
       
-      const data = await response.json();
-      console.log('📍 Resultado da geocodificação reversa:', data);
+      let response = null;
+      let data = null;
+      
+      // Try each service until one works
+      for (const service of geocodingServices) {
+        try {
+          console.log('Trying geocoding service:', service.url.split('?')[0]);
+          response = await fetch(service.url, {
+            headers: service.headers
+          });
+          
+          if (response.ok) {
+            data = await response.json();
+            break;
+          }
+        } catch (err) {
+          console.log('Geocoding service failed, trying next...');
+        }
+      }
+      
+      if (!data) {
+        throw new Error('All geocoding services failed');
+      }
+      
+      console.log('🔍 Resultado da geocodificação reversa:', data);
       
       if (data && data.display_name) {
         // Extrair o nome mais relevante (primeiro item antes da primeira vírgula)
@@ -2803,8 +3452,10 @@ export default function HomeScreen({ navigation, route }) {
           {/* Handle Bar - Área clicável melhorada */}
           <TouchableOpacity 
             style={[styles.dropdownHandleContainer, {
-              paddingVertical: isDropdownMinimized ? 20 : 8, // Área maior quando minimizado
-              backgroundColor: isDropdownMinimized ? 'rgba(66, 133, 244, 0.1)' : 'transparent'
+              paddingVertical: isDropdownMinimized ? 15 : 8,
+              backgroundColor: isDropdownMinimized ? 'rgba(66, 133, 244, 0.05)' : 'transparent',
+              borderTopWidth: isDropdownMinimized ? 2 : 0,
+              borderTopColor: '#4285F4',
             }]}
             onPress={() => {
               console.log('🎛️ Alternando estado do dropdown:', !isDropdownMinimized);
@@ -2812,9 +3463,12 @@ export default function HomeScreen({ navigation, route }) {
             }}
             activeOpacity={0.7}
           >
-            <View style={styles.dropdownHandle} />
+            <View style={[styles.dropdownHandle, isDropdownMinimized && { backgroundColor: '#4285F4', height: 5 }]} />
             {isDropdownMinimized && (
-              <Text style={styles.expandHint}>Toque para expandir</Text>
+              <View style={styles.expandHintContainer}>
+                <MaterialIcons name="keyboard-arrow-up" size={20} color="#4285F4" />
+                <Text style={styles.expandHint}>Toque para ver detalhes</Text>
+              </View>
             )}
           </TouchableOpacity>
           
@@ -2825,16 +3479,27 @@ export default function HomeScreen({ navigation, route }) {
                 <View style={styles.driverAvatarSmall}>
                   <MaterialIcons name="person" size={20} color="#4285F4" />
                 </View>
-                                 <View style={styles.minimizedInfo}>
-                   <Text style={styles.minimizedDriverName}>{driverInfo.name}</Text>
-                   <Text style={styles.minimizedStatus}>
-                     {driverArrived ? 'Chegou • Indo ao destino' : `A caminho • ${driverInfo.estimatedArrival}`}
-                   </Text>
-                 </View>
-                <TouchableOpacity style={styles.callButtonSmall} onPress={handleCallDriver}>
-                  <MaterialIcons name="phone" size={20} color="#ffffff" />
-                </TouchableOpacity>
+                <View style={styles.minimizedInfo}>
+                  <Text style={styles.minimizedDriverName}>{driverInfo.name}</Text>
+                  <Text style={styles.minimizedStatus}>
+                    {driverArrived ? '🚦 Chegou • Indo ao destino' : `🚗 A caminho • ${driverInfo.estimatedArrival}`}
+                  </Text>
+                </View>
+                <View style={styles.minimizedActions}>
+                  <TouchableOpacity style={styles.callButtonSmall} onPress={handleCallDriver}>
+                    <MaterialIcons name="phone" size={20} color="#ffffff" />
+                  </TouchableOpacity>
+                </View>
               </View>
+              
+              {/* Botão de cancelar sempre visível mesmo minimizado */}
+              <TouchableOpacity 
+                style={[styles.cancelButtonMinimized]} 
+                onPress={handleNewSearch}
+              >
+                <MaterialIcons name="close" size={16} color="#DC2626" />
+                <Text style={styles.cancelButtonTextMinimized}>Cancelar</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             /* Versão Expandida */
@@ -2883,13 +3548,13 @@ export default function HomeScreen({ navigation, route }) {
                   <View style={styles.vehicleRow}>
                     <Text style={styles.vehicleLabel}>Modelo:</Text>
                     <Text style={styles.vehicleValue}>
-                      {driverInfo.vehicleInfo ? `${driverInfo.plateplate?.make} ${driverInfo.vehicleInfo?.model}` : 'Toyota Corolla'}
+                      {driverInfo.vehicleInfo ? `${driverInfo.vehicleInfo?.make} ${driverInfo.vehicleInfo?.model}` : 'Toyota Corolla'}
                     </Text>
                   </View>
                   <View style={styles.vehicleRow}>
                     <Text style={styles.vehicleLabel}>Placa:</Text>
                     <Text style={styles.vehiclePlate}>
-                      {driverInfo.plate ? driverInfo.plate.plate : 'ABC-1234'}
+                      {driverInfo.vehicleInfo ? driverInfo.vehicleInfo.plate : 'ABC-1234'}
                     </Text>
                   </View>
                   <View style={styles.vehicleRow}>
@@ -3996,7 +4661,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 8,
-    paddingBottom: 34, // Safe area
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20, // Safe area
     paddingHorizontal: 20,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: -4 },
@@ -4004,10 +4669,13 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 20,
     maxHeight: height * 0.75,
+    minHeight: 160, // Altura mínima para sempre permanecer visível
   },
   dropdownHandleContainer: {
     paddingVertical: 12,
     alignItems: 'center',
+    minHeight: 50, // Garantir área clicavel suficiente
+    justifyContent: 'center',
   },
   dropdownHandle: {
     width: 40,
@@ -4265,6 +4933,8 @@ const styles = StyleSheet.create({
   // Estilos para versão minimizada
   minimizedContent: {
     paddingVertical: 12,
+    minHeight: 80, // Garantir altura mínima para o conteúdo minimizado
+    paddingBottom: 20,
   },
   minimizedRow: {
     flexDirection: 'row',
@@ -4303,9 +4973,35 @@ const styles = StyleSheet.create({
   expandHint: {
     fontSize: 12,
     color: '#4285F4',
-    fontWeight: '500',
-    marginTop: 4,
-    textAlign: 'center',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  expandHintContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  minimizedActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cancelButtonMinimized: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  cancelButtonTextMinimized: {
+    fontSize: 14,
+    color: '#DC2626',
+    fontWeight: '600',
+    marginLeft: 4,
   },
 
   statusIndicator: {

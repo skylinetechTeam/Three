@@ -1,0 +1,60 @@
+// SCRIPT SIMPLIFICADO - COLE NO CONSOLE DO NAVEGADOR
+// Execute apenas com o app do motorista aberto e logado
+
+(async () => {
+  try {
+    console.log('🚗 Adicionando dados reais do veículo ao motorista...');
+    
+    // Dados do veículo
+    const vehicleData = {
+      make: 'Honda',
+      model: 'Civic',
+      year: 2018,
+      color: 'Prata',
+      plate: 'LD-43-18-MH'
+    };
+    
+    // Buscar perfil atual
+    const currentData = JSON.parse(await AsyncStorage.getItem('driver_auth_data') || '{}');
+    
+    if (!currentData.name) {
+      console.error('❌ Nenhum motorista logado!');
+      return;
+    }
+    
+    console.log('✅ Motorista:', currentData.name);
+    
+    // Atualizar com dados do veículo
+    const updatedProfile = {
+      ...currentData,
+      vehicles: [{
+        make: vehicleData.make,
+        model: vehicleData.model,
+        year: vehicleData.year,
+        color: vehicleData.color,
+        license_plate: vehicleData.plate,
+        plate: vehicleData.plate
+      }],
+      vehicle: vehicleData,
+      vehicleInfo: vehicleData,
+      vehicle_make: vehicleData.make,
+      vehicle_model: vehicleData.model,
+      vehicle_year: vehicleData.year,
+      vehicle_color: vehicleData.color,
+      vehicle_plate: vehicleData.plate,
+      license_plate: vehicleData.plate,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Salvar
+    await AsyncStorage.setItem('driver_auth_data', JSON.stringify(updatedProfile));
+    await AsyncStorage.setItem('driverProfile', JSON.stringify(updatedProfile));
+    
+    console.log('✅ Veículo adicionado com sucesso!');
+    console.log('🚙 Dados:', vehicleData);
+    console.log('🔄 Recarregue o app para aplicar as mudanças');
+    
+  } catch (error) {
+    console.error('❌ Erro:', error);
+  }
+})();

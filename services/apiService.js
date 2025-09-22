@@ -1174,8 +1174,8 @@ class ApiService {
       // Coletivo: preço fixo de 500 AOA
       return 500;
     } else if (vehicleType === 'privado' || vehicleType === 'premium') {
-      // Privado: a partir de 800 AOA + cálculo por distância
-      const baseFare = 800; // Taxa base mínima em AOA
+      // Privado: a partir de 1000 AOA + cálculo por distância
+      const baseFare = 1000; // Taxa base mínima em AOA
       const perKmRate = 100; // AOA por km para privado
       const perMinuteRate = 20; // AOA por minuto para privado
       
@@ -1184,12 +1184,45 @@ class ApiService {
       
       const calculatedFare = Math.round(baseFare + distanceFare + timeFare);
       
-      // Garantir que o preço mínimo seja 800 AOA
-      return Math.max(calculatedFare, 800);
+      // Garantir que o preço mínimo seja 1000 AOA
+      return Math.max(calculatedFare, 1000);
     }
     
     // Fallback para standard
     return 500;
+  }
+
+  // Obter detalhes de uma corrida específica
+  async getRide(rideId) {
+    try {
+      console.log(`📡 [API] Buscando detalhes da corrida ${rideId}`);
+      const response = await fetch(`${API_BASE_URL}/rides/${rideId}`);
+      const data = await response.json();
+      
+      if (response.ok) {
+        console.log('✅ [API] Dados da corrida obtidos:', data);
+        
+        // DEBUG DETALHADO: Verificar estrutura dos dados
+        console.log('🔍 [API DEBUG] Estrutura detalhada dos dados:');
+        console.log('📊 [API DEBUG] data.success:', data.success);
+        console.log('📊 [API DEBUG] data.data exists:', !!data.data);
+        if (data.data) {
+          console.log('📊 [API DEBUG] data.data.id:', data.data.id);
+          console.log('📊 [API DEBUG] data.data.status:', data.data.status);
+          console.log('📊 [API DEBUG] data.data.passengerId:', data.data.passengerId);
+          console.log('📊 [API DEBUG] data.data.driverId:', data.data.driverId);
+          console.log('📊 [API DEBUG] data.data keys:', Object.keys(data.data));
+        }
+        
+        return { success: true, data };
+      } else {
+        console.error('❌ [API] Erro ao obter corrida:', data.error);
+        return { success: false, error: data.error || 'Erro ao obter dados da corrida' };
+      }
+    } catch (error) {
+      console.error('❌ [API] Erro de rede ao obter corrida:', error);
+      return { success: false, error: error.message };
+    }
   }
 
   // Implementar fallback via polling para status de corrida
@@ -1215,7 +1248,11 @@ class ApiService {
         const response = await this.getRide(rideId);
         
         if (response.success && response.data) {
-          const ride = response.data;
+          // CORREÇÃO: Extrair corretamente a corrida dos dados
+          const ride = response.data.data || response.data; // Pode estar em data.data ou diretamente em data
+          
+          console.log('🔍 [POLLING DEBUG] Ride extraído:', ride);
+          console.log('🔍 [POLLING DEBUG] Status da corrida:', ride.status);
           
           // Chamar callback com atualização de status
           if (onStatusUpdate) {

@@ -206,11 +206,11 @@ const TermsScreen = ({ navigation }) => {
           </Text>
           <View style={styles.contactItem}>
             <Ionicons name="mail-outline" size={20} color="#6B7280" />
-            <Text style={styles.contactText}>terms@threeapp.com</Text>
+            <Text style={styles.contactText}>threecompanyofangola@gmail.com</Text>
           </View>
           <View style={styles.contactItem}>
             <Ionicons name="call-outline" size={20} color="#6B7280" />
-            <Text style={styles.contactText}>+244 123 456 789</Text>
+            <Text style={styles.contactText}>+244 975651828</Text>
           </View>
         </View>
 

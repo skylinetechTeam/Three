@@ -381,7 +381,7 @@ const ReservasScreen = () => {
         ...novaReserva,
         status: 'Pendente',
         createdAt: new Date().toISOString(),
-        preco: novaReserva.tipoTaxi === 'Coletivo' ? 500 : 800
+        preco: novaReserva.tipoTaxi === 'Coletivo' ? 500 : 1000
       };
 
       const updatedReservas = [...reservas, novaReservaCompleta];
@@ -860,7 +860,7 @@ const ReservasScreen = () => {
               </View>
               <View style={styles.resumoItem}>
                 <Text style={styles.resumoLabel}>Preço estimado:</Text>
-                <Text style={[styles.resumoValue, styles.resumoPrice]}>{novaReserva.tipoTaxi === 'Coletivo' ? '500' : '800'} Kz</Text>
+                <Text style={[styles.resumoValue, styles.resumoPrice]}>{novaReserva.tipoTaxi === 'Coletivo' ? '500' : '1000'} Kz</Text>
               </View>
             </View>
           </>

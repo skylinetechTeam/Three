@@ -54,7 +54,7 @@ export const TaxiSelectionModal = ({
       name: 'Taxi Normal',
       description: 'Viagem individual, conforto padrão',
       icon: '🚗',
-      basePrice: 800,
+      basePrice: 1000,
       pricePerKm: 120,
       capacity: '4 passageiros',
       estimatedWait: '5-12 min',

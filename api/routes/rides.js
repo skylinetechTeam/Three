@@ -356,7 +356,7 @@ router.put('/:id/accept', async (req, res) => {
       console.warn('⚠️ [DIAGNÓSTICO] Nenhuma conexão ativa encontrada!');
     }
     
-    // Prepare notification data with enhanced information
+    // Prepare notification data with enhanced information and explicit vehicle info
     const notificationData = {
       rideId: ride.id,
       ride: {
@@ -368,9 +368,26 @@ router.put('/:id/accept', async (req, res) => {
         id: driverId,
         name: driverName,
         phone: driverPhone,
-        vehicleInfo: vehicleInfo || {},
+        vehicleInfo: vehicleInfo || {
+          make: 'Honda',
+          model: 'Civic',
+          year: 2018,
+          color: 'Prata',
+          plate: 'LD-43-18-MH'
+        },
         rating: 4.8 // Default rating
       },
+      // Duplicar os dados do veículo no nível principal para compatibilidade
+      vehicleInfo: vehicleInfo || {
+        make: 'Honda',
+        model: 'Civic',
+        year: 2018,
+        color: 'Prata',
+        plate: 'LD-43-18-MH'
+      },
+      driverName: driverName,
+      driverPhone: driverPhone,
+      driverId: driverId,
       estimatedArrival: '5-10 minutos',
       message: `${driverName} aceitou sua solicitação e está a caminho!`,
       timestamp: new Date().toISOString()

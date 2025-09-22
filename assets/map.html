@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .leaflet-routing-container { display: none !important; }
+        
+        /* Custom marker styles */
+        .driver-marker {
+            background-color: #4CAF50;
+            border: 3px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        
+        .driver-marker::after {
+            content: '🚗';
+            font-size: 20px;
+        }
+        
+        .driver-info {
+            background: white;
+            padding: 8px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <script>
+        // Inicializar mapa
+        var map = L.map('map').setView([-8.8390, 13.2894], 13);
+        
+        // Adicionar tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        
+        // Variáveis globais
+        var userMarker = null;
+        var destinationMarker = null;
+        var driverMarker = null;
+        var routeControl = null;
+        var driverRouteControl = null;
+        var userAccuracyCircle = null;
+        
+        // Ícone personalizado para o motorista
+        var driverIcon = L.divIcon({
+            className: 'driver-marker pulse-animation',
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+        });
+        
+        // Ícone para o usuário
+        var userIcon = L.icon({
+            iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxNzM3ZTgiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEwIiByPSI4Ii8+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMCIgcj0iMyIvPjwvc3ZnPg==',
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+        });
+        
+        // Função para definir localização do usuário
+        window.__setUserLocation = function(lat, lng, accuracy) {
+            console.log('Setting user location:', lat, lng, 'accuracy:', accuracy);
+            
+            if (userMarker) {
+                userMarker.setLatLng([lat, lng]);
+            } else {
+                userMarker = L.marker([lat, lng], {icon: userIcon}).addTo(map);
+            }
+            
+            // Círculo de precisão
+            if (userAccuracyCircle) {
+                userAccuracyCircle.setLatLng([lat, lng]).setRadius(accuracy);
+            } else {
+                userAccuracyCircle = L.circle([lat, lng], {
+                    radius: accuracy,
+                    color: '#1737e8',
+                    fillColor: '#1737e8',
+                    fillOpacity: 0.15,
+                    weight: 2
+                }).addTo(map);
+            }
+            
+            // Centralizar mapa na localização do usuário se não houver motorista
+            if (!driverMarker) {
+                map.setView([lat, lng], 15);
+            }
+            
+            return true;
+        };
+        
+        // Função para definir destino e calcular rota
+        window.__setDestination = function(lat, lng, name) {
+            console.log('Setting destination:', lat, lng, name);
+            
+            // Remover marcador anterior
+            if (destinationMarker) {
+                map.removeLayer(destinationMarker);
+            }
+            
+            // Adicionar novo marcador de destino
+            destinationMarker = L.marker([lat, lng]).addTo(map);
+            if (name) {
+                destinationMarker.bindPopup(name).openPopup();
+            }
+            
+            // Se houver localização do usuário, calcular rota
+            if (userMarker) {
+                var userLatLng = userMarker.getLatLng();
+                
+                // Remover rota anterior
+                if (routeControl) {
+                    map.removeControl(routeControl);
+                }
+                
+                // Criar nova rota
+                routeControl = L.Routing.control({
+                    waypoints: [
+                        L.latLng(userLatLng.lat, userLatLng.lng),
+                        L.latLng(lat, lng)
+                    ],
+                    routeWhileDragging: false,
+                    addWaypoints: false,
+                    createMarker: function() { return null; },
+                    lineOptions: {
+                        styles: [{ color: '#1737e8', weight: 4, opacity: 0.7 }]
+                    }
+                }).addTo(map);
+                
+                // Ajustar zoom para mostrar toda a rota
+                var bounds = L.latLngBounds([
+                    [userLatLng.lat, userLatLng.lng],
+                    [lat, lng]
+                ]);
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+            
+            return true;
+        };
+        
+        // Função para mostrar localização do motorista
+        window.__showDriverLocation = function(lat, lng, name, vehicle, color, plate) {
+            console.log('Showing driver location:', lat, lng, name, vehicle);
+            
+            // Remover marcador anterior se existir
+            if (driverMarker) {
+                map.removeLayer(driverMarker);
+            }
+            
+            // Criar marcador do motorista
+            driverMarker = L.marker([lat, lng], {icon: driverIcon}).addTo(map);
+            
+            // Adicionar popup com informações
+            var popupContent = '<div class="driver-info">' +
+                '<strong>' + (name || 'Motorista') + '</strong><br>' +
+                (vehicle ? vehicle + ' ' : '') +
+                (color || '') + '<br>' +
+                (plate ? 'Placa: ' + plate : '') +
+                '</div>';
+            
+            driverMarker.bindPopup(popupContent);
+            
+            // Calcular e mostrar rota do motorista até o passageiro
+            if (userMarker) {
+                __showDriverRoute(lat, lng);
+            }
+            
+            return true;
+        };
+        
+        // Função para atualizar localização do motorista (sem recriar marcador)
+        window.__updateDriverLocation = function(lat, lng) {
+            console.log('Updating driver location:', lat, lng);
+            
+            if (driverMarker) {
+                // Animar movimento suave
+                var currentLatLng = driverMarker.getLatLng();
+                var newLatLng = L.latLng(lat, lng);
+                
+                // Mover marcador suavemente
+                driverMarker.setLatLng(newLatLng);
+                
+                // Atualizar rota se necessário
+                if (userMarker) {
+                    __showDriverRoute(lat, lng);
+                }
+                
+                // Ajustar visualização para mostrar ambos
+                if (userMarker) {
+                    var userLatLng = userMarker.getLatLng();
+                    var bounds = L.latLngBounds([
+                        [userLatLng.lat, userLatLng.lng],
+                        [lat, lng]
+                    ]);
+                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+                }
+            } else {
+                // Se não existe marcador, criar um novo
+                window.__showDriverLocation(lat, lng);
+            }
+            
+            return true;
+        };
+        
+        // Função para mostrar rota do motorista até o passageiro
+        window.__showDriverRoute = function(driverLat, driverLng) {
+            if (!userMarker) return;
+            
+            var userLatLng = userMarker.getLatLng();
+            
+            // Remover rota anterior do motorista
+            if (driverRouteControl) {
+                map.removeControl(driverRouteControl);
+            }
+            
+            // Criar rota do motorista até o passageiro
+            driverRouteControl = L.Routing.control({
+                waypoints: [
+                    L.latLng(driverLat, driverLng),
+                    L.latLng(userLatLng.lat, userLatLng.lng)
+                ],
+                routeWhileDragging: false,
+                addWaypoints: false,
+                createMarker: function() { return null; },
+                lineOptions: {
+                    styles: [{ 
+                        color: '#4CAF50', 
+                        weight: 5, 
+                        opacity: 0.8,
+                        dashArray: '10, 10'
+                    }]
+                }
+            }).addTo(map);
+            
+            // Ajustar visualização
+            var bounds = L.latLngBounds([
+                [driverLat, driverLng],
+                [userLatLng.lat, userLatLng.lng]
+            ]);
+            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        };
+        
+        // Função para limpar marcador do motorista
+        window.__clearDriverMarker = function() {
+            console.log('Clearing driver marker');
+            
+            if (driverMarker) {
+                map.removeLayer(driverMarker);
+                driverMarker = null;
+            }
+            
+            if (driverRouteControl) {
+                map.removeControl(driverRouteControl);
+                driverRouteControl = null;
+            }
+            
+            return true;
+        };
+        
+        // Função para resetar o mapa
+        window.__resetMap = function() {
+            console.log('Resetting map');
+            
+            // Limpar todos os marcadores e rotas
+            if (destinationMarker) {
+                map.removeLayer(destinationMarker);
+                destinationMarker = null;
+            }
+            
+            if (driverMarker) {
+                map.removeLayer(driverMarker);
+                driverMarker = null;
+            }
+            
+            if (routeControl) {
+                map.removeControl(routeControl);
+                routeControl = null;
+            }
+            
+            if (driverRouteControl) {
+                map.removeControl(driverRouteControl);
+                driverRouteControl = null;
+            }
+            
+            // Focar na localização do usuário
+            if (userMarker) {
+                var latLng = userMarker.getLatLng();
+                map.setView([latLng.lat, latLng.lng], 15);
+            }
+            
+            return true;
+        };
+        
+        // Função helper para calcular distância
+        window.__calculateDistance = function(lat1, lng1, lat2, lng2) {
+            var R = 6371e3; // metros
+            var φ1 = lat1 * Math.PI/180;
+            var φ2 = lat2 * Math.PI/180;
+            var Δφ = (lat2-lat1) * Math.PI/180;
+            var Δλ = (lng2-lng1) * Math.PI/180;
+            
+            var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                    Math.cos(φ1) * Math.cos(φ2) *
+                    Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            
+            return R * c;
+        };
+        
+        console.log('Map initialized and ready');
+    </script>
+</body>
+</html>

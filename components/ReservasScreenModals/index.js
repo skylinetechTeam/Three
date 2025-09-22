@@ -242,7 +242,7 @@ export const ProgressiveReservationModal = ({
         name: 'Taxi Normal',
         description: 'Viagem individual, conforto padrão',
         icon: '🚗',
-        price: 'A partir de 800 Kz',
+        price: 'A partir de 1000 Kz',
       },
       {
         id: 'Taxi Executivo',

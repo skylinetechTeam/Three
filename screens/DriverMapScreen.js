@@ -18,6 +18,7 @@ import { WebView } from 'react-native-webview';
 import LocalDatabase from '../services/localDatabase';
 import apiService from '../services/apiService';
 import driverAuthService from '../services/driverAuthService';
+import { extractVehicleInfo } from '../utils/vehicleUtils';
 import Toast from 'react-native-toast-message';
 
 const { width, height } = Dimensions.get('window');
@@ -116,22 +117,91 @@ export default function DriverMapScreen({ navigation, route }) {
   }, [activeRide, location, navigationMode, ridePhase]);
 
   const initializeDriver = async () => {
+    console.log('\n🚗 ========== INICIALIZANDO TELA DO MOTORISTA ==========');
+    console.log('📍 Timestamp:', new Date().toISOString());
+    
     try {
       // Tentar carregar dados autenticados primeiro
+      console.log('🔍 Buscando dados do motorista autenticado...');
       const authData = await driverAuthService.getLocalDriverData();
       
       if (authData) {
+        console.log('✅ Dados do motorista encontrados via authService!');
+        console.log('\n📋 === PERFIL COMPLETO DO MOTORISTA ===');
+        console.log('👤 Nome:', authData.name || authData.nome || 'N/A');
+        console.log('📱 Telefone:', authData.phone || authData.telefone || 'N/A');
+        console.log('📧 Email:', authData.email || 'N/A');
+        console.log('🆔 ID:', authData.id || 'N/A');
+        console.log('🆔 API Driver ID:', authData.apiDriverId || 'N/A');
+        console.log('🟢 Status Online:', authData.isOnline || false);
+        console.log('⭐ Avaliação:', authData.rating || 'N/A');
+        console.log('🚕 Total de Corridas:', authData.total_trips || authData.totalTrips || 'N/A');
+        
+        // Log detalhado dos dados do veículo
+        console.log('\n🚗 === DADOS DO VEÍCULO ===');
+        if (authData.vehicles && authData.vehicles.length > 0) {
+          console.log('✅ Array vehicles encontrado com', authData.vehicles.length, 'veículo(s)');
+          authData.vehicles.forEach((vehicle, index) => {
+            console.log(`  Veículo ${index + 1}:`, JSON.stringify(vehicle, null, 2));
+          });
+        } else {
+          console.log('❌ Array vehicles não encontrado ou vazio');
+        }
+        
+        if (authData.vehicle) {
+          console.log('✅ Objeto vehicle encontrado:', JSON.stringify(authData.vehicle, null, 2));
+        } else {
+          console.log('❌ Objeto vehicle não encontrado');
+        }
+        
+        if (authData.vehicleInfo) {
+          console.log('✅ Objeto vehicleInfo encontrado:', JSON.stringify(authData.vehicleInfo, null, 2));
+        } else {
+          console.log('❌ Objeto vehicleInfo não encontrado');
+        }
+        
+        // Verificar campos individuais do veículo
+        console.log('\n🔧 Campos individuais do veículo:');
+        console.log('  vehicle_make:', authData.vehicle_make || 'N/A');
+        console.log('  vehicle_model:', authData.vehicle_model || 'N/A');
+        console.log('  vehicle_year:', authData.vehicle_year || 'N/A');
+        console.log('  vehicle_color:', authData.vehicle_color || 'N/A');
+        console.log('  vehicle_plate:', authData.vehicle_plate || 'N/A');
+        console.log('  license_plate:', authData.license_plate || 'N/A');
+        
+        // Verificar campos em português
+        console.log('\n🌐 Campos em português:');
+        console.log('  marca:', authData.marca || 'N/A');
+        console.log('  modelo:', authData.modelo || 'N/A');
+        console.log('  ano:', authData.ano || 'N/A');
+        console.log('  cor:', authData.cor || 'N/A');
+        console.log('  placa:', authData.placa || 'N/A');
+        
+        // Extrair e logar os dados do veículo usando a função auxiliar
+        console.log('\n🔍 Usando extractVehicleInfo para processar dados...');
+        const extractedVehicle = extractVehicleInfo(authData);
+        console.log('📦 Dados extraídos do veículo:', JSON.stringify(extractedVehicle, null, 2));
+        
+        console.log('\n📊 === ESTRUTURA COMPLETA DO OBJETO (DEBUG) ===');
+        console.log(JSON.stringify(authData, null, 2));
+        console.log('\n========== FIM DOS LOGS DO MOTORISTA ==========\n');
+        
         setDriverProfile(authData);
         setIsOnline(authData.isOnline || false);
       } else {
+        console.log('⚠️ Dados do motorista não encontrados via authService, tentando LocalDatabase...');
+        
         // Tentar backup do LocalDatabase
         const profile = await LocalDatabase.getDriverProfile();
         const onlineStatus = await LocalDatabase.getDriverOnlineStatus();
         
         if (profile) {
+          console.log('✅ Perfil encontrado no LocalDatabase!');
+          console.log('📋 Dados do perfil:', JSON.stringify(profile, null, 2));
           setDriverProfile(profile);
           setIsOnline(onlineStatus);
         } else {
+          console.log('❌ Nenhum perfil de motorista encontrado. Redirecionando para login...');
           // Redirecionar para login se não houver dados
           navigation.reset({
             index: 0,
@@ -140,6 +210,8 @@ export default function DriverMapScreen({ navigation, route }) {
         }
       }
     } catch (error) {
+      console.error('❌ ERRO ao inicializar motorista:', error);
+      console.error('Stack trace:', error.stack);
       // Em caso de erro, redirecionar para login
       navigation.reset({
         index: 0,
@@ -553,25 +625,58 @@ export default function DriverMapScreen({ navigation, route }) {
           firstVehicle: driverProfile.vehicles?.[0]
         });
         
-        // Construir vehicleInfo com verificações seguras
-        const vehicle = driverProfile.vehicles && driverProfile.vehicles[0] ? driverProfile.vehicles[0] : null;
+        // ANÁLISE COMPLETA DOS DADOS DO VEÍCULO DISPONÍVEIS
+        console.log('📊 [acceptRequest] ANÁLISE COMPLETA DOS DADOS DO VEÍCULO:');
+        console.log('  - driverProfile.vehicles:', JSON.stringify(driverProfile.vehicles, null, 2));
+        console.log('  - driverProfile.vehicle:', JSON.stringify(driverProfile.vehicle, null, 2));
+        console.log('  - driverProfile.vehicleInfo:', JSON.stringify(driverProfile.vehicleInfo, null, 2));
         
-        // Dados personalizados para o motorista Celesônio
-        // TODO: Adicionar tela de cadastro de veículo
+        // Campos individuais
+        console.log('  - campos individuais:', {
+          vehicle_make: driverProfile.vehicle_make,
+          vehicle_model: driverProfile.vehicle_model,
+          vehicle_year: driverProfile.vehicle_year,
+          vehicle_color: driverProfile.vehicle_color,
+          vehicle_plate: driverProfile.vehicle_plate,
+          license_plate: driverProfile.license_plate
+        });
+        
+        // Construir vehicleInfo com os dados reais do motorista
+        // Usar a função auxiliar para extrair os dados do veículo corretamente
+        const extractedVehicleInfo = extractVehicleInfo(driverProfile);
+        
+        // VERIFICAR SE OS DADOS EXTRAÍDOS SÃO REAIS OU PADRÃO
+        const isDefaultData = extractedVehicleInfo.make === 'Honda' && 
+                             extractedVehicleInfo.model === 'Civic' && 
+                             extractedVehicleInfo.plate === 'LD-43-18-MH';
+        
+        console.log('⚠️ [acceptRequest] DADOS DO VEÍCULO SÃO PADRÃO?', isDefaultData);
+        
+        if (isDefaultData) {
+          console.log('🚨 [ATENÇÃO] Enviando dados padrão do veículo! Motorista pode não ter cadastrado veículo.');
+        } else {
+          console.log('✅ [CORRETO] Enviando dados reais do veículo do motorista.');
+        }
+        
+        // Garantir que os dados do veículo sejam enviados corretamente
         const vehicleInfo = {
-          make: vehicle?.make || driverProfile.vehicle?.make || 'Honda',
-          model: vehicle?.model || driverProfile.vehicle?.model || 'Civic',
-          year: vehicle?.year || driverProfile.vehicle?.year || 2018,
-          color: vehicle?.color || driverProfile.vehicle?.color || 'Prata',
-          plate: vehicle?.license_plate || vehicle?.plate || driverProfile.vehicle?.plate || 'LD-43-18-MH'
+          make: extractedVehicleInfo.make,
+          model: extractedVehicleInfo.model,
+          year: extractedVehicleInfo.year,
+          color: extractedVehicleInfo.color,
+          plate: extractedVehicleInfo.plate
         };
         
-        console.log('🔵 [acceptRequest] VehicleInfo construído:', vehicleInfo);
+        console.log('🔵 [acceptRequest] Dados do veículo extraídos:', {
+          extractedVehicleInfo: extractedVehicleInfo,
+          vehicleInfoFinal: vehicleInfo,
+          isRealData: !isDefaultData
+        });
         
         const driverData = {
           driverId: driverId,
           driverName: driverProfile.name || 'Motorista',
-          driverPhone: driverProfile.telefone || driverProfile.phone || driverProfile.phoneNumber || '+244 900 000 000',
+          driverPhone: driverProfile.phone || '+244 943204862',
           vehicleInfo: vehicleInfo
         };
         
@@ -1318,11 +1423,67 @@ export default function DriverMapScreen({ navigation, route }) {
                 attributionControl: false
             }).setView([${location?.coords.latitude || -8.8390}, ${location?.coords.longitude || 13.2894}], 16);
 
-            // Add OpenStreetMap tiles (free)
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19
-            }).addTo(map);
+            // Tile servers - usar CartoDB Voyager (estilo Google Maps)
+            const tileServers = [
+                {
+                    name: 'CartoDB Voyager (Google-like)',
+                    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                    options: {
+                        attribution: '© OpenStreetMap contributors, © CartoDB',
+                        subdomains: 'abcd',
+                        maxZoom: 20,
+                        tileSize: 256,
+                        zoomOffset: 0
+                    }
+                },
+                {
+                    name: 'CartoDB Positron',
+                    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+                    options: {
+                        attribution: '© OpenStreetMap contributors, © CartoDB',
+                        subdomains: 'abcd',
+                        maxZoom: 20
+                    }
+                },
+                {
+                    name: 'ESRI World Street',
+                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                    options: {
+                        attribution: '© Esri',
+                        maxZoom: 19
+                    }
+                },
+                {
+                    name: 'Wikimedia Maps',
+                    url: 'https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png',
+                    options: {
+                        attribution: '© Wikimedia',
+                        maxZoom: 19
+                    }
+                }
+            ];
+            
+            // Usar sempre CartoDB Voyager (mais parecido com Google Maps)
+            const selectedServer = tileServers[0];
+            console.log('Using tile server:', selectedServer.name);
+            
+            // Add tile layer with error handling
+            const tileLayer = L.tileLayer(selectedServer.url, {
+                ...selectedServer.options,
+                errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+                crossOrigin: true
+            });
+            
+            // Add error handling for tile loading
+            let currentServerIndex = 0;
+            tileLayer.on('tileerror', function(error, tile) {
+                console.log('Tile error, trying alternative server...');
+                currentServerIndex = (currentServerIndex + 1) % tileServers.length;
+                const nextServer = tileServers[currentServerIndex];
+                tile.src = tile.src.replace(selectedServer.url.split('{')[0], nextServer.url.split('{')[0]);
+            });
+            
+            tileLayer.addTo(map);
 
                          let driverMarker = null;
              let routeControl = null;
@@ -1513,13 +1674,40 @@ export default function DriverMapScreen({ navigation, route }) {
                          [destinationLat, destinationLng]
                      ];
                      
-                     // Try to get real route from OSRM using Promises
-                     console.log('🌐 Fetching real route from OSRM...');
-                     const routeUrl = \`https://router.project-osrm.org/route/v1/driving/\${driverPos.lng},\${driverPos.lat};\${destinationLng},\${destinationLat}?overview=full&geometries=geojson\`;
-                     
-                     fetch(routeUrl)
-                         .then(response => response.json())
-                         .then(data => {
+                    // Try multiple routing services with fallback
+                    console.log('🌐 Fetching real route...');
+                    const routingServices = [
+                        \`https://router.project-osrm.org/route/v1/driving/\${driverPos.lng},\${driverPos.lat};\${destinationLng},\${destinationLat}?overview=full&geometries=geojson\`,
+                        \`https://api.openrouteservice.org/v2/directions/driving-car?api_key=5b3ce3597851110001cf62488a7e4a14a9164a8d8a3c49f973c8e8ef&start=\${driverPos.lng},\${driverPos.lat}&end=\${destinationLng},\${destinationLat}\`
+                    ];
+                    
+                    let routeUrl = routingServices[0];
+                    let routeData = null;
+                    
+                    // Try each service sequentially until one works
+                    const tryRouteService = async (urls, index = 0) => {
+                        if (index >= urls.length) {
+                            throw new Error('All routing services failed');
+                        }
+                        
+                        const url = urls[index];
+                        console.log('Trying routing service:', url.split('?')[0]);
+                        
+                        try {
+                            const response = await fetch(url);
+                            if (!response.ok) {
+                                throw new Error('Service returned error: ' + response.status);
+                            }
+                            const data = await response.json();
+                            return data;
+                        } catch (err) {
+                            console.log('Service failed, trying next...');
+                            return tryRouteService(urls, index + 1);
+                        }
+                    };
+                    
+                    tryRouteService(routingServices)
+                        .then(data => {
                              if (data.routes && data.routes.length > 0) {
                                  const route = data.routes[0];
                                  const coordinates = route.geometry.coordinates;
@@ -2129,17 +2317,7 @@ export default function DriverMapScreen({ navigation, route }) {
 
         <View style={styles.headerRight}>
           {/* Indicador de conexão WebSocket */}
-          {isOnline && (
-            <View style={styles.connectionIndicator}>
-              <View style={[
-                styles.connectionDot, 
-                socketConnected ? styles.connectedDot : styles.disconnectedDot
-              ]} />
-              <Text style={styles.connectionText}>
-                {socketConnected ? 'Conectado' : 'Reconectando...'}
-              </Text>
-            </View>
-          )}
+          
           
           <TouchableOpacity 
             style={[styles.statusButton, isOnline ? styles.onlineButton : styles.offlineButton]}

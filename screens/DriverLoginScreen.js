@@ -260,13 +260,7 @@ export default function DriverLoginScreen({ navigation }) {
           phone: currentDriver.phone,
           email: currentDriver.email,
           licenseNumber: currentDriver.license_number || 'CNH123456789',
-          vehicleInfo: {
-            make: currentDriver.vehicles?.[0]?.make || 'Toyota',
-            model: currentDriver.vehicles?.[0]?.model || 'Corolla',
-            year: currentDriver.vehicles?.[0]?.year || 2020,
-            color: currentDriver.vehicles?.[0]?.color || 'Branco',
-            plate: currentDriver.vehicles?.[0]?.license_plate || 'ABC-1234'
-          }
+          vehicleInfo: require('../utils/vehicleUtils').extractVehicleInfo(currentDriver)
         };
 
         const apiResponse = await apiService.registerDriver(driverData);
@@ -374,13 +368,7 @@ export default function DriverLoginScreen({ navigation }) {
           phone: currentDriver.phone,
           email: currentDriver.email,
           licenseNumber: currentDriver.license_number || 'CNH123456789',
-          vehicleInfo: {
-            make: currentDriver.vehicles?.[0]?.make || 'Toyota',
-            model: currentDriver.vehicles?.[0]?.model || 'Corolla',
-            year: currentDriver.vehicles?.[0]?.year || 2020,
-            color: currentDriver.vehicles?.[0]?.color || 'Branco',
-            plate: currentDriver.vehicles?.[0]?.license_plate || 'ABC-1234'
-          }
+          vehicleInfo: require('../utils/vehicleUtils').extractVehicleInfo(currentDriver)
         };
 
         const apiResponse = await apiService.registerDriver(driverData);

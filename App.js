@@ -8,6 +8,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import * as Updates from 'expo-updates';
 import { UIProvider, useUI } from './contexts/UIContext';
 import { RESPONSIVE, SIZES } from './config/theme';
+import updateService from './services/updateService'; // Serviço de atualizações OTA
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -215,7 +216,7 @@ function AppContent() {
 
   useEffect(() => {
     checkLoginStatus();
-    checkForUpdates();
+    initializeSilentUpdates(); // Inicializar atualizações silenciosas
   }, []);
 
   const checkLoginStatus = async () => {
@@ -251,50 +252,31 @@ function AppContent() {
     }
   };
 
-  const checkForUpdates = async () => {
+  // Sistema de atualizações OTA silenciosas
+  const initializeSilentUpdates = async () => {
     try {
       if (__DEV__) {
-        console.log('Skipping update check in development mode');
+        console.log('⚠️ Atualizações OTA desabilitadas em desenvolvimento');
         return;
       }
 
-      const update = await Updates.checkForUpdateAsync();
+      // Inicializar serviço de atualizações silenciosas
+      await updateService.initialize();
       
-      if (update.isAvailable) {
-        Alert.alert(
-          'Atualização Disponível',
-          'Uma nova versão do aplicativo está disponível. Deseja atualizar agora?',
-          [
-            {
-              text: 'Depois',
-              style: 'cancel',
-            },
-            {
-              text: 'Atualizar',
-              onPress: async () => {
-                try {
-                  await Updates.fetchUpdateAsync();
-                  Alert.alert(
-                    'Atualização Pronta',
-                    'A atualização foi baixada. O aplicativo será reiniciado.',
-                    [
-                      {
-                        text: 'Reiniciar',
-                        onPress: () => Updates.reloadAsync(),
-                      },
-                    ]
-                  );
-                } catch (error) {
-                  console.error('Error downloading update:', error);
-                  Alert.alert('Erro', 'Falha ao baixar a atualização. Tente novamente mais tarde.');
-                }
-              },
-            },
-          ]
-        );
+      // Log apenas em desenvolvimento para debug
+      if (__DEV__) {
+        const updateInfo = await updateService.getUpdateInfo();
+        console.log('🔄 [OTA] Informações de atualização:', updateInfo);
       }
+      
+      // As atualizações agora são 100% silenciosas
+      // O usuário não verá nenhuma notificação ou alerta
+      // A atualização será baixada em background e aplicada quando o app reiniciar
+      
     } catch (error) {
-      console.error('Error checking for updates:', error);
+      // Falhas em atualizações não devem afetar o uso do app
+      // Apenas logamos o erro silenciosamente
+      console.error('🔇 [OTA] Erro silencioso ao inicializar atualizações:', error);
     }
   };
 

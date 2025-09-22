@@ -300,13 +300,35 @@ export default function DriverProfileScreen({ navigation }) {
             </View>
             <View style={styles.vehicleInfo}>
               <Text style={styles.vehicleModel}>
-                {driverProfile.vehicles[0]?.model || 'Toyota Corolla'}
+                {driverProfile.vehicles?.[0]?.make || 
+                 driverProfile.vehicle?.make || 
+                 driverProfile.vehicleInfo?.make || 
+                 driverProfile.vehicle_make || 
+                 'Honda'} {driverProfile.vehicles?.[0]?.model || 
+                           driverProfile.vehicle?.model || 
+                           driverProfile.vehicleInfo?.model || 
+                           driverProfile.vehicle_model || 
+                           'Civic'}
               </Text>
               <Text style={styles.vehicleDetails}>
-                {driverProfile.vehicles[0]?.license_plate || 'LD-12-34-AB'} • {driverProfile.vehicles[0]?.color || 'Branco'}
+                {driverProfile.vehicles?.[0]?.license_plate || 
+                 driverProfile.vehicles?.[0]?.plate || 
+                 driverProfile.vehicle?.license_plate || 
+                 driverProfile.vehicle?.plate || 
+                 driverProfile.vehicleInfo?.plate || 
+                 driverProfile.vehicle_plate || 
+                 'LD-43-18-MH'} • {driverProfile.vehicles?.[0]?.color || 
+                                   driverProfile.vehicle?.color || 
+                                   driverProfile.vehicleInfo?.color || 
+                                   driverProfile.vehicle_color || 
+                                   'Prata'}
               </Text>
               <Text style={styles.vehicleYear}>
-                Ano: {driverProfile.vehicles[0]?.year || '2020'}
+                Ano: {driverProfile.vehicles?.[0]?.year || 
+                      driverProfile.vehicle?.year || 
+                      driverProfile.vehicleInfo?.year || 
+                      driverProfile.vehicle_year || 
+                      '2018'}
               </Text>
             </View>
           </View>
