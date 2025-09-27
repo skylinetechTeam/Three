@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import { Platform, Alert } from 'react-native';
 
 const CHECK_INTERVAL = 60000; // Verificar a cada 1 minuto
 
@@ -25,9 +24,6 @@ class ReservaScheduler {
     this.onReservaActivated = onReservaActivated;
     this.isRunning = true;
 
-    // Configurar notificações
-    await this.setupNotifications();
-    
     // Iniciar verificação periódica (apenas quando app estiver em uso)
     this.intervalId = setInterval(async () => {
       await this.checkReservas();
@@ -55,32 +51,6 @@ class ReservaScheduler {
     console.log('✅ [SCHEDULER] Scheduler parado');
   }
 
-  /**
-   * Configura as permissões de notificações
-   */
-  async setupNotifications() {
-    try {
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== 'granted') {
-        console.warn('⚠️ [SCHEDULER] Permissões de notificação não concedidas');
-        return;
-      }
-
-      // Configurar canal de notificação (Android)
-      if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('reservas', {
-          name: 'Reservas de Taxi',
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#FF231F7C',
-        });
-      }
-      
-      console.log('✅ [SCHEDULER] Notificações configuradas');
-    } catch (error) {
-      console.error('❌ [SCHEDULER] Erro ao configurar notificações:', error);
-    }
-  }
 
 
   /**
@@ -184,8 +154,8 @@ class ReservaScheduler {
       // 1. Atualizar status da reserva para "Em Andamento"
       await this.updateReservaStatus(reserva.id, 'Em Andamento');
 
-      // 2. Enviar notificação local para o usuário
-      await this.sendLocalNotification(reserva);
+      // 2. Mostrar alerta para o usuário
+      this.showReservaAlert(reserva);
 
       // 3. Simular envio de request para motorista (sem mexer na API)
       await this.simulateDriverRequest(reserva);
@@ -228,25 +198,23 @@ class ReservaScheduler {
   }
 
   /**
-   * Envia notificação local para o usuário
+   * Mostra alerta nativo para o usuário
    * @param {Object} reserva - Dados da reserva
    */
-  async sendLocalNotification(reserva) {
+  showReservaAlert(reserva) {
     try {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '🚕 Sua reserva foi ativada!',
-          body: `Um motorista está sendo solicitado para sua corrida de ${reserva.origem} para ${reserva.destino}`,
-          sound: true,
-          priority: Notifications.AndroidImportance.HIGH,
-          vibrate: [0, 250, 250, 250],
-        },
-        trigger: null, // Enviar imediatamente
-      });
+      Alert.alert(
+        '🚕 Sua reserva foi ativada!',
+        `Um motorista está sendo solicitado para sua corrida de ${reserva.origem} para ${reserva.destino}`,
+        [
+          { text: 'OK', style: 'default' }
+        ],
+        { cancelable: true }
+      );
 
-      console.log(`📱 [SCHEDULER] Notificação enviada para reserva ${reserva.id}`);
+      console.log(`📱 [SCHEDULER] Alerta mostrado para reserva ${reserva.id}`);
     } catch (error) {
-      console.error(`❌ [SCHEDULER] Erro ao enviar notificação para reserva ${reserva.id}:`, error);
+      console.error(`❌ [SCHEDULER] Erro ao mostrar alerta para reserva ${reserva.id}:`, error);
     }
   }
 

@@ -11,7 +11,7 @@ Implementar um sistema que monitora automaticamente as reservas criadas na tela 
 **Funcionalidades principais:**
 - ✅ Monitora reservas salvas no AsyncStorage
 - ✅ Verifica periodicamente se alguma reserva deve ser executada
-- ✅ Envia notificações locais quando uma reserva é ativada  
+- ✅ Mostra alerta nativo quando uma reserva é ativada  
 - ✅ Simula envio de request para motorista
 - ✅ Funciona apenas quando o app estiver em uso (foreground)
 - ✅ Sistema de logs detalhados para debugging
@@ -51,7 +51,7 @@ Implementar um sistema que monitora automaticamente as reservas criadas na tela 
 3. **Ativação Automática**
    - Quando chega o horário (-2 a +5 min de tolerância)
    - Status atualizado para `Em Andamento`
-   - Notificação local enviada ao usuário
+   - Alerta nativo mostrado ao usuário
    - Request simulado enviado para motorista
    - UI atualizada automaticamente
 
@@ -82,12 +82,13 @@ const CHECK_INTERVAL = 60000; // 1 minuto em millisegundos
 // Funciona apenas enquanto o app estiver em uso
 ```
 
-### Notificações
+### Alertas Nativos
 ```javascript
-// Canal para Android
-channel: 'reservas'
-importance: HIGH
-vibrationPattern: [0, 250, 250, 250]
+// Alert nativo do React Native
+Alert.alert(
+  '🚕 Sua reserva foi ativada!',
+  'Um motorista está sendo solicitado para sua corrida'
+);
 ```
 
 ### Tolerância de Horário
@@ -133,10 +134,10 @@ const stats = await reservaScheduler.getStats();
 3. Aguarde o horário e observe os logs
 4. Verifique se a reserva foi ativada automaticamente
 
-### 3. Teste de Notificação
-1. Permita notificações no dispositivo
-2. Crie reserva agendada
-3. Quando ativar, deve receber notificação local
+### 3. Teste de Alerta
+1. Crie reserva agendada
+2. Mantenha o app aberto
+3. Quando ativar, deve aparecer um alerta nativo
 
 ## 🚀 Request Simulado para Motorista
 
