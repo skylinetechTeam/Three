@@ -30,6 +30,7 @@ import {
   getAllCollectiveRoutes,
   getLocationCoordinates 
 } from '../config/collectiveRoutes';
+import PricingHelper from './PricingHelper';
 
 const { width, height } = Dimensions.get('window');
 
@@ -54,6 +55,7 @@ export default function HomeScreen({ navigation, route }) {
   const [passengerProfile, setPassengerProfile] = useState(null);
   const [currentRide, setCurrentRide] = useState(null);
   const [requestStatus, setRequestStatus] = useState(null); // 'pending', 'accepted', 'rejected', 'cancelled', 'completed', 'started'
+  const [driverInfo, setDriverInfo] = useState(null);
   
   // Atualizar refs quando os estados mudam
   useEffect(() => {
@@ -63,7 +65,6 @@ export default function HomeScreen({ navigation, route }) {
   useEffect(() => {
     requestStatusRef.current = requestStatus;
   }, [requestStatus]);
-  const [driverInfo, setDriverInfo] = useState(null);
   const [requestId, setRequestId] = useState(null);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [rideEstimate, setRideEstimate] = useState(null);
@@ -98,6 +99,46 @@ export default function HomeScreen({ navigation, route }) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
     return R * c; // Distance in meters
+  };
+
+  // Função para validar dados do motorista
+  const isValidDriverData = (driverInfo) => {
+    if (!driverInfo) {
+      console.log('❌ [VALIDAÇÃO] driverInfo é nulo ou undefined');
+      return false;
+    }
+    
+    // Verificar nome válido (não pode ser padrão)
+    const hasValidName = driverInfo.name && 
+                        driverInfo.name !== 'Motorista' && 
+                        driverInfo.name.trim().length > 2;
+    
+    // Verificar ID válido
+    const hasValidId = driverInfo.id && 
+                      driverInfo.id.toString().trim().length > 0;
+    
+    // Verificar se tem dados do veículo válidos
+    const hasValidVehicle = driverInfo.vehicleInfo && (
+      (driverInfo.vehicleInfo.make && driverInfo.vehicleInfo.model) ||
+      (driverInfo.vehicleInfo.plate && 
+       driverInfo.vehicleInfo.plate !== 'ABC-1234' && 
+       driverInfo.vehicleInfo.plate.trim().length > 0) ||
+      (driverInfo.vehicleInfo.color && driverInfo.vehicleInfo.color.trim().length > 0)
+    );
+    
+    const isValid = hasValidName && hasValidId;
+    
+    console.log('🔍 [VALIDAÇÃO] Resultado da validação:', {
+      hasValidName: hasValidName,
+      hasValidId: hasValidId,
+      hasValidVehicle: hasValidVehicle,
+      name: driverInfo.name,
+      id: driverInfo.id,
+      vehicleInfo: driverInfo.vehicleInfo,
+      isValid: isValid
+    });
+    
+    return isValid;
   };
 
   // Função de teste para simular o início da corrida (desenvolvimento)
@@ -778,16 +819,32 @@ export default function HomeScreen({ navigation, route }) {
           setRequestStatus('accepted');
           console.log('📦 Dados finais do veículo sendo salvos:', vehicleData);
           
-          // SALVAR INFORMAÇÕES DO MOTORISTA COM DADOS CORRETOS DO VEÍCULO
-          setDriverInfo({
+          // PREPARAR dados do motorista
+          const driverData = {
             id: data.driver?.id || data.driverId || data.ride?.driverId,
-            name: data.driver?.name || data.ride?.driverName || 'Motorista',
+            name: data.driver?.name || data.ride?.driverName,
             phone: data.driver?.phone || data.ride?.driverPhone || '',
-            vehicleInfo: vehicleData || {},
+            vehicleInfo: vehicleData,
             rating: data.driver?.rating || data.ride?.rating || 0,
             location: data.driver?.location || null,
-            estimatedArrival: data.estimatedArrival || '5-10 minutos'
-          });
+            estimatedArrival: data.estimatedArrival
+          };
+
+          console.log('🔍 [PREPARAÇÃO] Dados preparados do motorista:', driverData);
+
+          // SÓ SALVAR se os dados são válidos
+          if (isValidDriverData(driverData)) {
+            setDriverInfo(driverData);
+            console.log('✅ [SUCESSO] Dados válidos do motorista salvos');
+          } else {
+            console.warn('⚠️ [AVISO] Dados do motorista são padrão/inválidos, não exibindo modal');
+            console.warn('🔍 [DEBUG] Motivo da rejeição:', {
+              name: driverData.name,
+              isNameValid: driverData.name && driverData.name !== 'Motorista',
+              id: driverData.id,
+              isIdValid: driverData.id && driverData.id.toString().trim().length > 0
+            });
+          }
           
           if (data.rideId || data.ride?.id) {
             setRequestId(data.rideId || data.ride.id);
@@ -2044,8 +2101,23 @@ export default function HomeScreen({ navigation, route }) {
         const timeInMinutes = estimatedTime / 60;
         console.log('📏 Distância em km:', distanceInKm);
         console.log('⏱️ Tempo em minutos:', timeInMinutes);
-        estimatedFare = apiService.calculateEstimatedFare(distanceInKm, timeInMinutes, vehicleType);
-        console.log('💰 Tarifa calculada privado:', estimatedFare, 'AOA');
+        
+        // Calcular tarifa original
+        const originalFare = apiService.calculateEstimatedFare(distanceInKm, timeInMinutes, vehicleType);
+        console.log('💰 Tarifa original privado:', originalFare, 'AOA');
+        
+        // Aplicar precificação competitiva usando PricingHelper
+        const competitivePricing = PricingHelper.calculateCompetitivePrice(
+          originalFare, 
+          null, // Sem preço da Yango por enquanto (pode ser adicionado via input depois)
+          vehicleType, 
+          distanceInKm
+        );
+        
+        // Usar o preço competitivo como fare final
+        estimatedFare = competitivePricing.finalPrice;
+        console.log('💰 Tarifa competitiva aplicada:', estimatedFare, 'AOA');
+        console.log('💰 Economia gerada:', competitivePricing.savings, 'AOA');
       }
       
       // Garantir formatação correta dos textos
@@ -2118,18 +2190,32 @@ export default function HomeScreen({ navigation, route }) {
         }
         
         // Extrair dados do veículo
-        const vehicleData = data.vehicleInfo || data.ride?.vehicleInfo || data.driver?.vehicleInfo || {};
+        const vehicleData = data.vehicleInfo || data.ride?.vehicleInfo || data.driver?.vehicleInfo;
         console.log('🚗 Dados do veículo:', vehicleData);
         
-        // Salvar informações do motorista
-        setDriverInfo({
+        // PREPARAR dados do motorista
+        const driverData = {
           id: data.driverId || data.driver?.id || data.ride?.driverId,
-          name: data.driverName || data.driver?.name || data.ride?.driverName || 'Motorista',
+          name: data.driverName || data.driver?.name || data.ride?.driverName,
           phone: data.driverPhone || data.driver?.phone || data.ride?.driverPhone || '',
           vehicleInfo: vehicleData,
           rating: data.driver?.rating || data.ride?.rating || 4.5,
-          estimatedArrival: data.estimatedArrival || '5-10 minutos'
-        });
+          estimatedArrival: data.estimatedArrival
+        };
+
+        console.log('🔍 [BUSCA] Dados preparados do motorista:', driverData);
+
+        // SÓ SALVAR se os dados são válidos
+        if (isValidDriverData(driverData)) {
+          setDriverInfo(driverData);
+          console.log('✅ [BUSCA] Dados válidos do motorista salvos');
+        } else {
+          console.warn('⚠️ [BUSCA] Dados do motorista inválidos, rejeitando corrida');
+          // Se os dados são inválidos, rejeitar a aceitação
+          setRequestStatus('rejected');
+          setIsSearchingDrivers(true); // Continuar procurando
+          return;
+        }
         
         // Atualizar corrida atual
         if (data.ride) {
@@ -3445,7 +3531,7 @@ export default function HomeScreen({ navigation, route }) {
       )}
 
       {/* Request Status - Solicitação Aceita - Dropdown Bottom */}
-      {requestStatus === 'accepted' && driverInfo && (
+      {requestStatus === 'accepted' && driverInfo && isValidDriverData(driverInfo) && (
         <Animated.View style={[styles.driverAcceptedDropdown, {
           transform: [{ translateY: slideAnim }]
         }]}>

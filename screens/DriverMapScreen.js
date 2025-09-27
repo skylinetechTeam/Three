@@ -45,11 +45,28 @@ export default function DriverMapScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
+    console.log('\n🎯 ========== ENTRANDO NO DRIVEMAPSCREEN ==========');
+    console.log('⏰ Timestamp de entrada:', new Date().toISOString());
+    console.log('\n📱 === PARÂMETROS DE NAVEGAÇÃO ===');
+    console.log('Route params completos:', JSON.stringify(route?.params, null, 2));
+    
+    if (route?.params?.activeRide) {
+      console.log('🏁 Corrida ativa detectada nos parâmetros!');
+      console.log('📍 Detalhes da corrida:', JSON.stringify(route.params.activeRide, null, 2));
+      console.log('🧭 Modo de navegação:', route.params.navigateTo || 'pickup');
+    } else {
+      console.log('⭕ Nenhuma corrida ativa detectada nos parâmetros');
+    }
+    
+    console.log('\n🚀 Iniciando inicialização do motorista...');
     initializeDriver();
+    
+    console.log('📡 Solicitando permissão de localização...');
     requestLocationPermission();
     
     // Check if we have an active ride from navigation params
     if (route?.params?.activeRide) {
+      console.log('✅ Configurando corrida ativa a partir dos parâmetros');
       setActiveRide(route.params.activeRide);
       setNavigationMode(true);
       setRidePhase(route.params.navigateTo || 'pickup');
@@ -57,6 +74,7 @@ export default function DriverMapScreen({ navigation, route }) {
     
     // Cleanup function
     return () => {
+      console.log('🧹 Limpando conexões do DriverMapScreen...');
       cleanupConnections();
     };
   }, []);
@@ -99,6 +117,112 @@ export default function DriverMapScreen({ navigation, route }) {
     }
   }, [activeRide, isOnline]);
 
+  // Effect para logar dados do motorista sempre que mudarem
+  useEffect(() => {
+    console.log('\n🔎 === useEffect driverProfile TRIGGERED ===');
+    console.log('⏰ Timestamp:', new Date().toISOString());
+    console.log('📄 driverProfile status:', !!driverProfile ? 'exists' : 'null/undefined');
+    
+    if (driverProfile) {
+      console.log('\n🔄 ========== DADOS DO MOTORISTA ATUALIZADOS ==========');
+      console.log('⏰ Timestamp atualização:', new Date().toISOString());
+      
+      // Log da fonte dos dados
+      console.log('📍 Origem dos dados:');
+      console.log('  É objeto válido?', typeof driverProfile === 'object' && driverProfile !== null);
+      console.log('  Tem ID?', !!(driverProfile.id || driverProfile.apiDriverId));
+      console.log('  Tem nome?', !!(driverProfile.name || driverProfile.nome));
+      console.log('  Total de propriedades:', Object.keys(driverProfile).length);
+      
+      console.log('\n👤 === INFORMAÇÕES PESSOAIS ===');
+      console.log('Nome:', driverProfile.name || driverProfile.nome || 'N/A');
+      console.log('Telefone:', driverProfile.phone || driverProfile.telefone || 'N/A');
+      console.log('Email:', driverProfile.email || 'N/A');
+      console.log('ID Local:', driverProfile.id || 'N/A');
+      console.log('ID API:', driverProfile.apiDriverId || 'N/A');
+      console.log('Status Online:', driverProfile.isOnline || false);
+      console.log('Avaliação:', driverProfile.rating || 'N/A');
+      console.log('Total de Corridas:', driverProfile.total_trips || driverProfile.totalTrips || 'N/A');
+      
+      console.log('\n🚗 === INFORMAÇÕES DO VEÍCULO ===');
+      // Log do array vehicles se existir
+      if (driverProfile.vehicles && Array.isArray(driverProfile.vehicles) && driverProfile.vehicles.length > 0) {
+        console.log('✅ Array vehicles encontrado:', driverProfile.vehicles.length, 'veículo(s)');
+        driverProfile.vehicles.forEach((vehicle, index) => {
+          console.log(`  🚙 Veículo ${index + 1}:`);
+          console.log('    Marca:', vehicle.make || vehicle.marca || 'N/A');
+          console.log('    Modelo:', vehicle.model || vehicle.modelo || 'N/A');
+          console.log('    Ano:', vehicle.year || vehicle.ano || 'N/A');
+          console.log('    Cor:', vehicle.color || vehicle.cor || 'N/A');
+          console.log('    Placa:', vehicle.plate || vehicle.placa || vehicle.license_plate || 'N/A');
+          console.log('    Objeto completo:', JSON.stringify(vehicle, null, 2));
+        });
+      } else {
+        console.log('❌ Array vehicles vazio ou não encontrado');
+      }
+      
+      // Log do objeto vehicle único se existir
+      if (driverProfile.vehicle) {
+        console.log('\n✅ Objeto vehicle encontrado:');
+        console.log('  Marca:', driverProfile.vehicle.make || driverProfile.vehicle.marca || 'N/A');
+        console.log('  Modelo:', driverProfile.vehicle.model || driverProfile.vehicle.modelo || 'N/A');
+        console.log('  Ano:', driverProfile.vehicle.year || driverProfile.vehicle.ano || 'N/A');
+        console.log('  Cor:', driverProfile.vehicle.color || driverProfile.vehicle.cor || 'N/A');
+        console.log('  Placa:', driverProfile.vehicle.plate || driverProfile.vehicle.placa || 'N/A');
+        console.log('  Objeto completo:', JSON.stringify(driverProfile.vehicle, null, 2));
+      } else {
+        console.log('❌ Objeto vehicle não encontrado');
+      }
+      
+      // Log do objeto vehicleInfo se existir
+      if (driverProfile.vehicleInfo) {
+        console.log('\n✅ Objeto vehicleInfo encontrado:');
+        console.log('  Marca:', driverProfile.vehicleInfo.make || driverProfile.vehicleInfo.marca || 'N/A');
+        console.log('  Modelo:', driverProfile.vehicleInfo.model || driverProfile.vehicleInfo.modelo || 'N/A');
+        console.log('  Ano:', driverProfile.vehicleInfo.year || driverProfile.vehicleInfo.ano || 'N/A');
+        console.log('  Cor:', driverProfile.vehicleInfo.color || driverProfile.vehicleInfo.cor || 'N/A');
+        console.log('  Placa:', driverProfile.vehicleInfo.plate || driverProfile.vehicleInfo.placa || 'N/A');
+        console.log('  Objeto completo:', JSON.stringify(driverProfile.vehicleInfo, null, 2));
+      } else {
+        console.log('❌ Objeto vehicleInfo não encontrado');
+      }
+      
+      // Log dos campos diretos de veículo no profile
+      console.log('\n🔧 Campos diretos do veículo no profile:');
+      console.log('  vehicle_make:', driverProfile.vehicle_make || 'N/A');
+      console.log('  vehicle_model:', driverProfile.vehicle_model || 'N/A');
+      console.log('  vehicle_year:', driverProfile.vehicle_year || 'N/A');
+      console.log('  vehicle_color:', driverProfile.vehicle_color || 'N/A');
+      console.log('  vehicle_plate:', driverProfile.vehicle_plate || 'N/A');
+      console.log('  license_plate:', driverProfile.license_plate || 'N/A');
+      
+      // Campos em português
+      console.log('\n🌐 Campos em português:');
+      console.log('  marca:', driverProfile.marca || 'N/A');
+      console.log('  modelo:', driverProfile.modelo || 'N/A');
+      console.log('  ano:', driverProfile.ano || 'N/A');
+      console.log('  cor:', driverProfile.cor || 'N/A');
+      console.log('  placa:', driverProfile.placa || 'N/A');
+      
+      // Usar extractVehicleInfo para processar
+      console.log('\n🔍 Dados processados pelo extractVehicleInfo:');
+      const extractedVehicle = extractVehicleInfo(driverProfile);
+      console.log('📦 Resultado:', JSON.stringify(extractedVehicle, null, 2));
+      
+      console.log('\n📊 === ESTADO ATUAL ===');
+      console.log('🟢 Online:', isOnline);
+      console.log('🔌 Socket conectado:', socketConnected);
+      console.log('🏁 Corrida ativa:', !!activeRide);
+      console.log('📍 Localização:', location ? `${location.coords?.latitude}, ${location.coords?.longitude}` : 'N/A');
+      
+      console.log('\n📋 === ESTRUTURA COMPLETA (DEBUG) ===');
+      console.log(JSON.stringify(driverProfile, null, 2));
+      console.log('\n========== FIM DOS LOGS ATUALIZADOS ==========\n');
+    } else {
+      console.log('⚠️ driverProfile é null ou undefined');
+    }
+  }, [driverProfile, isOnline, socketConnected, activeRide, location]);
+
   useEffect(() => {
     if (activeRide && location && webViewRef.current && navigationMode) {
       console.log('🎯 useEffect triggered for navigation:', {
@@ -123,10 +247,57 @@ export default function DriverMapScreen({ navigation, route }) {
     try {
       // Tentar carregar dados autenticados primeiro
       console.log('🔍 Buscando dados do motorista autenticado...');
+      console.log('📱 Método usado: driverAuthService.getLocalDriverData()');
+      
       const authData = await driverAuthService.getLocalDriverData();
       
+      console.log('\n🔬 === RESULTADO DO getLocalDriverData ===');
+      console.log('authData existe?', !!authData);
+      console.log('authData type:', typeof authData);
       if (authData) {
-        console.log('✅ Dados do motorista encontrados via authService!');
+        console.log('authData keys:', Object.keys(authData));
+        console.log('authData size:', JSON.stringify(authData).length, 'caracteres');
+      } else {
+        console.log('authData é null/undefined');
+      }
+      
+      // COMPARAÇÃO: Tentar também buscar dados atualizados do Supabase (como no DriverProfileScreen)
+      if (authData) {
+        console.log('\n🔄 === TENTANDO MÉTODO DO DRIVERPROFILESCREEN ===');
+        console.log('📡 Buscando dados atualizados do Supabase...');
+        
+        try {
+          const updatedData = await driverAuthService.getDriverFullData(authData.id);
+          console.log('✅ Dados do Supabase obtidos!');
+          console.log('updatedData existe?', !!updatedData);
+          console.log('updatedData keys:', updatedData ? Object.keys(updatedData) : 'N/A');
+          
+          if (updatedData) {
+            console.log('🔄 Mesclando dados como no DriverProfileScreen...');
+            const mergedData = {
+              ...updatedData,
+              photo: authData.photo,
+              isOnline: authData.isOnline || false,
+              isLoggedIn: authData.isLoggedIn || false
+            };
+            
+            console.log('✅ Dados mesclados! Usando dados do Supabase + dados locais');
+            console.log('mergedData vehicle info:');
+            console.log('  vehicles array:', mergedData.vehicles ? mergedData.vehicles.length + ' items' : 'N/A');
+            console.log('  vehicle object:', !!mergedData.vehicle ? 'exists' : 'N/A');
+            console.log('  direct fields: make=' + (mergedData.vehicle_make || 'N/A'));
+            
+            // Usar dados mesclados em vez dos dados originais
+            authData = mergedData;
+          }
+        } catch (supabaseError) {
+          console.warn('⚠️ Erro ao buscar dados do Supabase:', supabaseError.message);
+          console.log('📦 Continuando com dados locais apenas');
+        }
+      }
+      
+      if (authData) {
+        console.log('✅ Dados do motorista encontrados (final)!');
         console.log('\n📋 === PERFIL COMPLETO DO MOTORISTA ===');
         console.log('👤 Nome:', authData.name || authData.nome || 'N/A');
         console.log('📱 Telefone:', authData.phone || authData.telefone || 'N/A');

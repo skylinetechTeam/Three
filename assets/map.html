@@ -56,9 +56,11 @@
         // Inicializar mapa
         var map = L.map('map').setView([-8.8390, 13.2894], 13);
         
-        // Adicionar tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
+        // Adicionar tile layer - Estilo similar ao Google Maps
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors, © CartoDB',
+            subdomains: 'abcd',
+            maxZoom: 20
         }).addTo(map);
         
         // Variáveis globais

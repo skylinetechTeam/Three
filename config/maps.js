@@ -1,5 +1,13 @@
 // Maps API Configuration
 export const MAPS_CONFIG = {
+  // CartoDB Voyager - Estilo similar ao Google Maps
+  GOOGLE_LIKE: {
+    TILE_URL: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+    ATTRIBUTION: '© OpenStreetMap contributors, © CartoDB',
+    MAX_ZOOM: 20,
+    SUBDOMAINS: 'abcd'
+  },
+  // OpenStreetMap padrão (fallback)
   OPENSTREETMAP: {
     TILE_URL: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     ATTRIBUTION: '© OpenStreetMap contributors',
@@ -19,8 +27,13 @@ export const MAPS_CONFIG = {
   }
 };
 
-// Get OpenStreetMap tile configuration
+// Get Google Maps-like tile configuration (default)
 export const getMapTileConfig = () => {
+  return MAPS_CONFIG.GOOGLE_LIKE;
+};
+
+// Get OpenStreetMap tile configuration (fallback)
+export const getOSMTileConfig = () => {
   return MAPS_CONFIG.OPENSTREETMAP;
 };
 

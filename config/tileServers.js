@@ -212,5 +212,12 @@ export function getBestServerForAfrica() {
   return server || getRandomTileServer();
 }
 
+// Export default best server with Google-like style
+export function getGoogleLikeServer() {
+  // CartoDB Voyager has the most Google Maps-like appearance
+  const googleLikeServer = tileServers.find(s => s.name === 'CartoDB Voyager');
+  return googleLikeServer || getBestServerForAfrica();
+}
+
 // Export default best server
-export default getBestServerForAfrica();
+export default getGoogleLikeServer();
