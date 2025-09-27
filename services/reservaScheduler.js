@@ -1,10 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import * as BackgroundFetch from 'expo-background-fetch';
-import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 
-const BACKGROUND_TASK_NAME = 'RESERVA_SCHEDULER';
 const CHECK_INTERVAL = 60000; // Verificar a cada 1 minuto
 
 class ReservaScheduler {
@@ -31,10 +28,7 @@ class ReservaScheduler {
     // Configurar notificações
     await this.setupNotifications();
     
-    // Registrar task em background
-    await this.registerBackgroundTask();
-    
-    // Iniciar verificação periódica em foreground
+    // Iniciar verificação periódica (apenas quando app estiver em uso)
     this.intervalId = setInterval(async () => {
       await this.checkReservas();
     }, CHECK_INTERVAL);
@@ -88,34 +82,6 @@ class ReservaScheduler {
     }
   }
 
-  /**
-   * Registra a task em background
-   */
-  async registerBackgroundTask() {
-    try {
-      // Definir a task
-      TaskManager.defineTask(BACKGROUND_TASK_NAME, async () => {
-        try {
-          await this.checkReservas();
-          return BackgroundFetch.BackgroundFetchResult.NewData;
-        } catch (error) {
-          console.error('❌ [SCHEDULER] Erro na task background:', error);
-          return BackgroundFetch.BackgroundFetchResult.Failed;
-        }
-      });
-
-      // Registrar a task
-      await BackgroundFetch.registerTaskAsync(BACKGROUND_TASK_NAME, {
-        minimumInterval: 60, // 1 minuto em segundos
-        stopOnTerminate: false,
-        startOnBoot: true,
-      });
-
-      console.log('✅ [SCHEDULER] Background task registrada');
-    } catch (error) {
-      console.error('❌ [SCHEDULER] Erro ao registrar background task:', error);
-    }
-  }
 
   /**
    * Verifica se existem reservas para serem executadas
@@ -375,12 +341,11 @@ class ReservaScheduler {
   }
 
   /**
-   * Limpa tasks em background ao ser destruído
+   * Limpa o scheduler ao ser destruído
    */
   async cleanup() {
     try {
       this.stop();
-      await BackgroundFetch.unregisterTaskAsync(BACKGROUND_TASK_NAME);
       console.log('🧹 [SCHEDULER] Cleanup concluído');
     } catch (error) {
       console.error('❌ [SCHEDULER] Erro no cleanup:', error);

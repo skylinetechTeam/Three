@@ -13,13 +13,13 @@ Implementar um sistema que monitora automaticamente as reservas criadas na tela 
 - ✅ Verifica periodicamente se alguma reserva deve ser executada
 - ✅ Envia notificações locais quando uma reserva é ativada  
 - ✅ Simula envio de request para motorista
-- ✅ Suporte a background tasks (funciona mesmo com app fechado)
+- ✅ Funciona apenas quando o app estiver em uso (foreground)
 - ✅ Sistema de logs detalhados para debugging
 
 **Configurações:**
 - **Intervalo de verificação:** 1 minuto
 - **Janela de ativação:** -2 a +5 minutos do horário agendado
-- **Background tasks:** Habilitado com Expo BackgroundFetch
+- **Funcionamento:** Apenas em foreground (enquanto app estiver em uso)
 
 ### 2. Integração com ReservasScreen
 
@@ -75,12 +75,11 @@ Implementar um sistema que monitora automaticamente as reservas criadas na tela 
 
 ## 🔧 Configurações Técnicas
 
-### Background Tasks
+### Verificação Periódica
 ```javascript
-// Configuração automática via Expo BackgroundFetch
-minimumInterval: 60, // 1 minuto
-stopOnTerminate: false, // Continua após fechar app
-startOnBoot: true, // Inicia com o sistema
+// Configuração do intervalo de verificação
+const CHECK_INTERVAL = 60000; // 1 minuto em millisegundos
+// Funciona apenas enquanto o app estiver em uso
 ```
 
 ### Notificações
@@ -128,11 +127,11 @@ const stats = await reservaScheduler.getStats();
 3. Crie uma reserva para alguns minutos no futuro
 4. Aguarde e observe os logs no console
 
-### 2. Teste de Background
+### 2. Teste de Foreground
 1. Crie uma reserva para 2 minutos no futuro
-2. Feche/minimize o aplicativo
-3. Aguarde o horário
-4. Abra o app e verifique se a reserva foi ativada
+2. Mantenha o aplicativo aberto e ativo
+3. Aguarde o horário e observe os logs
+4. Verifique se a reserva foi ativada automaticamente
 
 ### 3. Teste de Notificação
 1. Permita notificações no dispositivo
@@ -180,7 +179,7 @@ Este formato pode ser facilmente integrado com:
 
 ### Limpeza Automática
 - Scheduler para automaticamente quando tela é desmontada
-- Background tasks são removidas no cleanup
+- Intervalos são limpos no cleanup
 - Não há vazamentos de memória
 
 ### Controle Manual
@@ -201,7 +200,7 @@ await reservaScheduler.cleanup();
 ## 🎉 Vantagens da Implementação
 
 ✅ **Não mexe na API** - Sistema totalmente independente
-✅ **Background operation** - Funciona mesmo com app fechado
+✅ **Funcionamento simples** - Funciona enquanto app estiver em uso
 ✅ **Visual feedback** - Indicador claro de que está funcionando
 ✅ **Logs detalhados** - Fácil debugging e monitoramento
 ✅ **Tolerância a erros** - Janela de tempo flexível
