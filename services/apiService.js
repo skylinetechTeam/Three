@@ -1174,18 +1174,18 @@ class ApiService {
       // Coletivo: preço fixo de 500 AOA
       return 500;
     } else if (vehicleType === 'privado' || vehicleType === 'premium') {
-      // Privado: a partir de 1200 AOA + cálculo por distância
-      const baseFare = 1200; // Taxa base mínima em AOA
-      const perKmRate = 150; // AOA por km para privado
-      const perMinuteRate = 25; // AOA por minuto para privado
+      // Privado: a partir de 2500 AOA + cálculo por distância aumentado
+      const baseFare = 2500; // Taxa base mínima em AOA (aumentado de 1200)
+      const perKmRate = 300; // AOA por km para privado (aumentado de 150)
+      const perMinuteRate = 50; // AOA por minuto para privado (aumentado de 25)
       
       const distanceFare = distance * perKmRate;
       const timeFare = time * perMinuteRate;
       
       const calculatedFare = Math.round(baseFare + distanceFare + timeFare);
       
-      // Garantir que o preço mínimo seja 1200 AOA
-      return Math.max(calculatedFare, 1200);
+      // Garantir que o preço mínimo seja 2500 AOA
+      return Math.max(calculatedFare, 2500);
     }
     
     // Fallback para standard

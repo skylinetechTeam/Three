@@ -6,12 +6,12 @@ class PricingHelper {
     // Desconto base para ser mais competitivo que Yango
     baseDiscount: 0.15, // 15% de desconto base
     
-    // Descontos por faixa de preço (AOA)
+    // Descontos por faixa de preço (AOA) - ajustados para preços mais altos
     discountByRange: {
-      short: { min: 0, max: 10000, discount: 0.10 },    // Até 10k: 10%
-      medium: { min: 10000, max: 25000, discount: 0.15 }, // 10k-25k: 15% 
-      long: { min: 25000, max: 50000, discount: 0.18 },   // 25k-50k: 18%
-      verylong: { min: 50000, max: Infinity, discount: 0.20 } // >50k: 20%
+      short: { min: 0, max: 15000, discount: 0.10 },    // Até 15k: 10%
+      medium: { min: 15000, max: 35000, discount: 0.15 }, // 15k-35k: 15% 
+      long: { min: 35000, max: 70000, discount: 0.18 },   // 35k-70k: 18%
+      verylong: { min: 70000, max: Infinity, discount: 0.20 } // >70k: 20%
     },
     
     // Multiplicadores por tipo de veículo para competitividade

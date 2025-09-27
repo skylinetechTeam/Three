@@ -9,14 +9,14 @@ class PricingService {
       max: 0.10   // 10%
     },
     
-    // Preço base por km (pode ajustar conforme sua região)
-    baseRatePerKm: 150, // Kwanzas por km
+    // Preço base por km (aumentado para privados)
+    baseRatePerKm: 300, // Kwanzas por km (aumentado de 150)
     
-    // Taxa base (taxa mínima da corrida)
-    baseFare: 500, // Kwanzas
+    // Taxa base (taxa mínima da corrida - apenas para privados)
+    baseFare: 2500, // Kwanzas (aumentado de 500)
     
     // Taxa por tempo (por minuto)
-    timeRate: 25, // Kwanzas por minuto
+    timeRate: 50, // Kwanzas por minuto (aumentado de 25)
     
     // Multiplicadores por tipo de veículo
     vehicleMultipliers: {
@@ -148,10 +148,10 @@ class PricingService {
     console.log(`─`.repeat(50));
     
     const scenarios = [
-      { yangoPrice: 3000, label: 'Corrida curta' },
-      { yangoPrice: 4000, label: 'Corrida média' },
-      { yangoPrice: 6000, label: 'Corrida longa' },
-      { yangoPrice: 8000, label: 'Corrida premium' }
+      { yangoPrice: 4500, label: 'Corrida curta' },
+      { yangoPrice: 6500, label: 'Corrida média' },
+      { yangoPrice: 10000, label: 'Corrida longa' },
+      { yangoPrice: 15000, label: 'Corrida premium' }
     ];
     
     scenarios.forEach(scenario => {

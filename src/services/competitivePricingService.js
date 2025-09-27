@@ -9,13 +9,13 @@ class CompetitivePricingService {
       max: 0.10   // 10%
     },
     
-    // Configurações para diferentes cenários
+    // Configurações para diferentes cenários - ajustados para preços mais altos
     discountByRange: {
-      // Corridas curtas (até 2000 Kz)
+      // Corridas curtas (até 3000 Kz)
       short: 0.075, // 7,5%
-      // Corridas médias (2000-6000 Kz) 
+      // Corridas médias (3000-8000 Kz) 
       medium: 0.0875, // 8,75%
-      // Corridas longas (acima de 6000 Kz)
+      // Corridas longas (acima de 8000 Kz)
       long: 0.095 // 9,5%
     }
   };
@@ -31,11 +31,11 @@ class CompetitivePricingService {
       throw new Error('Preço da Yango deve ser um número positivo');
     }
 
-    // Determinar tipo de corrida automaticamente se não especificado
+    // Determinar tipo de corrida automaticamente se não especificado - ajustado para preços mais altos
     if (!rangeType) {
-      if (yangoPrice <= 2000) {
+      if (yangoPrice <= 3000) {
         rangeType = 'short';
-      } else if (yangoPrice <= 6000) {
+      } else if (yangoPrice <= 8000) {
         rangeType = 'medium';
       } else {
         rangeType = 'long';
