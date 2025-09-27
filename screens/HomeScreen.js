@@ -253,10 +253,12 @@ export default function HomeScreen({ navigation, route }) {
       const dest = route.params.selectedDestination;
       const autoStartFlow = route?.params?.autoStartFlow;
       const fromFavorites = route?.params?.fromFavorites;
+      const fromScheduled = route?.params?.fromScheduled;
       
       console.log('📍 Received destination from navigation:', dest);
       console.log('🚀 Auto start flow:', autoStartFlow);
       console.log('⭐ From favorites:', fromFavorites);
+      console.log('⏰ From scheduled:', fromScheduled);
       console.log('📱 Current location available:', !!location?.coords);
       
       setSelectedDestination(dest);
@@ -272,22 +274,30 @@ export default function HomeScreen({ navigation, route }) {
         );
       }
       
-      // Se veio dos favoritos com autoStartFlow, criar estimate e mostrar modal automaticamente
-      if (autoStartFlow && fromFavorites) {
-        console.log('🚀 Processando fluxo automático de favorito...');
+      // Se veio dos favoritos ou reservas agendadas com autoStartFlow, criar estimate e mostrar modal automaticamente
+      if (autoStartFlow && (fromFavorites || fromScheduled)) {
+        const sourceType = fromScheduled ? 'reserva agendada' : 'favorito';
+        console.log(`🚀 Processando fluxo automático de ${sourceType}...`);
+        
+        // Para reservas agendadas, mostrar alerta adicional
+        if (fromScheduled) {
+          const originalReservaId = route?.params?.originalReservaId;
+          const scheduledTime = route?.params?.scheduledTime;
+          console.log(`⏰ Reserva agendada ativada! ID: ${originalReservaId}, Horário: ${scheduledTime}`);
+        }
         
         setTimeout(async () => {
           try {
             const estimate = await createRideEstimateForFavorite(dest);
             
             if (estimate) {
-              console.log('✅ Estimate criado, definindo estado e mostrando modal...');
+              console.log(`✅ Estimate criado para ${sourceType}, definindo estado e mostrando modal...`);
               setRideEstimate(estimate);
               
               // Aguardar um pouco para garantir que o estado foi atualizado
               setTimeout(() => {
                 setShowConfirmationModal(true);
-                console.log('🎭 Modal de confirmação exibido');
+                console.log(`🎭 Modal de confirmação exibido para ${sourceType}`);
               }, 200);
             } else {
               console.error('❌ Falha ao criar estimate');
@@ -304,7 +314,11 @@ export default function HomeScreen({ navigation, route }) {
       navigation.setParams({ 
         selectedDestination: undefined, 
         autoStartFlow: undefined,
-        fromFavorites: undefined 
+        fromFavorites: undefined,
+        fromScheduled: undefined,
+        originalReservaId: undefined,
+        scheduledTime: undefined,
+        observacoes: undefined
       });
     }
   }, [route?.params?.selectedDestination, location]);

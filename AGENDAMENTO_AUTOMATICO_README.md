@@ -12,7 +12,7 @@ Implementar um sistema que monitora automaticamente as reservas criadas na tela 
 - ✅ Monitora reservas salvas no AsyncStorage
 - ✅ Verifica periodicamente se alguma reserva deve ser executada
 - ✅ Mostra alerta nativo quando uma reserva é ativada  
-- ✅ Simula envio de request para motorista
+- ✅ Navega para HomeScreen e inicia busca real de motoristas
 - ✅ Funciona apenas quando o app estiver em uso (foreground)
 - ✅ Sistema de logs detalhados para debugging
 
@@ -52,7 +52,8 @@ Implementar um sistema que monitora automaticamente as reservas criadas na tela 
    - Quando chega o horário (-2 a +5 min de tolerância)
    - Status atualizado para `Em Andamento`
    - Alerta nativo mostrado ao usuário
-   - Request simulado enviado para motorista
+   - **Navega para HomeScreen automaticamente**
+   - **Inicia busca real de motoristas** (igual aos favoritos)
    - UI atualizada automaticamente
 
 ## 📱 Interface de Usuário
@@ -228,9 +229,10 @@ await reservaScheduler.cleanup();
 Quando você agendar uma reserva na tela de Reservas, ela será automaticamente monitorada pelo scheduler. No horário marcado (com tolerância de ±2 minutos), o sistema irá:
 
 1. ✅ Atualizar o status da reserva
-2. ✅ Enviar notificação local para você
-3. ✅ Simular envio de request para motoristas
-4. ✅ Atualizar a interface automaticamente  
-5. ✅ Registrar tudo nos logs para acompanhamento
+2. ✅ Mostrar alerta nativo para você
+3. ✅ **Navegar automaticamente para a HomeScreen**
+4. ✅ **Iniciar busca real de motoristas** (processo completo)
+5. ✅ Atualizar a interface automaticamente  
+6. ✅ Registrar tudo nos logs para acompanhamento
 
 **Tudo isso sem mexer uma linha da API!** 🚀

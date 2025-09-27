@@ -98,7 +98,7 @@ const ReservasScreen = () => {
           console.log('📱 [RESERVAS] Reserva ativada:', reservaAtivada.id);
           // Recarregar reservas para atualizar a UI
           loadExistingReservas();
-        });
+        }, navigation);
         setSchedulerActive(true);
         // Iniciar animação pulsante
         startPulseAnimation();

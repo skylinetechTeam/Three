@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, Alert } from 'react-native';
+import { CommonActions } from '@react-navigation/native';
 
 const CHECK_INTERVAL = 60000; // Verificar a cada 1 minuto
 
@@ -8,13 +9,15 @@ class ReservaScheduler {
     this.isRunning = false;
     this.intervalId = null;
     this.onReservaActivated = null; // Callback para quando uma reserva for ativada
+    this.navigation = null; // Navigation object para navegar entre telas
   }
 
   /**
    * Inicia o scheduler
    * @param {Function} onReservaActivated - Callback executado quando uma reserva é ativada
+   * @param {Object} navigation - Objeto de navegação do React Navigation
    */
-  async start(onReservaActivated = null) {
+  async start(onReservaActivated = null, navigation = null) {
     if (this.isRunning) {
       console.log('📅 [SCHEDULER] Já está executando');
       return;
@@ -22,6 +25,7 @@ class ReservaScheduler {
 
     console.log('🚀 [SCHEDULER] Iniciando scheduler de reservas...');
     this.onReservaActivated = onReservaActivated;
+    this.navigation = navigation;
     this.isRunning = true;
 
     // Iniciar verificação periódica (apenas quando app estiver em uso)
@@ -157,8 +161,8 @@ class ReservaScheduler {
       // 2. Mostrar alerta para o usuário
       this.showReservaAlert(reserva);
 
-      // 3. Simular envio de request para motorista (sem mexer na API)
-      await this.simulateDriverRequest(reserva);
+      // 3. Navegar para HomeScreen e iniciar busca real
+      await this.navigateToHomeAndSearch(reserva);
 
       // 4. Chamar callback se fornecido
       if (this.onReservaActivated) {
@@ -219,58 +223,67 @@ class ReservaScheduler {
   }
 
   /**
-   * Simula o envio de request para um motorista
+   * Navega para HomeScreen e inicia busca real como um favorito
    * @param {Object} reserva - Dados da reserva
    */
-  async simulateDriverRequest(reserva) {
+  async navigateToHomeAndSearch(reserva) {
     try {
-      // Simular dados de request para motorista (formato similar ao da API)
-      const driverRequest = {
-        rideId: `scheduled_${reserva.id}`,
-        passengerId: `passenger_${Date.now()}`,
-        passengerName: 'Usuário da Reserva',
-        pickup: {
-          address: reserva.origem,
-          lat: reserva.origemLat || -8.8390,
-          lng: reserva.origemLng || 13.2894
-        },
-        destination: {
-          address: reserva.destino,
-          lat: reserva.destinoLat || -8.8450,
-          lng: reserva.destinoLng || 13.2950
-        },
-        estimatedFare: reserva.preco || 1000,
-        estimatedDistance: 5.0,
-        estimatedTime: 15,
-        rideType: reserva.tipoTaxi,
-        scheduledTime: reserva.data + ' ' + reserva.hora,
-        isScheduled: true,
-        originalReservaId: reserva.id,
-        observacoes: reserva.observacoes || ''
+      console.log(`🌐 [SCHEDULER] Navegando para HomeScreen com reserva ${reserva.id}...`);
+
+      if (!this.navigation) {
+        console.error('❌ [SCHEDULER] Navigation object não está disponível!');
+        Alert.alert(
+          '❌ Erro de Navegação',
+          'Não foi possível abrir automaticamente a tela de corridas. Por favor, vá para a tela inicial e solicite a corrida manualmente.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Preparar dados da reserva no formato que a HomeScreen espera
+      const destinationData = {
+        name: reserva.destino,
+        address: reserva.destino,
+        lat: reserva.destinoLat || -8.8450,
+        lng: reserva.destinoLng || 13.2950,
+        categories: [] // Deixar vazio ou adicionar categoria baseada no tipo
       };
 
-      // Log do request simulado
-      console.log('📤 [SCHEDULER] Request simulado para motorista:');
-      console.log('   Origem:', driverRequest.pickup.address);
-      console.log('   Destino:', driverRequest.destination.address);
-      console.log('   Preço estimado:', `${driverRequest.estimatedFare} Kz`);
-      console.log('   Tipo:', driverRequest.rideType);
-      console.log('   Horário original:', driverRequest.scheduledTime);
+      console.log('📤 [SCHEDULER] Dados da reserva para navegação:');
+      console.log('   Origem:', reserva.origem);
+      console.log('   Destino:', reserva.destino);
+      console.log('   Coordenadas destino:', `${destinationData.lat}, ${destinationData.lng}`);
+      console.log('   Tipo de táxi:', reserva.tipoTaxi);
+      console.log('   Horário original:', `${reserva.data} ${reserva.hora}`);
 
-      // Aqui você poderia integrar com um sistema de notificações push
-      // para motoristas ou com qualquer outro sistema externo
-      // Por exemplo: Firebase Cloud Messaging, OneSignal, etc.
+      // Navegar para HomeScreen com os mesmos parâmetros que um favorito usa
+      this.navigation.dispatch(
+        CommonActions.navigate({
+          name: 'Home',
+          params: {
+            selectedDestination: destinationData,
+            autoStartFlow: true, // Iniciar automaticamente o fluxo
+            fromScheduled: true, // Flag para identificar que veio de uma reserva agendada
+            originalReservaId: reserva.id, // ID da reserva original
+            scheduledTime: `${reserva.data} ${reserva.hora}`, // Horário original
+            observacoes: reserva.observacoes || ''
+          }
+        })
+      );
 
-      // Simular delay de processamento
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log(`🎯 [SCHEDULER] Navegação executada com sucesso (reserva ${reserva.id})`);
 
-      // Log de sucesso
-      console.log(`🎯 [SCHEDULER] Request enviado com sucesso para motoristas (reserva ${reserva.id})`);
-
-      return driverRequest;
+      return true;
 
     } catch (error) {
-      console.error(`❌ [SCHEDULER] Erro ao simular driver request para reserva ${reserva.id}:`, error);
+      console.error(`❌ [SCHEDULER] Erro ao navegar para reserva ${reserva.id}:`, error);
+      
+      // Mostrar alerta de erro para o usuário
+      Alert.alert(
+        '❌ Erro na Reserva',
+        `Não foi possível processar automaticamente sua reserva agendada para ${reserva.destino}. Por favor, faça a solicitação manualmente na tela inicial.`,
+        [{ text: 'OK' }]
+      );
     }
   }
 
