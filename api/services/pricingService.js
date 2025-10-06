@@ -25,14 +25,17 @@ class PricingService {
       xl: 1.5           // 50% mais caro
     },
     
-    // Multiplicadores por horário (surge pricing simplificado)
-    timeMultipliers: {
+  // Multiplicadores por horário (surge pricing simplificado)
+  timeMultipliers: {
       'peak_morning': 1.2,    // 07:00-09:00
       'peak_evening': 1.3,    // 17:00-19:00
       'late_night': 1.4,      // 22:00-06:00
       'weekend': 1.1,         // Fins de semana
       'normal': 1.0           // Horário normal
-    }
+    },
+    
+    // Desconto global aplicado sobre o preço total (pós-todos os cálculos)
+    totalPriceDiscount: 0.10
   };
 
   // Calcular preço base sem desconto competitivo
@@ -125,16 +128,23 @@ class PricingService {
     
     // Aplicar desconto competitivo
     const finalPrice = this.applyCompetitiveDiscount(basePrice, yangoPrice);
+
+    // Aplicar desconto global de 10% sobre o preço total
+    const totalDiscount = this.config.totalPriceDiscount || 0;
+    const discountedFinalPrice = Math.round(finalPrice * (1 - totalDiscount));
+    if (totalDiscount > 0) {
+      console.log(`   🔻 Desconto total aplicado (${(totalDiscount * 100).toFixed(0)}%): ${finalPrice} → ${discountedFinalPrice}`);
+    }
     
-    console.log(`   ✅ Preço final competitivo: ${finalPrice}`);
+    console.log(`   ✅ Preço final competitivo: ${discountedFinalPrice}`);
     
     return {
       basePrice,
-      finalPrice,
-      savings: yangoPrice ? (yangoPrice - finalPrice) : (basePrice - finalPrice),
+      finalPrice: discountedFinalPrice,
+      savings: yangoPrice ? (yangoPrice - discountedFinalPrice) : (basePrice - discountedFinalPrice),
       discountPercentage: yangoPrice 
-        ? ((yangoPrice - finalPrice) / yangoPrice * 100).toFixed(1)
-        : (((basePrice - finalPrice) / basePrice) * 100).toFixed(1),
+        ? ((yangoPrice - discountedFinalPrice) / yangoPrice * 100).toFixed(1)
+        : (((basePrice - discountedFinalPrice) / basePrice) * 100).toFixed(1),
       competitorPrice: yangoPrice,
       timeMultiplier: this.getTimeMultiplier(),
       vehicleType

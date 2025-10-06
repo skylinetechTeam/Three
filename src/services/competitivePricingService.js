@@ -17,7 +17,19 @@ class CompetitivePricingService {
       medium: 0.0875, // 8,75%
       // Corridas longas (acima de 8000 Kz)
       long: 0.095 // 9,5%
-    }
+    },
+
+    // Multiplicadores por horário (apenas frontend)
+    timeMultipliers: {
+      peak_morning: 0.95,   // 07:00-09:00 (reduz levemente)
+      peak_evening: 0.95,   // 17:00-19:00 (reduz levemente)
+      late_night: 0.90,     // 22:00-06:00 (reduz mais)
+      weekend: 0.95,        // Fins de semana (reduz levemente)
+      normal: 1.0           // Horário normal
+    },
+
+    // Desconto global aplicado ao preço final (pós-cálculo)
+    finalTotalDiscount: 0.20
   };
 
   /**
@@ -46,7 +58,18 @@ class CompetitivePricingService {
     const discount = this.config.discountByRange[rangeType] || this.config.discountByRange.medium;
     
     // Calcular nosso preço
-    const ourPrice = Math.round(yangoPrice * (1 - discount));
+    let ourPrice = Math.round(yangoPrice * (1 - discount));
+
+    // Aplicar multiplicador por horário (antes do desconto final)
+    const timeMultiplier = this.getTimeMultiplier();
+    if (timeMultiplier && timeMultiplier !== 1) {
+      ourPrice = Math.round(ourPrice * timeMultiplier);
+    }
+
+    const totalDiscount = this.config.finalTotalDiscount || 0;
+    if (totalDiscount > 0) {
+      ourPrice = Math.round(ourPrice * (1 - totalDiscount));
+    }
     const savings = yangoPrice - ourPrice;
     const discountPercentage = (discount * 100).toFixed(1);
 
@@ -72,11 +95,18 @@ class CompetitivePricingService {
       // Se não temos preço da Yango, aplicar desconto padrão ao nosso preço
       const discount = (this.config.competitiveDiscount.min + this.config.competitiveDiscount.max) / 2;
       const discountedPrice = Math.round(originalPrice * (1 - discount));
+
+      // Aplicar multiplicador por horário (antes do desconto final)
+      const timeMultiplier = this.getTimeMultiplier();
+      const timeAdjusted = Math.round(discountedPrice * (timeMultiplier || 1));
+
+      const totalDiscount = this.config.finalTotalDiscount || 0;
+      const finalDiscounted = Math.round(timeAdjusted * (1 - totalDiscount));
       
       return {
         originalPrice,
-        finalPrice: discountedPrice,
-        savings: originalPrice - discountedPrice,
+        finalPrice: finalDiscounted,
+        savings: originalPrice - finalDiscounted,
         discountPercentage: (discount * 100).toFixed(1),
         competitive: null,
         message: `Preço competitivo aplicado (${(discount * 100).toFixed(1)}% de desconto)`
@@ -102,6 +132,29 @@ class CompetitivePricingService {
       },
       message: competitive.message
     };
+  }
+
+  /**
+   * Obter multiplicador baseado no horário atual (frontend)
+   */
+  static getTimeMultiplier() {
+    const now = new Date();
+    const hour = now.getHours();
+    const day = now.getDay(); // 0=Domingo, 6=Sábado
+
+    if (day === 0 || day === 6 || (day === 5 && hour >= 18)) {
+      return this.config.timeMultipliers.weekend;
+    }
+    if (hour >= 7 && hour <= 9) {
+      return this.config.timeMultipliers.peak_morning;
+    }
+    if (hour >= 17 && hour <= 19) {
+      return this.config.timeMultipliers.peak_evening;
+    }
+    if (hour >= 22 || hour <= 6) {
+      return this.config.timeMultipliers.late_night;
+    }
+    return this.config.timeMultipliers.normal;
   }
 
   /**

@@ -14,6 +14,15 @@ class PricingHelper {
       verylong: { min: 70000, max: Infinity, discount: 0.20 } // >70k: 20%
     },
     
+    // Multiplicadores por horário (apenas frontend)
+    timeMultipliers: {
+      peak_morning: 0.95,   // 07:00-09:00 (reduz levemente)
+      peak_evening: 0.95,   // 17:00-19:00 (reduz levemente)
+      late_night: 0.90,     // 22:00-06:00 (reduz mais)
+      weekend: 0.95,        // Fins de semana (reduz levemente)
+      normal: 1.0           // Horário normal
+    },
+    
     // Multiplicadores por tipo de veículo para competitividade
     vehicleCompetitiveMultipliers: {
       'moto': 0.85,    // 15% mais barato
@@ -21,7 +30,10 @@ class PricingHelper {
       'privado': 0.85,  // 15% mais barato (como no exemplo)
       'premium': 0.90,  // 10% mais barato
       'xl': 0.92       // 8% mais barato
-    }
+    },
+
+    // Desconto global aplicado ao preço final (pós-cálculo)
+    finalTotalDiscount: 0.20
   };
 
   /**
@@ -72,6 +84,30 @@ class PricingHelper {
       console.log(`💰 [PRICING] Multiplicador veículo: ${vehicleMultiplier}`);
     }
 
+    // Aplicar multiplicador por horário (antes do desconto final)
+    const timeMultiplier = this.getTimeMultiplier();
+    if (timeMultiplier && timeMultiplier !== 1) {
+      const beforeTime = finalPrice;
+      finalPrice = Math.round(finalPrice * timeMultiplier);
+      discountReason = discountReason
+        ? `${discountReason} + Mult. horário x${timeMultiplier}`
+        : `Mult. horário x${timeMultiplier}`;
+      console.log(`🕒 [PRICING] Multiplicador por horário aplicado: x${timeMultiplier} (${beforeTime} → ${finalPrice})`);
+    }
+
+    // Aplicar desconto global de 10% sobre o preço total
+    const totalDiscount = this.config.finalTotalDiscount || 0;
+    if (totalDiscount > 0) {
+      const priceBefore = finalPrice;
+      finalPrice = Math.round(finalPrice * (1 - totalDiscount));
+      savings = yangoPrice ? (yangoPrice - finalPrice) : (originalPrice - finalPrice);
+      discountApplied = 1 - (finalPrice / originalPrice);
+      discountReason = discountReason
+        ? `${discountReason} + Desconto total ${(totalDiscount * 100).toFixed(0)}%`
+        : `Desconto total ${(totalDiscount * 100).toFixed(0)}%`;
+      console.log(`💰 [PRICING] Desconto total aplicado (${(totalDiscount * 100).toFixed(0)}%): ${priceBefore} → ${finalPrice}`);
+    }
+
     const result = {
       originalPrice,
       finalPrice,
@@ -115,6 +151,31 @@ class PricingHelper {
     } else {
       return { name: 'verylong', ...ranges.verylong };
     }
+  }
+
+  /**
+   * Obter multiplicador baseado no horário atual (frontend)
+   */
+  static getTimeMultiplier() {
+    const now = new Date();
+    const hour = now.getHours();
+    const day = now.getDay(); // 0=Domingo, 6=Sábado
+
+    // Fim de semana (Dom e Sáb) ou sexta noite
+    if (day === 0 || day === 6 || (day === 5 && hour >= 18)) {
+      return this.config.timeMultipliers.weekend;
+    }
+
+    if (hour >= 7 && hour <= 9) {
+      return this.config.timeMultipliers.peak_morning;
+    }
+    if (hour >= 17 && hour <= 19) {
+      return this.config.timeMultipliers.peak_evening;
+    }
+    if (hour >= 22 || hour <= 6) {
+      return this.config.timeMultipliers.late_night;
+    }
+    return this.config.timeMultipliers.normal;
   }
 
   /**
