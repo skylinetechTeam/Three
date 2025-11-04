@@ -11,6 +11,7 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BottomSheetModal } from '../BaseModal/ModalVariants';
 import { ResponsiveButton, ResponsiveInput, ResponsiveCard } from '../ResponsiveUI';
+import Button from '../Button';
 import { useResponsive, useNotification } from '../../contexts/UIContext';
 import { COLORS, SIZES, FONTS, RESPONSIVE } from '../../config/theme';
 
@@ -201,22 +202,29 @@ export const SmartCategoriesModal = ({
         </View>
       </View>
       
-      <TouchableOpacity
-        style={styles.favoriteAction}
-        onPress={() => {
-          showNotification({
-            type: 'success',
-            title: 'Corrida solicitada',
-            message: `Destino: ${item.nome}`,
-          });
-        }}
-      >
-        <Ionicons 
-          name="car" 
-          size={RESPONSIVE.getIconSize('small')} 
-          color={COLORS.semantic.success} 
+      <View style={styles.favoriteAction}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onPress={() => {
+            showNotification({
+              type: 'success',
+              title: 'Corrida solicitada',
+              message: `Destino: ${item.nome}`,
+            });
+          }}
+          iconLeft={
+            <Ionicons 
+              name="car" 
+              size={RESPONSIVE.getIconSize('small')} 
+              color={COLORS.semantic.success} 
+            />
+          }
+          accessibilityLabel={`Solicitar corrida para ${item.nome}`}
+          accessibilityHint="Toque para iniciar uma corrida para este destino favorito"
+          style={styles.favoriteButton}
         />
-      </TouchableOpacity>
+      </View>
     </TouchableOpacity>
   );
 
@@ -583,12 +591,19 @@ const styles = StyleSheet.create({
   },
   
   favoriteAction: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.semantic.successLight,
+    minWidth: RESPONSIVE.getDynamicSize({ small: 36, standard: 40, large: 44, tablet: 48 }),
+    minHeight: RESPONSIVE.getDynamicSize({ small: 36, standard: 40, large: 44, tablet: 48 }),
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  
+  favoriteButton: {
+    minWidth: RESPONSIVE.getDynamicSize({ small: 36, standard: 40, large: 44, tablet: 48 }),
+    minHeight: RESPONSIVE.getDynamicSize({ small: 36, standard: 40, large: 44, tablet: 48 }),
+    borderRadius: RESPONSIVE.getDynamicSize({ small: 18, standard: 20, large: 22, tablet: 24 }),
+    backgroundColor: COLORS.semantic.successLight,
+    margin: 0,
+    padding: SIZES.spacing.xs,
   },
 
   // Empty state

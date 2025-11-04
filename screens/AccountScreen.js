@@ -1,9 +1,41 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Image } from "react-native";
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import LocalDatabase from '../services/localDatabase';
 
 export default function AccountScreen({ navigation }) {
+  const [userProfile, setUserProfile] = useState(null);
+  const [tripCount, setTripCount] = useState(0);
+  const [favoriteCount, setFavoriteCount] = useState(0);
+
+  useEffect(() => {
+    loadUserData();
+    
+    // Reload profile when navigating back
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadUserData();
+    });
+    
+    return unsubscribe;
+  }, [navigation]);
+
+  const loadUserData = async () => {
+    try {
+      const profile = await LocalDatabase.getUserProfile();
+      console.log('📄 Account - Profile loaded:', profile);
+      setUserProfile(profile);
+
+      const trips = await LocalDatabase.getTripHistory();
+      setTripCount(trips.length);
+
+      const favorites = await LocalDatabase.getFavoriteDestinations();
+      setFavoriteCount(favorites.length);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
+
   const accountOptions = [
     {
       id: 'profile',
@@ -93,11 +125,22 @@ export default function AccountScreen({ navigation }) {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Informações do Usuário */}
         <View style={styles.userSection}>
-          <View style={styles.userAvatar}>
-            <Ionicons name="person" size={40} color="#1737e8" />
-          </View>
-          <Text style={styles.userName}>Usuário</Text>
-          <Text style={styles.userEmail}>usuario@email.com</Text>
+          {userProfile?.profileImageUrl ? (
+            <Image 
+              source={{ uri: userProfile.profileImageUrl }} 
+              style={styles.userAvatarImage}
+            />
+          ) : (
+            <View style={styles.userAvatar}>
+              <Ionicons name="person" size={40} color="#1737e8" />
+            </View>
+          )}
+          <Text style={styles.userName}>
+            {userProfile?.nome || userProfile?.name || 'Usuário'}
+          </Text>
+          <Text style={styles.userEmail}>
+            {userProfile?.email || userProfile?.telefone || userProfile?.phone || ''}
+          </Text>
         </View>
 
         {/* Opções da Conta */}
@@ -125,16 +168,21 @@ export default function AccountScreen({ navigation }) {
           <Text style={styles.statsTitle}>Estatísticas</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>12</Text>
+              <Text style={styles.statNumber}>{tripCount}</Text>
               <Text style={styles.statLabel}>Corridas</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>4.8</Text>
-              <Text style={styles.statLabel}>Avaliação</Text>
+              <Text style={styles.statNumber}>{favoriteCount}</Text>
+              <Text style={styles.statLabel}>Favoritos</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>15.600 Kz</Text>
-              <Text style={styles.statLabel}>Total Gasto</Text>
+              <Text style={styles.statNumber}>
+                {userProfile?.createdAt ? 
+                  new Date(userProfile.createdAt).getFullYear() : 
+                  new Date().getFullYear()
+                }
+              </Text>
+              <Text style={styles.statLabel}>Membro desde</Text>
             </View>
           </View>
         </View>
@@ -175,6 +223,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  userAvatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#E5E7EB',
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: {

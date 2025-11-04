@@ -18,8 +18,6 @@ import LocalDatabase from '../services/localDatabase';
 
 export default function ProfileScreen({ navigation }) {
   const [userProfile, setUserProfile] = useState(null);
-  const [tripCount, setTripCount] = useState(0);
-  const [favoriteCount, setFavoriteCount] = useState(0);
   
   // Obter dimensões da tela para responsividade
   const { width } = useWindowDimensions();
@@ -65,18 +63,20 @@ export default function ProfileScreen({ navigation }) {
 
   useEffect(() => {
     loadUserData();
-  }, []);
+    
+    // Reload profile when navigating back from EditProfile
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadUserData();
+    });
+    
+    return unsubscribe;
+  }, [navigation]);
 
   const loadUserData = async () => {
     try {
       const profile = await LocalDatabase.getUserProfile();
+      console.log('📄 Profile loaded:', profile);
       setUserProfile(profile);
-
-      const trips = await LocalDatabase.getTripHistory();
-      setTripCount(trips.length);
-
-      const favorites = await LocalDatabase.getFavoriteDestinations();
-      setFavoriteCount(favorites.length);
     } catch (error) {
       console.error('Error loading user data:', error);
     }
@@ -192,15 +192,22 @@ export default function ProfileScreen({ navigation }) {
         {/* Profile Card */}
         <View style={[styles.profileCard, {width: '100%', maxWidth: responsiveStyles.layout.maxWidth, padding: responsiveStyles.padding.card}]}>
           <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {(
-                  (userProfile.nome || userProfile.fullName || userProfile.email || 'U')
-                    .charAt(0)
-                    .toUpperCase()
-                )}
-              </Text>
-            </View>
+            {userProfile.profileImageUrl ? (
+              <Image 
+                source={{ uri: userProfile.profileImageUrl }} 
+                style={styles.avatarImage}
+              />
+            ) : (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {(
+                    (userProfile.nome || userProfile.fullName || userProfile.email || 'U')
+                      .charAt(0)
+                      .toUpperCase()
+                  )}
+                </Text>
+              </View>
+            )}
           </View>
 
           <Text style={[styles.userName, {fontSize: responsiveStyles.fontSize.userName}]}>{userProfile.nome || userProfile.fullName || 'Usuário'}</Text>
@@ -213,28 +220,6 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Stats */}
-        <View style={[styles.statsContainer, {width: '100%', maxWidth: responsiveStyles.layout.maxWidth}]}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statNumber, {fontSize: responsiveStyles.fontSize.stat}]}>{tripCount}</Text>
-            <Text style={[styles.statLabel, {fontSize: responsiveStyles.fontSize.statLabel}]}>Viagens</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statNumber, {fontSize: responsiveStyles.fontSize.stat}]}>{favoriteCount}</Text>
-            <Text style={[styles.statLabel, {fontSize: responsiveStyles.fontSize.statLabel}]}>Favoritos</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statNumber, {fontSize: responsiveStyles.fontSize.stat}]}>
-              {userProfile.createdAt ? 
-                new Date(userProfile.createdAt).getFullYear() : 
-                new Date().getFullYear()
-              }
-            </Text>
-            <Text style={[styles.statLabel, {fontSize: responsiveStyles.fontSize.statLabel}]}>Membro desde</Text>
-          </View>
-        </View>
 
         {/* Menu Items */}
         <View style={[styles.menuSection, {width: '100%', maxWidth: responsiveStyles.layout.maxWidth}]}>
@@ -359,6 +344,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#E5E7EB',
+  },
   avatarText: {
     fontSize: 32,
     fontWeight: '700',
@@ -393,38 +384,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#2563EB',
     marginLeft: 4,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    marginHorizontal: 20,
-    marginBottom: 20,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: '#E5E7EB',
-    marginHorizontal: 10,
   },
   menuSection: {
     backgroundColor: '#ffffff',

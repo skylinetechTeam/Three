@@ -247,8 +247,8 @@ export default function DriverLoginScreen({ navigation }) {
     setLoading(true);
 
     try {
-      // Salvar foto localmente
-      await driverAuthService.saveDriverPhoto(driverPhoto);
+      // Salvar foto localmente e no Supabase
+      await driverAuthService.saveDriverPhoto(driverPhoto, currentDriver.id);
       
       // Salvar dados do motorista localmente
       await driverAuthService.saveDriverLocally(currentDriver, driverPhoto);
@@ -353,9 +353,9 @@ export default function DriverLoginScreen({ navigation }) {
       // Definir senha no banco de dados
       await driverAuthService.setDriverPassword(currentDriver.id, newPassword);
       
-      // Salvar foto localmente
+      // Salvar foto localmente e no Supabase
       if (driverPhoto) {
-        await driverAuthService.saveDriverPhoto(driverPhoto);
+        await driverAuthService.saveDriverPhoto(driverPhoto, currentDriver.id);
       }
       
       // Salvar dados do motorista localmente

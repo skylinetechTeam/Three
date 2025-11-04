@@ -17,11 +17,12 @@ import {
   Keyboard,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { COLORS, SIZES, FONTS, SHADOWS } from '../config/theme';
+import { COLORS, SIZES, FONTS, SHADOWS, RESPONSIVE } from '../config/theme';
 import { checkForExistingData } from '../utils/dataCleaner';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';
+import Button from '../components/Button';
 
 const { width, height } = Dimensions.get('window');
 
@@ -488,13 +489,19 @@ const FavoritosScreen = () => {
       </View>
       
       <View style={styles.cardFooter}>
-        <TouchableOpacity
-          style={styles.primaryButton}
+        <Button
+          variant="primary"
+          size="md"
           onPress={() => handleGoToFavorite(item)}
+          iconLeft={
+            <MaterialIcons name="navigation" size={18} color="#ffffff" />
+          }
+          accessibilityLabel={`Solicitar corrida para ${item.nome}`}
+          accessibilityHint="Toque para iniciar uma corrida para este destino"
+          style={styles.requestRideButton}
         >
-          <MaterialIcons name="navigation" size={18} color="#ffffff" />
-          <Text style={styles.primaryButtonText}>Solicitar Corrida</Text>
-        </TouchableOpacity>
+          Solicitar Corrida
+        </Button>
       </View>
     </View>
   );
@@ -1587,6 +1594,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     marginLeft: 6,
+  },
+  requestRideButton: {
+    width: '100%',
+    minHeight: RESPONSIVE.getDynamicSize({ small: 48, standard: 52, large: 56, tablet: 60 }),
+    marginVertical: 0,
   },
   emptyState: {
     flex: 1,

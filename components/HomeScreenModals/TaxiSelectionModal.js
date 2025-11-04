@@ -77,10 +77,26 @@ export const TaxiSelectionModal = ({
     },
   ];
 
+  const getTimeMultiplier = () => {
+    const now = new Date();
+    const h = now.getHours();
+    const d = now.getDay();
+    if (d === 0 || d === 6 || (d === 5 && h >= 18)) return 0.95; // fim de semana / sexta noite (reduz levemente)
+    if (h >= 7 && h <= 9) return 0.95; // pico manhã (reduz levemente)
+    if (h >= 17 && h <= 19) return 0.95; // pico fim de tarde (reduz levemente)
+    if (h >= 22 || h <= 6) return 0.90; // madrugada (reduz mais)
+    return 1.0; // normal
+  };
+
+  // Cálculo de preço em tempo real - sem cache
+  // Preço é recalculado imediatamente ao selecionar a zona
   const calculatePrice = (taxiType) => {
     const basePrice = taxiType.basePrice;
     const distancePrice = distance * taxiType.pricePerKm;
-    return Math.round(basePrice + distancePrice);
+    const total = basePrice + distancePrice;
+    const timeMultiplier = getTimeMultiplier();
+    // Aplicar multiplicador por horário e desconto global de 20%
+    return Math.round(total * timeMultiplier * 0.8);
   };
 
   const formatPrice = (price) => {
@@ -114,6 +130,7 @@ export const TaxiSelectionModal = ({
     ]).start();
 
     setTimeout(() => {
+      // Preço é calculado novamente no momento da seleção
       onTaxiSelect?.({
         ...taxiType,
         estimatedPrice: calculatePrice(taxiType),
@@ -126,6 +143,7 @@ export const TaxiSelectionModal = ({
 
   const renderTaxiCard = (taxiType) => {
     const isSelected = selectedTaxi === taxiType.id;
+    // Preço calculado em tempo real sempre que a zona/táxi é renderizado
     const price = calculatePrice(taxiType);
     
     return (

@@ -2,6 +2,7 @@ import { supabase } from '../supabaseClient';
 import { Buffer } from 'buffer';
 import sha256 from 'crypto-js/sha256';
 import Base64 from 'crypto-js/enc-base64';
+import { sendResetCodeEmail } from '../utils/emailService';
 
 // Função para gerar um salt aleatório
 const generateSalt = (length = 16) => {
@@ -16,6 +17,8 @@ const hashPassword = (password) => {
 };
 
 const authService = {
+  supabase, // Exportar cliente supabase
+  
   async register({ nome, email, telefone, senha }) {
     try {
       // Hash da senha (sem salt por enquanto)
@@ -172,6 +175,85 @@ const authService = {
 
     } catch (error) {
       console.error('Erro ao alterar senha:', error);
+      throw error;
+    }
+  },
+
+  // Solicita código de redefinição (armazena no Supabase e tenta enviar por email)
+  async requestPasswordReset(email) {
+    try {
+      // Verifica se email existe
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('id, email, nome')
+        .eq('email', email)
+        .single();
+
+      if (userError || !user) {
+        throw new Error('Email não encontrado');
+      }
+
+      // Gera código de 6 dígitos
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
+
+      // Salva/atualiza solicitação na tabela password_resets
+      const { error: upsertError } = await supabase
+        .from('password_resets')
+        .upsert({ email, code, expires_at: expiresAt }, { onConflict: 'email' });
+
+      if (upsertError) throw upsertError;
+
+      // Tenta enviar por email (opcional)
+      let viaEmail = false;
+      try {
+        console.log('🔄 AuthService: Chamando sendResetCodeEmail...');
+        viaEmail = await sendResetCodeEmail(email, code, user?.nome || '');
+        console.log('🔄 AuthService: Resultado do envio:', viaEmail);
+      } catch (e) {
+        console.error('❌ AuthService: Erro no emailService:', e);
+        viaEmail = false;
+      }
+
+      return { sent: true, code, viaEmail };
+    } catch (error) {
+      console.error('Erro ao solicitar reset:', error);
+      throw error;
+    }
+  },
+
+  // Confirma código e redefine senha
+  async resetPasswordWithCode(email, code, newPassword) {
+    try {
+      // Busca solicitação
+      const { data: req, error: reqError } = await supabase
+        .from('password_resets')
+        .select('*')
+        .eq('email', email)
+        .eq('code', code)
+        .single();
+
+      if (reqError || !req) throw new Error('Código inválido');
+      if (new Date(req.expires_at).getTime() < Date.now()) throw new Error('Código expirado');
+
+      // Atualiza senha do usuário
+      const hashedPassword = hashPassword(newPassword);
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ senha: hashedPassword })
+        .eq('email', email);
+
+      if (updateError) throw updateError;
+
+      // Remove o código usado
+      await supabase
+        .from('password_resets')
+        .delete()
+        .eq('email', email);
+
+      return { success: true };
+    } catch (error) {
+      console.error('Erro ao redefinir senha:', error);
       throw error;
     }
   }

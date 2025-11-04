@@ -173,19 +173,28 @@ export default function RegisterScreen({ navigation }) {
             </View>
 
             {/* Terms Checkbox */}
-            <TouchableOpacity
-              style={styles.termsContainer}
-              onPress={() => setAcceptTerms(!acceptTerms)}
-            >
-              <View style={[styles.checkbox, acceptTerms && styles.checkboxChecked]}>
-                {acceptTerms && <Ionicons name="checkmark" size={16} color="#fff" />}
+            <View style={styles.termsContainer}>
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={() => setAcceptTerms(!acceptTerms)}
+              >
+                <View style={[styles.checkbox, acceptTerms && styles.checkboxChecked]}>
+                  {acceptTerms && <Ionicons name="checkmark" size={16} color="#fff" />}
+                </View>
+              </TouchableOpacity>
+              <View style={styles.termsTextContainer}>
+                <Text style={styles.termsText}>
+                  Aceito os termos e condições e{" "}
+                </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Terms')}>
+                  <Text style={styles.termsLink}>Termos de serviço</Text>
+                </TouchableOpacity>
+                <Text style={styles.termsText}> e </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Privacy')}>
+                  <Text style={styles.termsLink}>Política de Privacidade</Text>
+                </TouchableOpacity>
               </View>
-              <Text style={styles.termsText}>
-                Aceito os termos e condições e{" "}
-                <Text style={styles.termsLink}>Termos de serviço</Text> e{" "}
-                <Text style={styles.termsLink}>Política de Privacidade</Text>
-              </Text>
-            </TouchableOpacity>
+            </View>
 
             {/* Create Account Button */}
             <TouchableOpacity 
@@ -200,25 +209,6 @@ export default function RegisterScreen({ navigation }) {
               )}
             </TouchableOpacity>
 
-            {/* Divider */}
-            <View style={styles.dividerContainer}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OU</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Social Login Buttons */}
-            <View style={styles.socialContainer}>
-              <TouchableOpacity style={styles.socialButton}>
-                <Text style={styles.socialButtonText}>G</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialButton}>
-                <Ionicons name="logo-facebook" size={24} color="#1877F2" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialButton}>
-                <Ionicons name="logo-apple" size={24} color="#000" />
-              </TouchableOpacity>
-            </View>
 
             {/* Login Link */}
             <View style={styles.loginContainer}>
@@ -326,6 +316,9 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     paddingHorizontal: 4,
   },
+  checkboxContainer: {
+    marginTop: 2,
+  },
   checkbox: {
     width: 20,
     height: 20,
@@ -333,7 +326,6 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     borderRadius: 4,
     marginRight: 12,
-    marginTop: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -341,8 +333,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
     borderColor: '#10B981',
   },
-  termsText: {
+  termsTextContainer: {
     flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  termsText: {
     fontSize: 14,
     color: '#6B7280',
     lineHeight: 20,
@@ -366,42 +363,6 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     backgroundColor: '#93C5FD',
     opacity: 0.7,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E5E7EB',
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    fontSize: 14,
-    color: '#9CA3AF',
-  },
-  socialContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 32,
-  },
-  socialButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 8,
-    backgroundColor: '#ffffff',
-  },
-  socialButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#DB4437',
   },
   loginContainer: {
     flexDirection: 'row',

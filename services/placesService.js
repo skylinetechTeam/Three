@@ -1,8 +1,8 @@
 // Cache para armazenar resultados de buscas recentes
 const searchCache = {};
 
-// Tempo de expiração do cache em milissegundos (5 minutos)
-const CACHE_EXPIRATION = 5 * 60 * 1000;
+// Cache desabilitado - sempre buscar preço atualizado
+const CACHE_EXPIRATION = 0;
 
 // Variável para controlar o debounce
 let searchDebounceTimer = null;
@@ -66,12 +66,12 @@ export const searchPlaces = async (searchText, location) => {
       try {
         const searchTerm = searchText.trim().toLowerCase();
         
-        // Verifica se temos resultados em cache para este termo
-        if (searchCache[searchTerm] && 
-            (Date.now() - searchCache[searchTerm].timestamp) < CACHE_EXPIRATION) {
-          console.log('Usando resultados em cache para:', searchTerm);
-          return resolve(searchCache[searchTerm].results);
-        }
+        // Cache desabilitado - sempre buscar dados atualizados
+        // if (searchCache[searchTerm] && 
+        //     (Date.now() - searchCache[searchTerm].timestamp) < CACHE_EXPIRATION) {
+        //   console.log('Usando resultados em cache para:', searchTerm);
+        //   return resolve(searchCache[searchTerm].results);
+        // }
         
         // Verificar se o termo é muito curto ou genérico
         if (searchTerm.length < 3 || 
@@ -185,12 +185,12 @@ const detailsCache = {};
 
 export const getPlaceDetails = async (placeId) => {
   try {
-    // Verificar se temos os detalhes em cache
-    if (detailsCache[placeId] && 
-        (Date.now() - detailsCache[placeId].timestamp) < CACHE_EXPIRATION) {
-      console.log('Usando detalhes em cache para:', placeId);
-      return detailsCache[placeId].details;
-    }
+    // Cache desabilitado - sempre buscar detalhes atualizados
+    // if (detailsCache[placeId] && 
+    //     (Date.now() - detailsCache[placeId].timestamp) < CACHE_EXPIRATION) {
+    //   console.log('Usando detalhes em cache para:', placeId);
+    //   return detailsCache[placeId].details;
+    // }
     
     const url = `https://nominatim.openstreetmap.org/lookup?format=json&place_ids=${placeId}`;
     console.log('Fazendo requisição de detalhes para:', url);

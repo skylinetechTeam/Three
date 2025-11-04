@@ -1,5 +1,8 @@
 import { supabase } from '../supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Buffer } from 'buffer';
+import sha256 from 'crypto-js/sha256';
+import Base64 from 'crypto-js/enc-base64';
 
 // Chaves para o AsyncStorage
 const STORAGE_KEYS = {
@@ -8,9 +11,16 @@ const STORAGE_KEYS = {
   DRIVER_SESSION: 'driver_session'
 };
 
+// Função para gerar hash da senha (mesmo sistema dos usuários)
+const hashPassword = (password) => {
+  const hash = sha256(password + 'TRAVEL_APP_SECRET_2024');
+  return Base64.stringify(hash);
+};
+
 class DriverAuthService {
   constructor() {
     this.currentDriver = null;
+    this.supabase = supabase; // Exportar cliente supabase
   }
 
   // Verificar se motorista existe no banco por email ou telefone
@@ -100,55 +110,79 @@ class DriverAuthService {
     }
   }
 
-  // Verificar senha do motorista (localmente)
+  // Verificar senha do motorista no Supabase
   async verifyDriverPassword(driverId, password) {
     try {
-      console.log('🔐 Verificando senha do motorista localmente:', driverId);
+      console.log('🔐 Verificando senha do motorista no Supabase:', driverId);
       
       if (!driverId || !password) {
         throw new Error('ID do motorista e senha são obrigatórios');
       }
 
-      const localData = await this.getLocalDriverData();
-      
-      if (!localData) {
-        throw new Error('Dados do motorista não encontrados localmente');
+      // Buscar motorista no banco
+      const { data: driver, error } = await supabase
+        .from('drivers')
+        .select('password_hash')
+        .eq('id', driverId)
+        .single();
+
+      if (error) {
+        console.error('❌ Erro ao buscar motorista:', error);
+        throw new Error('Motorista não encontrado');
       }
 
-      // Comparar senha armazenada localmente
-      const isValid = localData.password === password;
+      if (!driver.password_hash) {
+        console.log('❌ Motorista não tem senha definida');
+        return false;
+      }
+
+      // Comparar senha com hash
+      const hashedInput = hashPassword(password);
+      const isValid = hashedInput === driver.password_hash;
       
       console.log(isValid ? '✅ Senha válida' : '❌ Senha inválida');
       return isValid;
 
     } catch (error) {
       console.error('❌ Erro ao verificar senha:', error);
-      throw new Error('Erro ao verificar senha. Tente novamente.');
+      throw error;
     }
   }
 
-  // Definir nova senha para motorista (apenas localmente)
+  // Definir nova senha para motorista no Supabase
   async setDriverPassword(driverId, password) {
     try {
-      console.log('🔐 Definindo nova senha localmente para motorista:', driverId);
+      console.log('🔐 Definindo nova senha no Supabase para motorista:', driverId);
       
-      const currentData = await this.getLocalDriverData() || {};
+      if (!driverId || !password) {
+        throw new Error('ID do motorista e senha são obrigatórios');
+      }
+
+      if (password.length < 6) {
+        throw new Error('A senha deve ter pelo menos 6 caracteres');
+      }
       
-      // Atualizar com a nova senha
-      const updatedData = {
-        ...currentData,
-        password: password, // Salvando senha apenas localmente
-        updated_at: new Date().toISOString()
-      };
+      // Gerar hash da senha
+      const hashedPassword = hashPassword(password);
       
-      // Salvar no AsyncStorage
-      await AsyncStorage.setItem(STORAGE_KEYS.DRIVER_AUTH, JSON.stringify(updatedData));
+      // Atualizar senha no banco
+      const { error } = await supabase
+        .from('drivers')
+        .update({ 
+          password_hash: hashedPassword
+        })
+        .eq('id', driverId);
+
+      if (error) {
+        console.error('❌ Erro ao atualizar senha:', error);
+        throw error;
+      }
       
-      console.log('✅ Senha definida com sucesso localmente');
+      console.log('✅ Senha definida com sucesso no Supabase');
       return true;
 
     } catch (error) {
-      console.error('❌ Erro ao definir senha localmente:', error);
+      console.error('❌ Erro ao definir senha:', error);
       throw error;
     }
   }
@@ -256,10 +290,7 @@ class DriverAuthService {
       
       const { error } = await supabase
         .from('drivers')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString()
-        })
+        .update(updates)
         .eq('id', driverId);
 
       if (error) {
@@ -304,11 +335,23 @@ class DriverAuthService {
     }
   }
 
-  // Salvar foto do motorista localmente
-  async saveDriverPhoto(photoUri) {
+  // Salvar foto do motorista localmente E no Supabase Storage
+  async saveDriverPhoto(photoUri, driverId) {
     try {
+      // Salvar localmente
       await AsyncStorage.setItem(STORAGE_KEYS.DRIVER_PHOTO, photoUri);
-      console.log('✅ Foto do motorista salva localmente');
+      console.log('✅ Foto salva localmente');
+      
+      // Fazer upload para Supabase Storage
+      if (driverId && photoUri) {
+        try {
+          await this.uploadDriverPhotoToSupabase(photoUri, driverId);
+        } catch (uploadError) {
+          console.warn('⚠️ Erro ao fazer upload da foto, continuando...', uploadError);
+          // Não falhar o login se o upload falhar
+        }
+      }
+      
       return true;
     } catch (error) {
       console.error('❌ Erro ao salvar foto:', error);
@@ -322,6 +365,105 @@ class DriverAuthService {
       return await AsyncStorage.getItem(STORAGE_KEYS.DRIVER_PHOTO);
     } catch (error) {
       console.error('❌ Erro ao recuperar foto:', error);
+      return null;
+    }
+  }
+
+  // Upload da foto do motorista para Supabase Storage
+  async uploadDriverPhotoToSupabase(photoUri, driverId) {
+    try {
+      console.log('📋 Upload de foto para Supabase:', driverId);
+      
+      // Converter URI para Blob
+      const response = await fetch(photoUri);
+      const blob = await response.blob();
+      
+      // Nome do arquivo: driver_{id}_{timestamp}.jpg
+      const timestamp = Date.now();
+      const fileName = `driver_${driverId}_${timestamp}.jpg`;
+      const filePath = `drivers/${fileName}`;
+      
+      // Upload para o bucket 'driver-photos'
+      const { data, error } = await supabase.storage
+        .from('driver-photos')
+        .upload(filePath, blob, {
+          contentType: 'image/jpeg',
+          upsert: true
+        });
+      
+      if (error) {
+        console.error('❌ Erro no upload:', error);
+        throw error;
+      }
+      
+      // Obter URL pública
+      const { data: publicUrlData } = supabase.storage
+        .from('driver-photos')
+        .getPublicUrl(filePath);
+      
+      const photoUrl = publicUrlData.publicUrl;
+      console.log('✅ Foto enviada com sucesso:', photoUrl);
+      
+      // Atualizar campo photo_url na tabela drivers
+      const { error: updateError } = await supabase
+        .from('drivers')
+        .update({ photo_url: photoUrl })
+        .eq('id', driverId);
+      
+      if (updateError) {
+        console.warn('⚠️ Erro ao atualizar photo_url:', updateError);
+      }
+      
+      return photoUrl;
+    } catch (error) {
+      console.error('❌ Erro ao fazer upload da foto:', error);
+      throw error;
+    }
+  }
+
+  // Buscar URL da foto do motorista do Supabase
+  async getDriverPhotoUrl(driverId) {
+    try {
+      if (!driverId) {
+        return null;
+      }
+
+      // Tentar buscar por ID primeiro
+      let { data, error } = await supabase
+        .from('drivers')
+        .select('photo_url')
+        .eq('id', driverId)
+        .single();
+      
+      // Se não encontrou por ID, tentar por tax_id
+      if (error || !data) {
+        const { data: dataByTaxId, error: errorByTaxId } = await supabase
+          .from('drivers')
+          .select('photo_url')
+          .eq('tax_id', driverId)
+          .single();
+        
+        if (!errorByTaxId && dataByTaxId) {
+          return dataByTaxId.photo_url;
+        }
+      }
+      
+      // Se não encontrou por tax_id, tentar por license_number (placa)
+      if (error || !data) {
+        const { data: dataByLicense, error: errorByLicense } = await supabase
+          .from('drivers')
+          .select('photo_url')
+          .eq('license_number', driverId)
+          .single();
+        
+        if (!errorByLicense && dataByLicense) {
+          return dataByLicense.photo_url;
+        }
+      }
+      
+      return data?.photo_url || null;
+    } catch (error) {
+      console.error('❌ Erro ao buscar photo_url:', error);
       return null;
     }
   }
@@ -350,14 +492,14 @@ class DriverAuthService {
         throw new Error('Dados do motorista não encontrados');
       }
 
-      // Verificar senha atual
+      // Verificar senha atual no Supabase
       const isCurrentValid = await this.verifyDriverPassword(driverData.id, currentPassword);
       
       if (!isCurrentValid) {
         throw new Error('Senha atual incorreta');
       }
 
-      // Atualizar senha
+      // Atualizar senha no Supabase
       await this.setDriverPassword(driverData.id, newPassword);
       
       console.log('✅ Senha alterada com sucesso');

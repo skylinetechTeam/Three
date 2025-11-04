@@ -7,7 +7,7 @@ import { Platform, Alert, Keyboard } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import * as Updates from 'expo-updates';
 import { UIProvider, useUI } from './contexts/UIContext';
-import { RESPONSIVE, SIZES } from './config/theme';
+import { RESPONSIVE, SIZES, COLORS } from './config/theme';
 import updateService from './services/updateService'; // Serviço de atualizações OTA
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
@@ -65,7 +65,7 @@ function HomeTabs() {
       screenOptions={{
         tabBarStyle: {
           height: RESPONSIVE.getDynamicSize({ small: 65, standard: 70, large: 75, tablet: 80 }) + insets.bottom,
-          backgroundColor: '#2563EB',
+          backgroundColor: COLORS.primary[500],
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
@@ -76,8 +76,8 @@ function HomeTabs() {
           height: RESPONSIVE.getIconSize('large'),
           width: RESPONSIVE.getIconSize('large'),
         },
-        tabBarActiveTintColor: '#ffffff',
-        tabBarInactiveTintColor: '#93C5FD',
+        tabBarActiveTintColor: COLORS.text.inverse,
+        tabBarInactiveTintColor: COLORS.primary[200],
         tabBarLabelStyle: {
           fontSize: RESPONSIVE.getDynamicSize({ small: 10, standard: 12, large: 14, tablet: 16 }),
           fontWeight: '500',
@@ -138,7 +138,7 @@ function DriverTabs() {
       screenOptions={{
         tabBarStyle: {
           height: RESPONSIVE.getDynamicSize({ small: 65, standard: 70, large: 75, tablet: 80 }) + insets.bottom,
-          backgroundColor: '#1F2937',
+          backgroundColor: COLORS.text.primary,
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
@@ -149,8 +149,8 @@ function DriverTabs() {
           height: RESPONSIVE.getIconSize('large'),
           width: RESPONSIVE.getIconSize('large'),
         },
-        tabBarActiveTintColor: '#ffffff',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: COLORS.text.inverse,
+        tabBarInactiveTintColor: COLORS.text.light,
         tabBarLabelStyle: {
           fontSize: RESPONSIVE.getDynamicSize({ small: 10, standard: 12, large: 14, tablet: 16 }),
           fontWeight: '500',
@@ -353,6 +353,16 @@ function AppContent() {
           <Stack.Screen
             name="Terms"
             component={TermsScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="ForgotPassword"
+            component={require('./screens/ForgotPasswordScreen').default}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="ResetPassword"
+            component={require('./screens/ResetPasswordScreen').default}
             options={{ headerShown: false }}
           />
           <Stack.Screen

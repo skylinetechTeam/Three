@@ -17,11 +17,12 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import * as Location from 'expo-location';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import Toast from 'react-native-toast-message';
 import { COLORS, SIZES, FONTS, SHADOWS } from '../config/theme';
 import apiService from '../services/apiService';
+import DriverAvatar from '../components/DriverAvatar';
 import LocalDatabase from '../services/localDatabase';
 import { 
   isValidCollectiveRoute, 
@@ -30,6 +31,7 @@ import {
   getAllCollectiveRoutes,
   getLocationCoordinates 
 } from '../config/collectiveRoutes';
+import PricingHelper from './PricingHelper';
 
 const { width, height } = Dimensions.get('window');
 
@@ -54,6 +56,7 @@ export default function HomeScreen({ navigation, route }) {
   const [passengerProfile, setPassengerProfile] = useState(null);
   const [currentRide, setCurrentRide] = useState(null);
   const [requestStatus, setRequestStatus] = useState(null); // 'pending', 'accepted', 'rejected', 'cancelled', 'completed', 'started'
+  const [driverInfo, setDriverInfo] = useState(null);
   
   // Atualizar refs quando os estados mudam
   useEffect(() => {
@@ -63,7 +66,6 @@ export default function HomeScreen({ navigation, route }) {
   useEffect(() => {
     requestStatusRef.current = requestStatus;
   }, [requestStatus]);
-  const [driverInfo, setDriverInfo] = useState(null);
   const [requestId, setRequestId] = useState(null);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [rideEstimate, setRideEstimate] = useState(null);
@@ -98,6 +100,46 @@ export default function HomeScreen({ navigation, route }) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
     return R * c; // Distance in meters
+  };
+
+  // Função para validar dados do motorista
+  const isValidDriverData = (driverInfo) => {
+    if (!driverInfo) {
+      console.log('❌ [VALIDAÇÃO] driverInfo é nulo ou undefined');
+      return false;
+    }
+    
+    // Verificar nome válido (não pode ser padrão)
+    const hasValidName = driverInfo.name && 
+                        driverInfo.name !== 'Motorista' && 
+                        driverInfo.name.trim().length > 2;
+    
+    // Verificar ID válido
+    const hasValidId = driverInfo.id && 
+                      driverInfo.id.toString().trim().length > 0;
+    
+    // Verificar se tem dados do veículo válidos
+    const hasValidVehicle = driverInfo.vehicleInfo && (
+      (driverInfo.vehicleInfo.make && driverInfo.vehicleInfo.model) ||
+      (driverInfo.vehicleInfo.plate && 
+       driverInfo.vehicleInfo.plate !== 'ABC-1234' && 
+       driverInfo.vehicleInfo.plate.trim().length > 0) ||
+      (driverInfo.vehicleInfo.color && driverInfo.vehicleInfo.color.trim().length > 0)
+    );
+    
+    const isValid = hasValidName && hasValidId;
+    
+    console.log('🔍 [VALIDAÇÃO] Resultado da validação:', {
+      hasValidName: hasValidName,
+      hasValidId: hasValidId,
+      hasValidVehicle: hasValidVehicle,
+      name: driverInfo.name,
+      id: driverInfo.id,
+      vehicleInfo: driverInfo.vehicleInfo,
+      isValid: isValid
+    });
+    
+    return isValid;
   };
 
   // Função de teste para simular o início da corrida (desenvolvimento)
@@ -212,10 +254,12 @@ export default function HomeScreen({ navigation, route }) {
       const dest = route.params.selectedDestination;
       const autoStartFlow = route?.params?.autoStartFlow;
       const fromFavorites = route?.params?.fromFavorites;
+      const fromScheduled = route?.params?.fromScheduled;
       
       console.log('📍 Received destination from navigation:', dest);
       console.log('🚀 Auto start flow:', autoStartFlow);
       console.log('⭐ From favorites:', fromFavorites);
+      console.log('⏰ From scheduled:', fromScheduled);
       console.log('📱 Current location available:', !!location?.coords);
       
       setSelectedDestination(dest);
@@ -231,22 +275,30 @@ export default function HomeScreen({ navigation, route }) {
         );
       }
       
-      // Se veio dos favoritos com autoStartFlow, criar estimate e mostrar modal automaticamente
-      if (autoStartFlow && fromFavorites) {
-        console.log('🚀 Processando fluxo automático de favorito...');
+      // Se veio dos favoritos ou reservas agendadas com autoStartFlow, criar estimate e mostrar modal automaticamente
+      if (autoStartFlow && (fromFavorites || fromScheduled)) {
+        const sourceType = fromScheduled ? 'reserva agendada' : 'favorito';
+        console.log(`🚀 Processando fluxo automático de ${sourceType}...`);
+        
+        // Para reservas agendadas, mostrar alerta adicional
+        if (fromScheduled) {
+          const originalReservaId = route?.params?.originalReservaId;
+          const scheduledTime = route?.params?.scheduledTime;
+          console.log(`⏰ Reserva agendada ativada! ID: ${originalReservaId}, Horário: ${scheduledTime}`);
+        }
         
         setTimeout(async () => {
           try {
             const estimate = await createRideEstimateForFavorite(dest);
             
             if (estimate) {
-              console.log('✅ Estimate criado, definindo estado e mostrando modal...');
+              console.log(`✅ Estimate criado para ${sourceType}, definindo estado e mostrando modal...`);
               setRideEstimate(estimate);
               
               // Aguardar um pouco para garantir que o estado foi atualizado
               setTimeout(() => {
                 setShowConfirmationModal(true);
-                console.log('🎭 Modal de confirmação exibido');
+                console.log(`🎭 Modal de confirmação exibido para ${sourceType}`);
               }, 200);
             } else {
               console.error('❌ Falha ao criar estimate');
@@ -263,7 +315,11 @@ export default function HomeScreen({ navigation, route }) {
       navigation.setParams({ 
         selectedDestination: undefined, 
         autoStartFlow: undefined,
-        fromFavorites: undefined 
+        fromFavorites: undefined,
+        fromScheduled: undefined,
+        originalReservaId: undefined,
+        scheduledTime: undefined,
+        observacoes: undefined
       });
     }
   }, [route?.params?.selectedDestination, location]);
@@ -778,16 +834,32 @@ export default function HomeScreen({ navigation, route }) {
           setRequestStatus('accepted');
           console.log('📦 Dados finais do veículo sendo salvos:', vehicleData);
           
-          // SALVAR INFORMAÇÕES DO MOTORISTA COM DADOS CORRETOS DO VEÍCULO
-          setDriverInfo({
+          // PREPARAR dados do motorista
+          const driverData = {
             id: data.driver?.id || data.driverId || data.ride?.driverId,
-            name: data.driver?.name || data.ride?.driverName || 'Motorista',
+            name: data.driver?.name || data.ride?.driverName,
             phone: data.driver?.phone || data.ride?.driverPhone || '',
-            vehicleInfo: vehicleData || {},
+            vehicleInfo: vehicleData,
             rating: data.driver?.rating || data.ride?.rating || 0,
             location: data.driver?.location || null,
-            estimatedArrival: data.estimatedArrival || '5-10 minutos'
-          });
+            estimatedArrival: data.estimatedArrival
+          };
+
+          console.log('🔍 [PREPARAÇÃO] Dados preparados do motorista:', driverData);
+
+          // SÓ SALVAR se os dados são válidos
+          if (isValidDriverData(driverData)) {
+            setDriverInfo(driverData);
+            console.log('✅ [SUCESSO] Dados válidos do motorista salvos');
+          } else {
+            console.warn('⚠️ [AVISO] Dados do motorista são padrão/inválidos, não exibindo modal');
+            console.warn('🔍 [DEBUG] Motivo da rejeição:', {
+              name: driverData.name,
+              isNameValid: driverData.name && driverData.name !== 'Motorista',
+              id: driverData.id,
+              isIdValid: driverData.id && driverData.id.toString().trim().length > 0
+            });
+          }
           
           if (data.rideId || data.ride?.id) {
             setRequestId(data.rideId || data.ride.id);
@@ -1064,6 +1136,19 @@ export default function HomeScreen({ navigation, route }) {
                     opacity: 0.7;
                 }
             }
+            
+            /* Traffic car styling */
+            .traffic-car {
+                transition: transform 0.1s linear;
+                will-change: transform;
+                pointer-events: none;
+            }
+            
+            .traffic-car svg {
+                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+            }
+            .leaflet-control-zoom { display: none; }
+            .leaflet-control-attribution { display: none; }
         </style>
     </head>
     <body>
@@ -1071,7 +1156,7 @@ export default function HomeScreen({ navigation, route }) {
         
         <script>
             // Initialize OpenStreetMap with Leaflet
-            const map = L.map('mapContainer').setView([${location?.coords.latitude || -8.8390}, ${location?.coords.longitude || 13.2894}], 15);
+            const map = L.map('mapContainer', { zoomControl: false, attributionControl: false }).setView([${location?.coords.latitude || -8.8390}, ${location?.coords.longitude || 13.2894}], 15);
             
             // Tile servers - usar CartoDB Voyager como padrão (mais parecido com Google Maps)
             const tileServers = [
@@ -1149,6 +1234,7 @@ export default function HomeScreen({ navigation, route }) {
             let destinationMarker = null;
             let routeLine = null;
             let routeControl = null;
+            
 
             // Add user location with blue circle (like Google Maps)
             function addUserLocationMarker(lat, lng, accuracy = 20) {
@@ -2044,8 +2130,23 @@ export default function HomeScreen({ navigation, route }) {
         const timeInMinutes = estimatedTime / 60;
         console.log('📏 Distância em km:', distanceInKm);
         console.log('⏱️ Tempo em minutos:', timeInMinutes);
-        estimatedFare = apiService.calculateEstimatedFare(distanceInKm, timeInMinutes, vehicleType);
-        console.log('💰 Tarifa calculada privado:', estimatedFare, 'AOA');
+        
+        // Calcular tarifa original usando dados do Supabase
+        const originalFare = await apiService.calculateEstimatedFareAsync(distanceInKm, timeInMinutes, vehicleType);
+        console.log('💰 Tarifa original privado (Supabase):', originalFare, 'AOA');
+        
+        // Aplicar precificação competitiva usando PricingHelper
+        const competitivePricing = PricingHelper.calculateCompetitivePrice(
+          originalFare, 
+          null, // Sem preço da Yango por enquanto (pode ser adicionado via input depois)
+          vehicleType, 
+          distanceInKm
+        );
+        
+        // Usar o preço competitivo como fare final
+        estimatedFare = competitivePricing.finalPrice;
+        console.log('💰 Tarifa competitiva aplicada:', estimatedFare, 'AOA');
+        console.log('💰 Economia gerada:', competitivePricing.savings, 'AOA');
       }
       
       // Garantir formatação correta dos textos
@@ -2118,18 +2219,32 @@ export default function HomeScreen({ navigation, route }) {
         }
         
         // Extrair dados do veículo
-        const vehicleData = data.vehicleInfo || data.ride?.vehicleInfo || data.driver?.vehicleInfo || {};
+        const vehicleData = data.vehicleInfo || data.ride?.vehicleInfo || data.driver?.vehicleInfo;
         console.log('🚗 Dados do veículo:', vehicleData);
         
-        // Salvar informações do motorista
-        setDriverInfo({
+        // PREPARAR dados do motorista
+        const driverData = {
           id: data.driverId || data.driver?.id || data.ride?.driverId,
-          name: data.driverName || data.driver?.name || data.ride?.driverName || 'Motorista',
+          name: data.driverName || data.driver?.name || data.ride?.driverName,
           phone: data.driverPhone || data.driver?.phone || data.ride?.driverPhone || '',
           vehicleInfo: vehicleData,
           rating: data.driver?.rating || data.ride?.rating || 4.5,
-          estimatedArrival: data.estimatedArrival || '5-10 minutos'
-        });
+          estimatedArrival: data.estimatedArrival
+        };
+
+        console.log('🔍 [BUSCA] Dados preparados do motorista:', driverData);
+
+        // SÓ SALVAR se os dados são válidos
+        if (isValidDriverData(driverData)) {
+          setDriverInfo(driverData);
+          console.log('✅ [BUSCA] Dados válidos do motorista salvos');
+        } else {
+          console.warn('⚠️ [BUSCA] Dados do motorista inválidos, rejeitando corrida');
+          // Se os dados são inválidos, rejeitar a aceitação
+          setRequestStatus('rejected');
+          setIsSearchingDrivers(true); // Continuar procurando
+          return;
+        }
         
         // Atualizar corrida atual
         if (data.ride) {
@@ -2418,6 +2533,8 @@ export default function HomeScreen({ navigation, route }) {
                               passengerProfile.phone || 
                               `passenger_${Date.now()}`;
           console.log('🚗 Criando corrida para passageiro:', passengerId);
+          console.log('📸 Foto do perfil do passageiro:', passengerProfile.profileImageUrl || 'Nenhuma foto');
+          
           const rideData = {
             passengerId: passengerId, // Usar o ID gerado acima
             passengerName: passengerProfile.name || 'Passageiro',
@@ -3119,6 +3236,8 @@ export default function HomeScreen({ navigation, route }) {
         onHttpError={(error) => console.error('🌐 WebView HTTP error:', error)}
       />
 
+      {/* Zoom Controls - REMOVIDOS */}
+
       {/* Location Button */}
       <TouchableOpacity
         style={styles.locationButton}
@@ -3212,22 +3331,29 @@ export default function HomeScreen({ navigation, route }) {
         )}
       </View>
 
-      {/* Taxi Type Dropdown - Lado Direito (mantido menor) */}
+      {/* Taxi Type Dropdown - Lado Esquerdo Inferior - Redesenhado */}
+      {/* Esconder quando corrida é aceita para não sobrepor informações do motorista */}
+      {requestStatus !== 'accepted' && (
       <View style={styles.taxiDropdownContainer}>
         <TouchableOpacity
           style={styles.taxiDropdownButton}
           onPress={() => setIsDropdownOpen(!isDropdownOpen)}
           activeOpacity={0.8}
         >
-          <MaterialIcons 
-            name={selectedTaxiType === 'Coletivo' ? 'directions-bus' : 'local-taxi'} 
-            size={18} 
-            color="#4285F4" 
-          />
-          <Text style={styles.taxiDropdownButtonText}>{selectedTaxiType}</Text>
+          <View style={styles.taxiDropdownIconContainer}>
+            {selectedTaxiType === 'Coletivo' ? (
+              <MaterialIcons name="directions-bus" size={24} color="#4285F4" />
+            ) : (
+              <FontAwesome5 name="car" size={20} color="#4285F4" solid />
+            )}
+          </View>
+          <View style={styles.taxiDropdownTextContainer}>
+            <Text style={styles.taxiDropdownLabel}>Tipo de serviço</Text>
+            <Text style={styles.taxiDropdownButtonText}>{selectedTaxiType}</Text>
+          </View>
           <MaterialIcons 
             name={isDropdownOpen ? "keyboard-arrow-up" : "keyboard-arrow-down"} 
-            size={16} 
+            size={20} 
             color="#6B7280" 
           />
         </TouchableOpacity>
@@ -3287,15 +3413,20 @@ export default function HomeScreen({ navigation, route }) {
                 }
               }}
             >
-              <MaterialIcons name="directions-bus" size={16} color={selectedTaxiType === 'Coletivo' ? '#4285F4' : '#6B7280'} />
-              <Text style={[
-                styles.taxiDropdownOptionText,
-                selectedTaxiType === 'Coletivo' && styles.taxiDropdownOptionTextSelected
-              ]}>
-                Coletivo
-              </Text>
+              <View style={styles.taxiOptionIconContainer}>
+                <MaterialIcons name="directions-bus" size={24} color={selectedTaxiType === 'Coletivo' ? '#4285F4' : '#6B7280'} />
+              </View>
+              <View style={styles.taxiOptionTextContainer}>
+                <Text style={[
+                  styles.taxiDropdownOptionText,
+                  selectedTaxiType === 'Coletivo' && styles.taxiDropdownOptionTextSelected
+                ]}>
+                  Coletivo
+                </Text>
+                <Text style={styles.taxiOptionDescription}>Rotas fixas, preço mais baixo</Text>
+              </View>
               {selectedTaxiType === 'Coletivo' && (
-                <MaterialIcons name="check" size={14} color="#4285F4" />
+                <MaterialIcons name="check-circle" size={24} color="#4285F4" />
               )}
             </TouchableOpacity>
 
@@ -3316,20 +3447,26 @@ export default function HomeScreen({ navigation, route }) {
                 }
               }}
             >
-              <MaterialIcons name="local-taxi" size={16} color={selectedTaxiType === 'Privado' ? '#4285F4' : '#6B7280'} />
-              <Text style={[
-                styles.taxiDropdownOptionText,
-                selectedTaxiType === 'Privado' && styles.taxiDropdownOptionTextSelected
-              ]}>
-                Privado
-              </Text>
+              <View style={styles.taxiOptionIconContainer}>
+                <FontAwesome5 name="car" size={20} color={selectedTaxiType === 'Privado' ? '#4285F4' : '#6B7280'} solid />
+              </View>
+              <View style={styles.taxiOptionTextContainer}>
+                <Text style={[
+                  styles.taxiDropdownOptionText,
+                  selectedTaxiType === 'Privado' && styles.taxiDropdownOptionTextSelected
+                ]}>
+                  Privado
+                </Text>
+                <Text style={styles.taxiOptionDescription}>Só para você, qualquer destino</Text>
+              </View>
               {selectedTaxiType === 'Privado' && (
-                <MaterialIcons name="check" size={14} color="#4285F4" />
+                <MaterialIcons name="check-circle" size={24} color="#4285F4" />
               )}
             </TouchableOpacity>
           </View>
         )}
       </View>
+      )}
 
       {/* Search and Taxi Controls OR Driver Search Animation */}
       {console.log('🔍 Render condition - isSearchingDrivers:', isSearchingDrivers, 'driversFound:', driversFound)}
@@ -3386,7 +3523,10 @@ export default function HomeScreen({ navigation, route }) {
               <View style={styles.searchIconContainer}>
                 <Animated.View style={[styles.pulseCircle, { transform: [{ scale: pulseAnim }] }]} />
                 <Animated.View style={[styles.pulseCircle2, { transform: [{ scale: pulseAnim2 }] }]} />
-                <MaterialIcons name="directions-car" size={40} color={COLORS.primary[500]} style={styles.carIcon} />
+                <View style={styles.carIconWrapper}>
+                  <FontAwesome5 name="car-side" size={44} color={COLORS.primary[500]} style={styles.carIcon} solid />
+                  <View style={styles.carShadow} />
+                </View>
               </View>
             </View>
             
@@ -3445,7 +3585,7 @@ export default function HomeScreen({ navigation, route }) {
       )}
 
       {/* Request Status - Solicitação Aceita - Dropdown Bottom */}
-      {requestStatus === 'accepted' && driverInfo && (
+      {requestStatus === 'accepted' && driverInfo && isValidDriverData(driverInfo) && (
         <Animated.View style={[styles.driverAcceptedDropdown, {
           transform: [{ translateY: slideAnim }]
         }]}>
@@ -3476,9 +3616,11 @@ export default function HomeScreen({ navigation, route }) {
             /* Versão Minimizada */
             <View style={styles.minimizedContent}>
               <View style={styles.minimizedRow}>
-                <View style={styles.driverAvatarSmall}>
-                  <MaterialIcons name="person" size={20} color="#4285F4" />
-                </View>
+                <DriverAvatar 
+                  driverId={driverInfo.id}
+                  size={40}
+                  style={styles.driverAvatarSmall}
+                />
                 <View style={styles.minimizedInfo}>
                   <Text style={styles.minimizedDriverName}>{driverInfo.name}</Text>
                   <Text style={styles.minimizedStatus}>
@@ -3518,9 +3660,11 @@ export default function HomeScreen({ navigation, route }) {
               {/* Informações do Motorista */}
               <View style={styles.driverSection}>
                 <View style={styles.driverRow}>
-                  <View style={styles.driverAvatarLarge}>
-                    <MaterialIcons name="person" size={32} color="#4285F4" />
-                  </View>
+                  <DriverAvatar 
+                    driverId={driverInfo.id}
+                    size={60}
+                    style={styles.driverAvatarLarge}
+                  />
                   <View style={styles.driverInfo}>
                     <Text style={styles.driverNameLarge}>{driverInfo.name}</Text>
                     <View style={styles.ratingRow}>
@@ -3979,20 +4123,46 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  locationButton: {
+  // Zoom Controls
+  zoomControls: {
     position: 'absolute',
     top: 60,
     right: 20,
-    width: 44,
-    height: 44,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  zoomButton: {
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  zoomDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  
+  locationButton: {
+    position: 'absolute',
+    top: 180,
+    right: 20,
+    width: 48,
+    height: 48,
     backgroundColor: '#2563EB',
-    borderRadius: 22,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
     elevation: 5,
   },
   bottomContainer: {
@@ -4085,67 +4255,107 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   
-  // Taxi Type Dropdown Styles (reposicionado para baixo do nav)
+  // Taxi Type Dropdown Styles - Redesenhado
   taxiDropdownContainer: {
     position: 'absolute',
-    top: 120,
+    bottom: 180,
     left: 20,
+    right: 20,
     zIndex: 999,
   },
   taxiDropdownButton: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-    minWidth: 90,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  taxiDropdownIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EBF4FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  taxiDropdownTextContainer: {
+    flex: 1,
+  },
+  taxiDropdownLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
   },
   taxiDropdownButtonText: {
-    fontSize: 12,
+    fontSize: 16,
     color: '#1F2937',
-    marginHorizontal: 4,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   taxiDropdownOptions: {
     position: 'absolute',
-    top: 38,
+    bottom: 72,
     left: 0,
+    right: 0,
     backgroundColor: '#ffffff',
-    borderRadius: 8,
-    minWidth: 100,
-    paddingVertical: 3,
+    borderRadius: 16,
+    paddingVertical: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
   },
   taxiDropdownOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minHeight: 30,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    minHeight: 56,
   },
   taxiDropdownOptionSelected: {
-    backgroundColor: '#F0F9FF',
+    backgroundColor: '#EBF4FF',
   },
   taxiDropdownOptionText: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginLeft: 6,
+    fontSize: 16,
+    color: '#1F2937',
+    marginLeft: 12,
     flex: 1,
     fontWeight: '500',
   },
   taxiDropdownOptionTextSelected: {
     color: '#4285F4',
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  taxiOptionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  taxiOptionTextContainer: {
+    flex: 1,
+  },
+  taxiOptionDescription: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
   },
   
   // Overlay para fechar dropdowns
@@ -4216,7 +4426,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(37, 99, 235, 0.3)',
     transform: [{ scale: 1 }],
   },
+  carIconWrapper: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
   carIcon: {
+    zIndex: 2,
+  },
+  carShadow: {
+    position: 'absolute',
+    bottom: -8,
+    width: 60,
+    height: 10,
+    borderRadius: 30,
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
     zIndex: 1,
   },
   searchContent: {
@@ -4721,12 +4946,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   driverAvatarLarge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#EEF2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 16,
   },
   driverInfo: {
@@ -4941,12 +5160,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   driverAvatarSmall: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#EEF2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 12,
   },
   minimizedInfo: {

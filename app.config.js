@@ -56,7 +56,7 @@ export default ({ config }) => ({
     versionCode: 2,
     adaptiveIcon: {
       foregroundImage: './assets/icon.png',
-      backgroundColor: '#1737e8',
+      backgroundColor: '#FFFFFF',
     },
     splash: {
       backgroundColor: "#1737e8",

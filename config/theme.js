@@ -1,10 +1,14 @@
 import { Dimensions, Platform, PixelRatio, Easing } from 'react-native';
 
-const { width, height } = Dimensions.get('window');
-
-// Responsive Design System
+// Responsive Design System - com leitura dinâmica de dimensões
 export const RESPONSIVE = {
+  // Ler dimensões sempre atualizadas
+  getScreenDimensions: () => {
+    return Dimensions.get('window');
+  },
+  
   getScreenSize: () => {
+    const { width } = Dimensions.get('window');
     if (width < 360) return 'small';
     if (width < 414) return 'standard';
     if (width < 768) return 'large';
@@ -24,6 +28,7 @@ export const RESPONSIVE = {
   },
   
   getModalHeight: () => {
+    const { height } = Dimensions.get('window');
     const screenSize = RESPONSIVE.getScreenSize();
     const heights = {
       small: 0.75,
@@ -173,9 +178,13 @@ export const SIZES = {
   xlarge: 24,
   xxlarge: 32,
   
-  // Screen dimensions
-  width,
-  height,
+  // Screen dimensions - getters dinâmicos
+  get width() {
+    return Dimensions.get('window').width;
+  },
+  get height() {
+    return Dimensions.get('window').height;
+  },
   
   // Responsive radius system
   radius: {
@@ -238,15 +247,64 @@ export const SIZES = {
   iconMedium: 20,
   iconLarge: 24,
   
-  // Typography scale with responsive font sizing
+  // Typography scale with responsive font sizing - escala fluida
   typography: {
-    caption: Math.round(12 * RESPONSIVE.getFontScale()),
-    body2: Math.round(14 * RESPONSIVE.getFontScale()),
-    body1: Math.round(16 * RESPONSIVE.getFontScale()),
-    subtitle: Math.round(18 * RESPONSIVE.getFontScale()),
-    title: Math.round(20 * RESPONSIVE.getFontScale()),
-    heading: Math.round(24 * RESPONSIVE.getFontScale()),
-    display: Math.round(32 * RESPONSIVE.getFontScale())
+    // Função helper para escala fluida baseada na largura do viewport
+    getFluidSize: (minSize, maxSize, minVw = 360, maxVw = 768) => {
+      const { width } = Dimensions.get('window');
+      const vw = Math.max(minVw, Math.min(width, maxVw));
+      const scale = (vw - minVw) / (maxVw - minVw);
+      return Math.round(minSize + (maxSize - minSize) * scale);
+    },
+    
+    get caption() {
+      const { width } = Dimensions.get('window');
+      const fontScale = RESPONSIVE.getFontScale();
+      const baseSize = width < 360 ? 11 : width < 768 ? 12 : 13;
+      return Math.round(baseSize * fontScale);
+    },
+    
+    get body2() {
+      const { width } = Dimensions.get('window');
+      const fontScale = RESPONSIVE.getFontScale();
+      const baseSize = width < 360 ? 13 : width < 768 ? 14 : 15;
+      return Math.round(baseSize * fontScale);
+    },
+    
+    get body1() {
+      const { width } = Dimensions.get('window');
+      const fontScale = RESPONSIVE.getFontScale();
+      const baseSize = width < 360 ? 15 : width < 768 ? 16 : 17;
+      return Math.round(baseSize * fontScale);
+    },
+    
+    get subtitle() {
+      const { width } = Dimensions.get('window');
+      const fontScale = RESPONSIVE.getFontScale();
+      const baseSize = width < 360 ? 16 : width < 768 ? 18 : 20;
+      return Math.round(baseSize * fontScale);
+    },
+    
+    get title() {
+      const { width } = Dimensions.get('window');
+      const fontScale = RESPONSIVE.getFontScale();
+      const baseSize = width < 360 ? 18 : width < 768 ? 20 : 22;
+      return Math.round(baseSize * fontScale);
+    },
+    
+    get heading() {
+      const { width } = Dimensions.get('window');
+      const fontScale = RESPONSIVE.getFontScale();
+      const baseSize = width < 360 ? 22 : width < 768 ? 24 : 28;
+      return Math.round(baseSize * fontScale);
+    },
+    
+    get display() {
+      const { width } = Dimensions.get('window');
+      const fontScale = RESPONSIVE.getFontScale();
+      const baseSize = width < 360 ? 28 : width < 768 ? 32 : 40;
+      return Math.round(baseSize * fontScale);
+    }
   }
 };
 
@@ -553,39 +611,64 @@ export const COMMON_STYLES = {
     textAlign: 'center',
   },
   
-  // Enhanced card system
-  card: {
-    backgroundColor: COLORS.surface.card,
-    borderRadius: SIZES.radius.large,
-    padding: SIZES.spacing.lg,
-    marginHorizontal: SIZES.spacing.lg,
-    marginVertical: SIZES.spacing.md,
-    ...SHADOWS.medium,
+  // Enhanced card system - responsivo dinâmico
+  get card() {
+    const screenSize = RESPONSIVE.getScreenSize();
+    const padding = screenSize === 'small' ? SIZES.spacing.md : 
+                    screenSize === 'tablet' ? SIZES.spacing.xl : SIZES.spacing.lg;
+    const margin = screenSize === 'small' ? SIZES.spacing.md : SIZES.spacing.lg;
+    
+    return {
+      backgroundColor: COLORS.surface.card,
+      borderRadius: SIZES.radius.large,
+      padding: padding,
+      marginHorizontal: margin,
+      marginVertical: SIZES.spacing.md,
+      ...SHADOWS.medium,
+    };
   },
   
-  cardElevated: {
-    backgroundColor: COLORS.surface.card,
-    borderRadius: SIZES.radius.large,
-    padding: SIZES.spacing.lg,
-    marginHorizontal: SIZES.spacing.lg,
-    marginVertical: SIZES.spacing.md,
-    ...SHADOWS.large,
+  get cardElevated() {
+    const screenSize = RESPONSIVE.getScreenSize();
+    const padding = screenSize === 'small' ? SIZES.spacing.md : 
+                    screenSize === 'tablet' ? SIZES.spacing.xl : SIZES.spacing.lg;
+    const margin = screenSize === 'small' ? SIZES.spacing.md : SIZES.spacing.lg;
+    
+    return {
+      backgroundColor: COLORS.surface.card,
+      borderRadius: SIZES.radius.large,
+      padding: padding,
+      marginHorizontal: margin,
+      marginVertical: SIZES.spacing.md,
+      ...SHADOWS.large,
+    };
   },
   
-  cardFlat: {
-    backgroundColor: COLORS.surface.card,
-    borderRadius: SIZES.radius.medium,
-    padding: SIZES.spacing.lg,
-    marginHorizontal: SIZES.spacing.lg,
-    marginVertical: SIZES.spacing.sm,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  get cardFlat() {
+    const screenSize = RESPONSIVE.getScreenSize();
+    const padding = screenSize === 'small' ? SIZES.spacing.md : SIZES.spacing.lg;
+    const margin = screenSize === 'small' ? SIZES.spacing.md : SIZES.spacing.lg;
+    
+    return {
+      backgroundColor: COLORS.surface.card,
+      borderRadius: SIZES.radius.medium,
+      padding: padding,
+      marginHorizontal: margin,
+      marginVertical: SIZES.spacing.sm,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+    };
   },
   
-  // Enhanced input system
-  inputContainer: {
-    width: '100%',
-    marginBottom: SIZES.spacing.lg,
+  // Enhanced input system - responsivo
+  get inputContainer() {
+    const screenSize = RESPONSIVE.getScreenSize();
+    const marginBottom = screenSize === 'small' ? SIZES.spacing.md : SIZES.spacing.lg;
+    
+    return {
+      width: '100%',
+      marginBottom: marginBottom,
+    };
   },
   
   label: {
@@ -694,20 +777,26 @@ export const COMMON_STYLES = {
     marginRight: SIZES.spacing.sm,
   },
   
-  // Modal styles
+  // Modal styles - responsivo
   modalOverlay: {
     flex: 1,
     backgroundColor: COLORS.surface.overlay,
     justifyContent: 'flex-end',
   },
   
-  modalContainer: {
-    backgroundColor: COLORS.surface.modal,
-    borderTopLeftRadius: SIZES.radius.large,
-    borderTopRightRadius: SIZES.radius.large,
-    paddingTop: SIZES.spacing.md,
-    maxHeight: SIZES.heights.modal,
-    ...SHADOWS.modal,
+  get modalContainer() {
+    const screenSize = RESPONSIVE.getScreenSize();
+    const radius = screenSize === 'tablet' ? SIZES.radius.xlarge : SIZES.radius.large;
+    const paddingTop = screenSize === 'small' ? SIZES.spacing.sm : SIZES.spacing.md;
+    
+    return {
+      backgroundColor: COLORS.surface.modal,
+      borderTopLeftRadius: radius,
+      borderTopRightRadius: radius,
+      paddingTop: paddingTop,
+      maxHeight: SIZES.heights.modal,
+      ...SHADOWS.modal,
+    };
   },
   
   modalHandle: {

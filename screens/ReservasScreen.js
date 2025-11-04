@@ -24,6 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
+import reservaScheduler from '../services/reservaScheduler';
 
 const { width, height } = Dimensions.get('window');
 
@@ -62,12 +63,52 @@ const ReservasScreen = () => {
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [schedulerActive, setSchedulerActive] = useState(false);
   const slideAnim = useRef(new Animated.Value(height * 0.85)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Função para iniciar animação pulsante
+  const startPulseAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.2,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
 
   // Carregar dados existentes ao montar o componente
   useEffect(() => {
     loadExistingReservas();
     loadUserLocation();
+    
+    // Inicializar scheduler de reservas
+    const initializeScheduler = async () => {
+      try {
+        console.log('🚀 [RESERVAS] Inicializando scheduler...');
+        await reservaScheduler.start((reservaAtivada) => {
+          console.log('📱 [RESERVAS] Reserva ativada:', reservaAtivada.id);
+          // Recarregar reservas para atualizar a UI
+          loadExistingReservas();
+        }, navigation);
+        setSchedulerActive(true);
+        // Iniciar animação pulsante
+        startPulseAnimation();
+        console.log('✅ [RESERVAS] Scheduler iniciado com sucesso');
+      } catch (error) {
+        console.error('❌ [RESERVAS] Erro ao inicializar scheduler:', error);
+      }
+    };
+    
+    initializeScheduler();
     
     // Listeners do teclado
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
@@ -80,6 +121,8 @@ const ReservasScreen = () => {
     return () => {
       keyboardDidShowListener?.remove();
       keyboardDidHideListener?.remove();
+      // Cleanup do scheduler quando componente for desmontado
+      reservaScheduler.cleanup();
     };
   }, []);
 
@@ -943,7 +986,15 @@ const ReservasScreen = () => {
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Reservas</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>Reservas</Text>
+          {schedulerActive && (
+            <View style={styles.schedulerIndicator}>
+              <Animated.View style={[styles.schedulerDot, { transform: [{ scale: pulseAnim }] }]} />
+              <Text style={styles.schedulerText}>Scheduler Ativo</Text>
+            </View>
+          )}
+        </View>
         {reservas.length > 0 && (
           <TouchableOpacity
             style={styles.clearButton}
@@ -1115,10 +1166,37 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border.light,
   },
+  headerLeft: {
+    flex: 1,
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
     color: COLORS.text.primary,
+  },
+  schedulerIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    backgroundColor: '#E6FFFA',
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  schedulerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginRight: 6,
+  },
+  schedulerText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#065F46',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   clearButton: {
     flexDirection: 'row',
