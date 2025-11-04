@@ -88,6 +88,8 @@ export const TaxiSelectionModal = ({
     return 1.0; // normal
   };
 
+  // Cálculo de preço em tempo real - sem cache
+  // Preço é recalculado imediatamente ao selecionar a zona
   const calculatePrice = (taxiType) => {
     const basePrice = taxiType.basePrice;
     const distancePrice = distance * taxiType.pricePerKm;
@@ -128,6 +130,7 @@ export const TaxiSelectionModal = ({
     ]).start();
 
     setTimeout(() => {
+      // Preço é calculado novamente no momento da seleção
       onTaxiSelect?.({
         ...taxiType,
         estimatedPrice: calculatePrice(taxiType),
@@ -140,6 +143,7 @@ export const TaxiSelectionModal = ({
 
   const renderTaxiCard = (taxiType) => {
     const isSelected = selectedTaxi === taxiType.id;
+    // Preço calculado em tempo real sempre que a zona/táxi é renderizado
     const price = calculatePrice(taxiType);
     
     return (

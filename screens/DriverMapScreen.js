@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
   Modal,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -455,22 +456,58 @@ export default function DriverMapScreen({ navigation, route }) {
         });
 
         // Escutar novas solicitações de corrida
-        socket.on('new_ride_request', (data) => {
+        socket.on('new_ride_request', async (data) => {
           console.log('🚖 Nova solicitação recebida:', data);
           
           if (data.ride) {
+            // Buscar foto do passageiro no Supabase
+            let passengerPhoto = null;
+            
+            console.log('🔍 Buscando foto do passageiro com telefone:', data.ride.passengerPhone);
+            
+            if (data.ride.passengerPhone) {
+              try {
+                const { data: userData, error } = await driverAuthService.supabase
+                  .from('users')
+                  .select('profile_image_url')
+                  .eq('telefone', data.ride.passengerPhone)
+                  .limit(1)
+                  .single();
+                
+                console.log('📊 Resultado da busca de foto:', { userData, error });
+                
+                if (!error && userData?.profile_image_url) {
+                  passengerPhoto = userData.profile_image_url;
+                  console.log('✅ Foto do passageiro encontrada:', passengerPhoto);
+                } else {
+                  console.log('⚠️ Foto não encontrada ou erro:', error?.message || 'sem foto');
+                }
+              } catch (error) {
+                console.log('❌ Erro ao buscar foto:', error.message);
+                console.log('❌ Stack:', error.stack);
+              }
+            } else {
+              console.log('⚠️ Telefone do passageiro não disponível na solicitação');
+            }
+            
+            // Adicionar foto ao objeto da corrida
+            const rideWithPhoto = {
+              ...data.ride,
+              passengerProfileImage: passengerPhoto
+            };
+            
             // Adicionar à lista de solicitações pendentes
             setPendingRequests(prev => {
-              const exists = prev.find(req => req.id === data.ride.id);
+              const exists = prev.find(req => req.id === rideWithPhoto.id);
               if (!exists) {
-                return [data.ride, ...prev];
+                return [rideWithPhoto, ...prev];
               }
               return prev;
             });
 
             // Mostrar a primeira solicitação se não há nenhuma sendo exibida
             if (!currentRequest && !showRequestModal) {
-              setCurrentRequest(data.ride);
+              setCurrentRequest(rideWithPhoto);
               setShowRequestModal(true);
             }
             
@@ -2652,7 +2689,16 @@ export default function DriverMapScreen({ navigation, route }) {
                   </View>
 
                   <View style={styles.passengerSection}>
-                    <MaterialIcons name="person" size={20} color="#1F2937" />
+                    {currentRequest.passengerProfileImage ? (
+                      <Image 
+                        source={{ uri: currentRequest.passengerProfileImage }} 
+                        style={styles.passengerAvatar}
+                      />
+                    ) : (
+                      <View style={styles.passengerAvatarPlaceholder}>
+                        <MaterialIcons name="person" size={24} color="#ffffff" />
+                      </View>
+                    )}
                     <View style={styles.passengerInfo}>
                       <Text style={styles.passengerName}>{currentRequest.passengerName}</Text>
                       <Text style={styles.requestTime}>
@@ -3032,6 +3078,20 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 10,
     marginBottom: 10,
+  },
+  passengerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E5E7EB',
+  },
+  passengerAvatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2563EB',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   passengerInfo: {
     marginLeft: 8,

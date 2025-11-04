@@ -356,6 +356,16 @@ function AppContent() {
             options={{ headerShown: false }}
           />
           <Stack.Screen
+            name="ForgotPassword"
+            component={require('./screens/ForgotPasswordScreen').default}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="ResetPassword"
+            component={require('./screens/ResetPasswordScreen').default}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
             name="About"
             component={AboutScreen}
             options={{ headerShown: false }}

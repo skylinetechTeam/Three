@@ -11,8 +11,10 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Image,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import Toast from 'react-native-toast-message';
 import { COLORS, SIZES, FONTS, SHADOWS } from '../config/theme';
 import LocalDatabase from '../services/localDatabase';
@@ -21,11 +23,12 @@ import authService from '../services/authService';
 export default function EditProfileScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [profileImage, setProfileImage] = useState(null);
   const [profile, setProfile] = useState({
     nome: '',
     email: '',
     telefone: '',
-    endereco: '',
+    profileImageUrl: '',
   });
 
   // Load user profile on component mount
@@ -47,6 +50,24 @@ export default function EditProfileScreen({ navigation }) {
         userProfile = await LocalDatabase.getPassengerProfile();
         console.log('🚗 Passenger profile from LocalDatabase:', userProfile);
       }
+      
+      // Se tem telefone, buscar foto do Supabase
+      if (userProfile && userProfile.telefone) {
+        try {
+          const { data: supabaseUser } = await authService.supabase
+            .from('users')
+            .select('profile_image_url')
+            .eq('telefone', userProfile.telefone)
+            .single();
+          
+          if (supabaseUser && supabaseUser.profile_image_url) {
+            userProfile.profileImageUrl = supabaseUser.profile_image_url;
+            console.log('📸 Foto carregada do Supabase:', supabaseUser.profile_image_url);
+          }
+        } catch (err) {
+          console.log('⚠️ Não foi possível carregar foto do Supabase:', err.message);
+        }
+      }
 
       if (userProfile) {
         // Filter out demo data - check if it's real user data
@@ -61,8 +82,9 @@ export default function EditProfileScreen({ navigation }) {
             nome: '',
             email: '',
             telefone: '',
-            endereco: '',
+            profileImageUrl: '',
           });
+          setProfileImage(null);
           Toast.show({
             type: 'info',
             text1: 'Perfil em Branco',
@@ -73,8 +95,11 @@ export default function EditProfileScreen({ navigation }) {
             nome: userProfile.nome || userProfile.name || userProfile.fullName || '',
             email: userProfile.email || '',
             telefone: userProfile.telefone || userProfile.phone || '',
-            endereco: userProfile.endereco || userProfile.address || '',
+            profileImageUrl: userProfile.profileImageUrl || '',
           });
+          if (userProfile.profileImageUrl) {
+            setProfileImage(userProfile.profileImageUrl);
+          }
           console.log('✅ Real user profile loaded successfully');
         }
       } else {
@@ -83,8 +108,9 @@ export default function EditProfileScreen({ navigation }) {
           nome: '',
           email: '',
           telefone: '',
-          endereco: '',
+          profileImageUrl: '',
         });
+        setProfileImage(null);
         Toast.show({
           type: 'info',
           text1: 'Novo Perfil',
@@ -103,11 +129,119 @@ export default function EditProfileScreen({ navigation }) {
         nome: '',
         email: '',
         telefone: '',
-        endereco: '',
+        profileImageUrl: '',
       });
+      setProfileImage(null);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const pickImage = async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Toast.show({
+          type: 'error',
+          text1: 'Permissão Negada',
+          text2: 'É necessário permitir acesso às fotos',
+        });
+        return;
+      }
+
+      // Pick image
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const imageUri = result.assets[0].uri;
+        setProfileImage(imageUri);
+        handleInputChange('profileImageUrl', imageUri);
+        
+        Toast.show({
+          type: 'success',
+          text1: 'Foto Selecionada',
+          text2: 'Lembre-se de salvar as alterações',
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao selecionar imagem:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Não foi possível selecionar a imagem',
+      });
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Toast.show({
+          type: 'error',
+          text1: 'Permissão Negada',
+          text2: 'É necessário permitir acesso à câmera',
+        });
+        return;
+      }
+
+      // Take photo
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const imageUri = result.assets[0].uri;
+        setProfileImage(imageUri);
+        handleInputChange('profileImageUrl', imageUri);
+        
+        Toast.show({
+          type: 'success',
+          text1: 'Foto Capturada',
+          text2: 'Lembre-se de salvar as alterações',
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao tirar foto:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Não foi possível tirar a foto',
+      });
+    }
+  };
+
+  const showImageOptions = () => {
+    Alert.alert(
+      'Foto de Perfil',
+      'Escolha uma opção',
+      [
+        {
+          text: 'Tirar Foto',
+          onPress: takePhoto,
+        },
+        {
+          text: 'Escolher da Galeria',
+          onPress: pickImage,
+        },
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const handleSaveProfile = async () => {
@@ -138,8 +272,7 @@ export default function EditProfileScreen({ navigation }) {
         email: profile.email.trim(),
         telefone: profile.telefone.trim(),
         phone: profile.telefone.trim(), // For compatibility
-        endereco: profile.endereco.trim(),
-        address: profile.endereco.trim(), // For compatibility
+        profileImageUrl: profileImage || profile.profileImageUrl || '',
         updatedAt: new Date().toISOString(),
       };
 
@@ -150,6 +283,158 @@ export default function EditProfileScreen({ navigation }) {
       await LocalDatabase.updatePassengerProfile(updatedProfile);
       
       console.log('✅ Profile saved successfully to local storage');
+      
+      // Sincronizar com Supabase
+      try {
+        console.log('🔍 Buscando usuário no Supabase pelo telefone:', updatedProfile.telefone);
+        
+        // Buscar ID do usuário pelo telefone
+        const { data: users, error: searchError } = await authService.supabase
+          .from('users')
+          .select('id')
+          .eq('telefone', updatedProfile.telefone)
+          .limit(1);
+        
+        console.log('📊 Resultado da busca:', { users, searchError });
+        
+        if (searchError) {
+          console.error('❌ Erro ao buscar usuário:', searchError.message);
+          throw searchError;
+        }
+        
+        if (!users || users.length === 0) {
+          console.warn('⚠️ Usuário não encontrado no Supabase. Criando novo registro...');
+          
+          // Se o usuário não existe, criar novo registro
+          const { data: newUser, error: insertError } = await authService.supabase
+            .from('users')
+            .insert([{
+              nome: updatedProfile.nome,
+              email: updatedProfile.email,
+              telefone: updatedProfile.telefone
+            }])
+            .select();
+          
+          if (insertError) {
+            console.error('❌ Erro ao criar usuário:', insertError.message);
+            throw insertError;
+          }
+          
+          console.log('✅ Novo usuário criado no Supabase:', newUser);
+        } else {
+          const userId = users[0].id;
+          console.log('🔄 Atualizando dados no Supabase...');
+          
+          let publicImageUrl = null;
+          
+          // Se tem foto nova, fazer upload para o Supabase Storage
+          if (profileImage && profileImage.startsWith('file://')) {
+            try {
+              console.log('📸 Fazendo upload da foto para Supabase Storage...');
+              console.log('📸 URI da imagem:', profileImage);
+              
+              // Ler arquivo como blob usando fetch (funciona em React Native)
+              const response = await fetch(profileImage);
+              const blob = await response.blob();
+              
+              console.log('📸 Blob criado, tamanho:', blob.size, 'tipo:', blob.type);
+              
+              // Converter blob para ArrayBuffer
+              const arrayBuffer = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(blob);
+              });
+              
+              console.log('📸 ArrayBuffer criado, tamanho:', arrayBuffer.byteLength);
+              
+              // Nome do arquivo: userId_timestamp.jpg
+              const fileName = `${userId}_${Date.now()}.jpg`;
+              const filePath = `${fileName}`;
+              
+              console.log('📸 Fazendo upload para:', filePath);
+              
+              // Upload para o bucket profile-images
+              const { data: uploadData, error: uploadError } = await authService.supabase.storage
+                .from('profile-images')
+                .upload(filePath, arrayBuffer, {
+                  contentType: 'image/jpeg',
+                  upsert: true // Substituir se já existir
+                });
+              
+              if (uploadError) {
+                console.error('❌ Erro no upload:', uploadError);
+                console.error('❌ Detalhes:', JSON.stringify(uploadError, null, 2));
+              } else {
+                console.log('✅ Upload concluído:', uploadData);
+                
+                // Obter URL pública da imagem
+                const { data: urlData } = authService.supabase.storage
+                  .from('profile-images')
+                  .getPublicUrl(filePath);
+                
+                publicImageUrl = urlData.publicUrl;
+                console.log('🌐 URL pública da imagem:', publicImageUrl);
+              }
+            } catch (uploadError) {
+              console.error('❌ Erro ao fazer upload da imagem:', uploadError);
+              console.error('❌ Stack:', uploadError.stack);
+            }
+          }
+          
+          // Atualizar dados no Supabase (incluindo URL da foto se houver)
+          const updateData = {
+            nome: updatedProfile.nome,
+            email: updatedProfile.email,
+            telefone: updatedProfile.telefone
+          };
+          
+          // Se conseguiu fazer upload, adiciona a URL da foto
+          if (publicImageUrl) {
+            updateData.profile_image_url = publicImageUrl;
+          }
+          
+          console.log('📝 Dados a atualizar no Supabase:', updateData);
+          
+          // Atualizar usando query direta para incluir profile_image_url
+          const { error: updateError } = await authService.supabase
+            .from('users')
+            .update(updateData)
+            .eq('id', userId);
+          
+          if (updateError) {
+            console.error('❌ Erro ao atualizar:', updateError.message);
+            console.error('❌ Detalhes do erro:', JSON.stringify(updateError, null, 2));
+            throw updateError;
+          } else {
+            console.log('✅ Dados sincronizados com Supabase!', publicImageUrl ? '(com foto)' : '');
+            
+            // Atualizar profileImageUrl local com a URL pública se houver
+            if (publicImageUrl) {
+              updatedProfile.profileImageUrl = publicImageUrl;
+              await LocalDatabase.saveUserProfile(updatedProfile);
+              await LocalDatabase.updatePassengerProfile(updatedProfile);
+              console.log('✅ URL da foto atualizada no storage local');
+            }
+          }
+        }
+      } catch (syncError) {
+        console.error('⚠️ Erro ao sincronizar com Supabase:', syncError);
+        console.error('⚠️ Detalhes:', {
+          message: syncError.message,
+          code: syncError.code,
+          details: syncError.details,
+          hint: syncError.hint
+        });
+        
+        // Mostrar erro ao usuário
+        Toast.show({
+          type: 'warning',
+          text1: 'Aviso',
+          text2: 'Salvo localmente, mas não sincronizado com servidor',
+        });
+      }
 
       Toast.show({
         type: 'success',
@@ -216,14 +501,28 @@ export default function EditProfileScreen({ navigation }) {
         <View style={styles.formContainer}>
           {/* Avatar Section */}
           <View style={styles.avatarSection}>
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {profile.nome ? profile.nome.charAt(0).toUpperCase() : 'U'}
-                </Text>
+            <TouchableOpacity 
+              style={styles.avatarContainer}
+              onPress={showImageOptions}
+              activeOpacity={0.7}
+            >
+              {profileImage ? (
+                <Image 
+                  source={{ uri: profileImage }} 
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {profile.nome ? profile.nome.charAt(0).toUpperCase() : 'U'}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.cameraIconContainer}>
+                <MaterialIcons name="camera-alt" size={20} color={COLORS.text.inverse} />
               </View>
-            </View>
-            <Text style={styles.avatarSubtext}>Foto do perfil</Text>
+            </TouchableOpacity>
+            <Text style={styles.avatarSubtext}>Toque para alterar a foto</Text>
           </View>
 
           {/* Name Input */}
@@ -275,22 +574,6 @@ export default function EditProfileScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Address Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Endereço (Opcional)</Text>
-            <View style={styles.inputContainer}>
-              <MaterialIcons name="location-on" size={20} color={COLORS.text.secondary} />
-              <TextInput
-                style={styles.textInput}
-                value={profile.endereco}
-                onChangeText={(value) => handleInputChange('endereco', value)}
-                placeholder="Digite seu endereço"
-                placeholderTextColor={COLORS.input.placeholder}
-                multiline
-                numberOfLines={2}
-              />
-            </View>
-          </View>
         </View>
       </ScrollView>
 
@@ -377,14 +660,35 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     marginBottom: 12,
+    position: 'relative',
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: COLORS.primary[500],
     justifyContent: 'center',
     alignItems: 'center',
+    ...SHADOWS.medium,
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    ...SHADOWS.medium,
+  },
+  cameraIconContainer: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary[500],
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: COLORS.surface.card,
     ...SHADOWS.medium,
   },
   avatarText: {

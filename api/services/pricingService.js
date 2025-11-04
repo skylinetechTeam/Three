@@ -1,7 +1,14 @@
 // Serviço de precificação competitiva
+const { createClient } = require('@supabase/supabase-js');
+
+// Configuração do Supabase
+const supabaseUrl = "https://fplfizngqozlnxkzevyg.supabase.co";
+const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwbGZpem5ncW96bG54a3pldnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMzNzE3NTYsImV4cCI6MjA2ODk0Nzc1Nn0.jTkKTHIrk8mmmU-gUTrs_gPkyC5D-xsZWTO363yGbfE";
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 class PricingService {
   
-  // Configurações de precificação
+  // Configurações de precificação (exceto baseFare que vem do Supabase)
   static config = {
     // Desconto competitivo em relação à Yango (7,5% a 10%)
     competitiveDiscount: {
@@ -12,8 +19,8 @@ class PricingService {
     // Preço base por km (aumentado para privados)
     baseRatePerKm: 300, // Kwanzas por km (aumentado de 150)
     
-    // Taxa base (taxa mínima da corrida - apenas para privados)
-    baseFare: 2500, // Kwanzas (aumentado de 500)
+    // Taxa base (taxa mínima da corrida - AGORA DINÂMICO DO SUPABASE)
+    baseFare: 2500, // Kwanzas - FALLBACK se Supabase falhar
     
     // Taxa por tempo (por minuto)
     timeRate: 50, // Kwanzas por minuto (aumentado de 25)
@@ -25,25 +32,99 @@ class PricingService {
       xl: 1.5           // 50% mais caro
     },
     
-  // Multiplicadores por horário (surge pricing simplificado)
-  timeMultipliers: {
-      'peak_morning': 1.2,    // 07:00-09:00
-      'peak_evening': 1.3,    // 17:00-19:00
-      'late_night': 1.4,      // 22:00-06:00
-      'weekend': 1.1,         // Fins de semana
-      'normal': 1.0           // Horário normal
-    },
-    
     // Desconto global aplicado sobre o preço total (pós-todos os cálculos)
     totalPriceDiscount: 0.10
   };
 
+  // Cache do preço base (atualizado a cada 5 minutos)
+  static baseFareCache = {
+    value: 2500,
+    lastUpdate: 0,
+    ttl: 5 * 60 * 1000 // 5 minutos em millisegundos
+  };
+
+  // Buscar preço base dinâmico do Supabase
+  static async getDynamicBaseFare() {
+    const now = Date.now();
+    
+    // Verificar se o cache ainda é válido
+    if (now - this.baseFareCache.lastUpdate < this.baseFareCache.ttl) {
+      return this.baseFareCache.value;
+    }
+
+    try {
+      // Determinar tipo de preço baseado na data/hora atual
+      const priceType = this.determinePriceType(new Date());
+      
+      // Buscar do Supabase
+      const { data, error } = await supabase
+        .from('private_base_price')
+        .select('base_price')
+        .eq('price_type', priceType)
+        .eq('is_active', true)
+        .single();
+
+      if (error || !data) {
+        console.warn('⚠️ Error fetching base price from Supabase, using fallback:', error?.message);
+        return this.config.baseFare; // Fallback
+      }
+
+      // Atualizar cache
+      this.baseFareCache.value = parseFloat(data.base_price);
+      this.baseFareCache.lastUpdate = now;
+      
+      console.log(`✅ Base fare loaded from Supabase: ${this.baseFareCache.value} Kz (${priceType})`);
+      return this.baseFareCache.value;
+    } catch (err) {
+      console.error('❌ Error in getDynamicBaseFare:', err);
+      return this.config.baseFare; // Fallback
+    }
+  }
+
+  // Determinar tipo de preço baseado na data/hora
+  static determinePriceType(date) {
+    const hour = date.getHours();
+    const day = date.getDay();
+    const dayOfMonth = date.getDate();
+    const month = date.getMonth();
+    const daysInMonth = new Date(date.getFullYear(), month + 1, 0).getDate();
+
+    // Prioridade 1: Fim de ano (todo mês de dezembro)
+    if (month === 11) {
+      return 'end_of_year';
+    }
+
+    // Prioridade 2: Fim de mês (últimos 5 dias)
+    if (dayOfMonth > daysInMonth - 5) {
+      return 'end_of_month';
+    }
+
+    // Prioridade 3: Período noturno (22h às 6h)
+    if (hour >= 22 || hour < 6) {
+      return 'night';
+    }
+
+    // Prioridade 4: Horas de pico (7h-9h e 17h-19h)
+    if ((hour >= 7 && hour < 9) || (hour >= 17 && hour < 19)) {
+      return 'peak_hours';
+    }
+
+    // Prioridade 5: Fins de semana (sábado=6, domingo=0)
+    if (day === 0 || day === 6) {
+      return 'weekend';
+    }
+
+    // Padrão: preço normal
+    return 'normal';
+  }
+
   // Calcular preço base sem desconto competitivo
-  static calculateBasePrice(distance, estimatedTime, vehicleType = 'standard') {
+  static async calculateBasePrice(distance, estimatedTime, vehicleType = 'standard') {
     const config = this.config;
     
-    // Preço base
-    let price = config.baseFare;
+    // Preço base DINÂMICO do Supabase
+    const baseFare = await this.getDynamicBaseFare();
+    let price = baseFare;
     
     // Preço por distância
     price += distance * config.baseRatePerKm;
@@ -55,40 +136,7 @@ class PricingService {
     const vehicleMultiplier = config.vehicleMultipliers[vehicleType] || 1.0;
     price *= vehicleMultiplier;
     
-    // Multiplicador por horário
-    const timeMultiplier = this.getTimeMultiplier();
-    price *= timeMultiplier;
-    
     return Math.round(price);
-  }
-
-  // Obter multiplicador baseado no horário atual
-  static getTimeMultiplier() {
-    const now = new Date();
-    const hour = now.getHours();
-    const dayOfWeek = now.getDay(); // 0 = domingo, 6 = sábado
-    
-    // Fins de semana (sexta noite, sábado e domingo)
-    if (dayOfWeek === 0 || dayOfWeek === 6 || (dayOfWeek === 5 && hour >= 18)) {
-      return this.config.timeMultipliers.weekend;
-    }
-    
-    // Horários de pico
-    if (hour >= 7 && hour <= 9) {
-      return this.config.timeMultipliers.peak_morning;
-    }
-    
-    if (hour >= 17 && hour <= 19) {
-      return this.config.timeMultipliers.peak_evening;
-    }
-    
-    // Madrugada
-    if (hour >= 22 || hour <= 6) {
-      return this.config.timeMultipliers.late_night;
-    }
-    
-    // Horário normal
-    return this.config.timeMultipliers.normal;
   }
 
   // Aplicar desconto competitivo (principal funcionalidade)
@@ -115,15 +163,15 @@ class PricingService {
   }
 
   // Função principal: calcular preço final competitivo
-  static calculateCompetitivePrice(distance, estimatedTime, vehicleType = 'standard', yangoPrice = null) {
-    console.log(`🧮 Calculando preço competitivo:`);
+  static async calculateCompetitivePrice(distance, estimatedTime, vehicleType = 'standard', yangoPrice = null) {
+    console.log(`🧭 Calculando preço competitivo:`);
     console.log(`   📏 Distância: ${distance} km`);
     console.log(`   ⏱️  Tempo estimado: ${estimatedTime} min`);
     console.log(`   🚗 Tipo de veículo: ${vehicleType}`);
     console.log(`   🏆 Preço Yango: ${yangoPrice || 'não informado'}`);
     
-    // Calcular preço base
-    const basePrice = this.calculateBasePrice(distance, estimatedTime, vehicleType);
+    // Calcular preço base (agora é async)
+    const basePrice = await this.calculateBasePrice(distance, estimatedTime, vehicleType);
     console.log(`   💵 Preço base calculado: ${basePrice}`);
     
     // Aplicar desconto competitivo
@@ -138,6 +186,9 @@ class PricingService {
     
     console.log(`   ✅ Preço final competitivo: ${discountedFinalPrice}`);
     
+    // Buscar tipo de preço ativo
+    const priceType = this.determinePriceType(new Date());
+    
     return {
       basePrice,
       finalPrice: discountedFinalPrice,
@@ -146,13 +197,13 @@ class PricingService {
         ? ((yangoPrice - discountedFinalPrice) / yangoPrice * 100).toFixed(1)
         : (((basePrice - discountedFinalPrice) / basePrice) * 100).toFixed(1),
       competitorPrice: yangoPrice,
-      timeMultiplier: this.getTimeMultiplier(),
+      priceType: priceType,
       vehicleType
     };
   }
 
   // Simular preços para comparação
-  static simulatePrices(distance, estimatedTime) {
+  static async simulatePrices(distance, estimatedTime) {
     console.log(`\n🎯 SIMULAÇÃO DE PREÇOS COMPETITIVOS`);
     console.log(`📊 Distância: ${distance}km | Tempo: ${estimatedTime}min`);
     console.log(`─`.repeat(50));
@@ -164,13 +215,13 @@ class PricingService {
       { yangoPrice: 15000, label: 'Corrida premium' }
     ];
     
-    scenarios.forEach(scenario => {
-      const pricing = this.calculateCompetitivePrice(distance, estimatedTime, 'standard', scenario.yangoPrice);
+    for (const scenario of scenarios) {
+      const pricing = await this.calculateCompetitivePrice(distance, estimatedTime, 'standard', scenario.yangoPrice);
       console.log(`\n${scenario.label}:`);
       console.log(`   Yango: ${scenario.yangoPrice} Kz`);
       console.log(`   Nosso: ${pricing.finalPrice} Kz`);
       console.log(`   Economia: ${pricing.savings} Kz (${pricing.discountPercentage}% mais barato)`);
-    });
+    }
     
     console.log(`\n─`.repeat(50));
   }

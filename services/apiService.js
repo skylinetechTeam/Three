@@ -1169,7 +1169,11 @@ class ApiService {
    }
 
   // Calcular preço estimado da corrida
+  // IMPORTANTE: Este método é síncrono mas deve ser usado com await no contexto assíncrono
+  // Para obter preços dinâmicos do Supabase, use calculateEstimatedFareAsync()
   calculateEstimatedFare(distance, time, vehicleType = 'standard') {
+    console.warn('⚠️ [DEPRECATED] calculateEstimatedFare está usando valores fixos. Use calculateEstimatedFareAsync() para preços dinâmicos do Supabase.');
+    
     if (vehicleType === 'coletivo' || vehicleType === 'standard') {
       // Coletivo: preço fixo de 500 AOA
       return 500;
@@ -1190,6 +1194,51 @@ class ApiService {
     
     // Fallback para standard
     return 500;
+  }
+
+  // Calcular preço estimado da corrida usando preços dinâmicos do Supabase
+  async calculateEstimatedFareAsync(distance, time, vehicleType = 'standard') {
+    try {
+      console.log('💰 [PRICING] Calculando preço com dados do Supabase...');
+      console.log(`📊 [PRICING] Distância: ${distance}km, Tempo: ${time}min, Tipo: ${vehicleType}`);
+      
+      if (vehicleType === 'coletivo' || vehicleType === 'standard') {
+        // Coletivo: preço fixo de 500 AOA
+        console.log('🚌 [PRICING] Coletivo - preço fixo: 500 AOA');
+        return 500;
+      } else if (vehicleType === 'privado' || vehicleType === 'premium') {
+        // Importar privateBasePriceService dinamicamente
+        const privateBasePriceService = require('./privateBasePriceService').default;
+        
+        // Buscar preço base atual do Supabase
+        const basePrice = await privateBasePriceService.getCurrentBasePrice();
+        console.log(`💲 [PRICING] Preço base do Supabase: ${basePrice} AOA`);
+        
+        // Taxas por km e por minuto
+        const perKmRate = 300; // AOA por km
+        const perMinuteRate = 50; // AOA por minuto
+        
+        const distanceFare = distance * perKmRate;
+        const timeFare = time * perMinuteRate;
+        
+        const calculatedFare = Math.round(basePrice + distanceFare + timeFare);
+        
+        console.log(`📊 [PRICING] Cálculo: ${basePrice} (base) + ${distanceFare} (dist) + ${timeFare} (tempo) = ${calculatedFare} AOA`);
+        
+        // Garantir que o preço mínimo seja o basePrice
+        const finalFare = Math.max(calculatedFare, basePrice);
+        console.log(`✅ [PRICING] Preço final: ${finalFare} AOA`);
+        
+        return finalFare;
+      }
+      
+      // Fallback para standard
+      return 500;
+    } catch (error) {
+      console.error('❌ [PRICING] Erro ao calcular preço com Supabase:', error);
+      // Fallback para método síncrono em caso de erro
+      return this.calculateEstimatedFare(distance, time, vehicleType);
+    }
   }
 
   // Obter detalhes de uma corrida específica
