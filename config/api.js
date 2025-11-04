@@ -1,8 +1,8 @@
 // API Configuration
 export const API_CONFIG = {
   // Base URLs - can be overridden by environment variables
-  API_BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'https://three-api-9fac.onrender.com/api',
-  SOCKET_URL: process.env.EXPO_PUBLIC_SOCKET_URL || 'https://three-api-9fac.onrender.com',
+  API_BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api',
+  SOCKET_URL: process.env.EXPO_PUBLIC_SOCKET_URL || 'http://localhost:3000',
   
   // Timeouts
   REQUEST_TIMEOUT: 10000, // 10 seconds
